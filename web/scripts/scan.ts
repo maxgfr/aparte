@@ -5,7 +5,8 @@
  *    the browser APIs that must go through one audited module (network, workers, service worker registration,
  *    Web Storage, Trusted Types policies).
  * 2. In `dist`, once built: every place the shipped JavaScript could evaluate code, which the CSP blocks (an
- *    unexpected one is a feature broken in production, or a dependency to look at); the production CSP `<meta>` in
+ *    unexpected one is a feature broken in production, or a dependency to look at), leaving out text inside comments
+ *    and literals but not a literal used as a computed member key; the production CSP `<meta>` in
  *    `index.html`, ahead of everything it governs; no inline script or style; no external URL in `src`/`href`.
  *
  * Comments are blanked before matching (so prose about `innerHTML` is fine) but strings are not, so
@@ -125,15 +126,30 @@ const REGEX_AFTER_WORD = new Set([
   'await',
 ])
 
+/** What a range of JavaScript text is, as far as the scans care: anything but code. */
+export type RangeKind = 'comment' | 'string' | 'template' | 'regex'
+
 /**
- * Blanks `//` and `/* *\/` comments with spaces, keeping every newline and every other character in place, so
- * offsets and line numbers still point into the original file. Strings, template literals (with nested `${}`) and
- * regular expression literals are skipped over intact, so a `//` inside one is not taken for a comment.
+ * A comment or literal of a JavaScript text, `[from, to)`. A `string` range includes its quotes; a `template` range is
+ * one text segment of a template literal, from just after its backtick or `}` to just after its closing backtick or
+ * its `${`; a `regex` range includes its slashes (not its flags).
  */
-export function stripComments(code: string): string {
-  const out = code.split('')
-  const blank = (from: number, to: number) => {
-    for (let k = from; k < to; k++) if (out[k] !== '\n' && out[k] !== '\r') out[k] = ' '
+export interface CodeRange {
+  kind: RangeKind
+  from: number
+  to: number
+}
+
+/**
+ * The comments and literals of a JavaScript text, in order. Strings, template literals (with nested `${}`) and
+ * regular expression literals are told apart from code with the usual lexer heuristics (a `/` after an operator or a
+ * keyword starts a regex), so a `//` inside a string is not taken for a comment and a quote inside a regex does not
+ * open a string.
+ */
+export function codeRanges(code: string): CodeRange[] {
+  const ranges: CodeRange[] = []
+  const add = (kind: RangeKind, from: number, to: number) => {
+    if (to > from) ranges.push({ kind, from, to: Math.min(to, code.length) })
   }
   /** Brace depth of each open `${` of a template literal; empty at top level. */
   const templates: number[] = []
@@ -150,19 +166,23 @@ export function stripComments(code: string): string {
   }
   /** Skips template text from `i` (just after a backtick or a closing `}`) to its end or its next `${`. */
   const skipTemplate = (): void => {
+    const from = i
     while (i < code.length) {
       const c = code[i]
       if (c === '\\') i += 2
       else if (c === '`') {
         i++
+        add('template', from, i)
         return
       } else if (c === '$' && code[i + 1] === '{') {
         i += 2
+        add('template', from, i)
         templates.push(depth)
         depth++
         return
       } else i++
     }
+    add('template', from, i)
   }
 
   while (i < code.length) {
@@ -171,15 +191,17 @@ export function stripComments(code: string): string {
     if (c === '/' && next === '/') {
       const end = code.indexOf('\n', i)
       const stop = end === -1 ? code.length : end
-      blank(i, stop)
+      add('comment', i, stop)
       i = stop
     } else if (c === '/' && next === '*') {
       const end = code.indexOf('*/', i + 2)
       const stop = end === -1 ? code.length : end + 2
-      blank(i, stop)
+      add('comment', i, stop)
       i = stop
     } else if (c === "'" || c === '"') {
+      const from = i
       skipQuoted(c)
+      add('string', from, i)
       prev = c
       prevWord = ''
     } else if (c === '`') {
@@ -190,6 +212,7 @@ export function stripComments(code: string): string {
     } else if (c === '/' && (prev === '' || '(,=:[!&|?{};+-*%>~^'.includes(prev) || REGEX_AFTER_WORD.has(prevWord))) {
       // A regular expression literal: skip to its closing slash, honouring escapes and character classes. A '/'
       // after '<' is not one: it closes a JSX element.
+      const from = i
       i++
       let inClass = false
       while (i < code.length && code[i] !== '\n') {
@@ -201,6 +224,7 @@ export function stripComments(code: string): string {
         i++
       }
       i++
+      add('regex', from, i)
       prev = '/'
       prevWord = ''
     } else {
@@ -230,6 +254,20 @@ export function stripComments(code: string): string {
       }
       i++
     }
+  }
+  return ranges
+}
+
+/**
+ * Blanks `//` and `/* *\/` comments with spaces, keeping every newline and every other character in place, so
+ * offsets and line numbers still point into the original file. Strings, template literals and regular expression
+ * literals are kept intact (so `el['innerHTML']` is still caught), and a `//` inside one is not taken for a comment.
+ */
+export function stripComments(code: string): string {
+  const out = code.split('')
+  for (const range of codeRanges(code)) {
+    if (range.kind !== 'comment') continue
+    for (let k = range.from; k < range.to; k++) if (out[k] !== '\n' && out[k] !== '\r') out[k] = ' '
   }
   return out.join('')
 }
@@ -303,6 +341,15 @@ export const KNOWN_SITES: readonly KnownSite[] = [
     before: /compile\(\)\{(?:let|const|var)\s+[\w$]+=$/,
     at: /^Function,[\w$]+=this\?\.content\?\?\[(?:``|""|'')\];return new [\w$]+\(\.\.\.Object\.keys\(this\.closed\),`return function \(/,
     needsJitless: true,
+  },
+  {
+    id: 'lib0-constructor-identity',
+    library: 'lib0',
+    reason:
+      "logging.common.js (computeNoColorLoggingArgs, createModuleLogger) and schema.js ($Lambda.check) compare a value's constructor with Function (`x.constructor === Function`): an identity check, nothing is called or built",
+    before: /(?:[\w$]|\])\??\.constructor===$/,
+    at: /^Function&&/,
+    needsJitless: false,
   },
 ]
 
@@ -386,7 +433,46 @@ export function packageOf(source: string): string {
   return m?.[1] ?? `app (${source.replace(/^(?:\.\.\/)+/, '')})`
 }
 
-/** Evaluation sites in one built chunk, each attributed and matched against the known sites. */
+/** The comment or literal that contains `index`, if any; `ranges` are in order and do not overlap. */
+export function rangeAt(ranges: readonly CodeRange[], index: number): CodeRange | undefined {
+  let lo = 0
+  let hi = ranges.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const r = ranges[mid] as CodeRange
+    if (index < r.from) hi = mid - 1
+    else if (index >= r.to) lo = mid + 1
+    else return r
+  }
+  return undefined
+}
+
+/**
+ * Whether a match inside a string or template literal still reaches the real function: a literal that is exactly
+ * the name, alone between brackets, is a computed member access (`globalThis['eval']`, ``self[`Function`]``).
+ */
+export function isComputedKey(code: string, range: CodeRange, name: string): boolean {
+  let open: number
+  let text: string
+  if (range.kind === 'string') {
+    open = range.from
+    text = code.slice(range.from + 1, range.to - 1)
+  } else if (range.kind === 'template' && code[range.from - 1] === '`' && code[range.to - 1] === '`') {
+    open = range.from - 1
+    text = code.slice(range.from, range.to - 1)
+  } else {
+    return false
+  }
+  if (text !== name) return false
+  return /\[\s*$/.test(code.slice(Math.max(0, open - 16), open)) && /^\s*\]/.test(code.slice(range.to, range.to + 16))
+}
+
+/**
+ * Evaluation sites in one built chunk, each attributed and matched against the known sites. A match inside a
+ * comment, a regular expression or a string or template literal is text, not code (highlight.js grammars list
+ * `eval` among a language's keywords; Zod's JSON Schema errors name "Function types"), unless the literal is the
+ * name used as a computed member key.
+ */
 export function scanBundle(
   file: string,
   code: string,
@@ -394,9 +480,12 @@ export function scanBundle(
   known: readonly KnownSite[] = KNOWN_SITES,
 ): BundleHit[] {
   const hits: BundleHit[] = []
+  const ranges = codeRanges(code)
   for (const { rule, pattern, skip } of BUNDLE_PATTERNS) {
     for (const m of code.matchAll(pattern)) {
       if (skip?.(code, m.index)) continue
+      const literal = rangeAt(ranges, m.index)
+      if (literal !== undefined && !isComputedKey(code, literal, m[0])) continue
       const before = code.slice(Math.max(0, m.index - 240), m.index)
       const at = code.slice(m.index, m.index + 240)
       const site = known.find((k) => k.before.test(before) && k.at.test(at))

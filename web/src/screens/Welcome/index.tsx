@@ -1,4 +1,4 @@
-import { LockKeyhole } from 'lucide-react'
+import { LockKeyhole, SquarePen } from 'lucide-react'
 import { Link } from 'wouter'
 import { paths } from '../../app/routes.ts'
 import { useVault } from '../../app/vault.tsx'
@@ -9,7 +9,7 @@ import styles from './Welcome.module.css'
 
 /**
  * The start screen of the preview: what Aparté is and, on a device without a vault, the first step (creating it).
- * With the vault open it says so and offers to lock it; the chat arrives in a later milestone.
+ * With the vault open it says so and leads to a new chat and to the model providers.
  */
 export default function Welcome() {
   const t = useT()
@@ -27,6 +27,17 @@ export default function Welcome() {
         )}
       </div>
       <div className={styles.actions}>
+        {!absent && (
+          <>
+            <Link href={paths.chat} className={buttonClass({ variant: 'primary', size: 'large' })}>
+              <SquarePen size={18} strokeWidth={2} aria-hidden="true" />
+              {t('chat.navNewChat')}
+            </Link>
+            <Link href={paths.providers} className={buttonClass({ variant: 'secondary' })}>
+              {t('chat.navProviders')}
+            </Link>
+          </>
+        )}
         {absent && (
           <Link href={paths.createVault} className={buttonClass({ variant: 'primary', size: 'large' })}>
             <LockKeyhole size={18} strokeWidth={2} aria-hidden="true" />

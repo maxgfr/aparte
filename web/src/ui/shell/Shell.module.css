@@ -168,3 +168,40 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* The conversation list in the sidebar (wide windows only; phones reach it from the Chats tab). */
+.sidebarList {
+  display: none;
+}
+
+@media (min-width: 1000px) {
+  .sidebarList {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+/* Phones: the tab bar is one row (the tabs, then Lock), and it steps aside while the keyboard is up. */
+@media (max-width: 999px) {
+  .nav {
+    display: flex;
+  }
+
+  .tabs {
+    flex: 1;
+  }
+
+  .lock {
+    flex: 0 0 calc(100% / 6);
+  }
+
+  :global(html[data-keyboard]) .nav {
+    display: none;
+  }
+
+  :global(html[data-keyboard]) .main {
+    padding-bottom: 0;
+  }
+}

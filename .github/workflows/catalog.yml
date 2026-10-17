@@ -1,0 +1,42 @@
+name: Catalog
+# Weekly refresh of the model catalog (web/src/core/ai/catalog.json): llm-models lists the providers and models, and
+# probes from the app's origin which providers a web page can call. The result comes back as a pull request, so a
+# refresh goes through the same review and CI as any other change.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+env:
+  BUN_VERSION: 1.4.3
+jobs:
+  refresh:
+    name: Refresh the model catalog
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run catalog
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: catalog-refresh
+          add-paths: web/src/core/ai/catalog.json
+          title: 'chore: refresh the model catalog'
+          commit-message: 'chore: refresh the model catalog'
+          body: Weekly refresh of the model catalog (providers, models, prices and browser reachability).
+          delete-branch: true

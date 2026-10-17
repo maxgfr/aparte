@@ -3,9 +3,18 @@ import { expect, Gates, loadAllowlist, originMatches, test } from './gates.ts'
 // The gates are what every other spec relies on to catch a CSP violation, a stray request or an error, so they are
 // tested themselves: each case runs in a context of its own, watched by its own gates, and reads what they caught.
 
-test('the allowlist file is valid and allows no fixed origin yet', () => {
-  // M0 contacts nothing but its own origin; a host added to the file is a reviewed change that updates this test.
-  expect(loadAllowlist()).toEqual([])
+test('the allowlist file is valid and allows only the default provider hosts', () => {
+  // The app contacts its own origin and, for purpose `provider`, the default API host of each provider it ships;
+  // endpoints the user types stay unlisted. A host added to the file is a reviewed change that updates this test.
+  expect(loadAllowlist()).toEqual(
+    [
+      'https://api.anthropic.com',
+      'https://api.openai.com',
+      'https://generativelanguage.googleapis.com',
+      'https://api.mistral.ai',
+      'https://openrouter.ai',
+    ].map((origin) => ({ origin, purposes: ['provider'] })),
+  )
 })
 
 test('allowlist entries match exact origins only', () => {
@@ -19,6 +28,22 @@ test('allowlist entries match exact origins only', () => {
   const local = { origin: 'http://localhost:11434', purposes: ['provider' as const] }
   expect(originMatches(local, new URL('http://localhost:11434/api'))).toBe(true)
   expect(originMatches(local, new URL('http://localhost:11435/api'))).toBe(false)
+})
+
+test('a user-typed endpoint is admitted for one test, by exact origin', () => {
+  const gates = new Gates('http://localhost:4173', [], [])
+  expect(gates.allows(new URL('http://127.0.0.1:18080/v1/chat/completions'))).toBe(false)
+  gates.userEndpoint('http://127.0.0.1:18080')
+  expect(gates.allows(new URL('http://127.0.0.1:18080/v1/chat/completions'))).toBe(true)
+  expect(gates.allows(new URL('http://127.0.0.1:18081/v1'))).toBe(false)
+  expect(gates.allows(new URL('https://127.0.0.1:18080/v1'))).toBe(false)
+  expect(gates.check('http://127.0.0.1:18080/v1/models')).toBe(true)
+  expect(gates.contacted.get('http://127.0.0.1:18080')).toBe('foreign')
+  expect(gates.problems()).toEqual([])
+  expect(() => gates.userEndpoint('http://example.com')).toThrow('loopback')
+  expect(() => gates.userEndpoint('https://example.com/v1')).toThrow('bare origin')
+  // Another test's gates know nothing of it.
+  expect(new Gates('http://localhost:4173', [], []).allows(new URL('http://127.0.0.1:18080/v1'))).toBe(false)
 })
 
 test('a request outside the allowlist is aborted and reported; an allowed one goes through', async ({

@@ -64,7 +64,17 @@ async function start(): Promise<void> {
   const { Workbox } = await import('workbox-window')
   // workbox-window types its TrustedScriptURL from @types/trusted-types, a twin of ours: the value passes through.
   const wb = new Workbox(url as string, options)
-  wb.addEventListener('waiting', () => machine.events.waiting())
+  // Only this app's worker counts: on the shared origin a page can be controlled by a broader scope's worker.
+  const controlledByThisApp = () => {
+    const controller = navigator.serviceWorker.controller
+    return controller !== null && new URL(controller.scriptURL).pathname.startsWith(base)
+  }
+  wb.addEventListener('waiting', () => {
+    // workbox-window calls a worker still `installed` 200 ms after it installed "waiting". On the first install,
+    // while no worker of this app controls the page yet, that is only an activation running late (a busy device),
+    // not a new version: offering one would ask the user to reload into the version they already run.
+    if (controlledByThisApp()) machine.events.waiting()
+  })
   wb.addEventListener('installed', (event) => {
     if (!event.isUpdate) machine.events.offlineReady()
   })
@@ -83,9 +93,7 @@ async function start(): Promise<void> {
     throw e
   }
   if (!registration) return
-  // Only this app's worker counts: on the shared origin a page can be controlled by a broader scope's worker.
-  const controller = navigator.serviceWorker.controller
-  if (controller && new URL(controller.scriptURL).pathname.startsWith(base)) machine.events.active()
+  if (controlledByThisApp()) machine.events.active()
 
   const check = () => {
     if (!navigator.onLine) return

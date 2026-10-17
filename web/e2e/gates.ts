@@ -131,6 +131,8 @@ export class Gates {
   private readonly expected: ExpectedViolation[] = []
   /** Exact URLs a test serves itself to play another site (an attacker framing the app). */
   private readonly foreign = new Set<string>()
+  /** Origins a test plays as an endpoint the user typed (a local model server, a custom base URL). */
+  private readonly userOrigins = new Set<string>()
 
   constructor(
     private readonly appOrigin: string,
@@ -156,9 +158,27 @@ export class Gates {
     await context.route(url, (route) => route.fulfill({ contentType: 'text/html', body: html }))
   }
 
+  /**
+   * Admits `origin` for this test only, as an endpoint the user typed. Such endpoints are by rule not in the
+   * allowlist; the test that plays one names it here, and every other origin stays a failure. Only a bare http(s)
+   * origin is accepted, and plain http only on the loopback, as web/src/security/net.ts requires.
+   */
+  userEndpoint(origin: string): void {
+    const url = new URL(origin)
+    if (url.origin !== origin) throw new Error(`userEndpoint: ${origin} is not a bare origin`)
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && LOOPBACK.has(url.hostname)))
+      throw new Error(`userEndpoint: ${origin} must be https, or http on the loopback`)
+    this.userOrigins.add(origin)
+  }
+
+  /** Whether `url` is an origin admitted with `userEndpoint`. */
+  private isUserEndpoint(url: URL): boolean {
+    return [...this.userOrigins].some((origin) => originMatches({ origin, purposes: [] }, url))
+  }
+
   /** Whether the app may contact `url`: its own origin always, any other host only through the allowlist. */
   allows(url: URL): boolean {
-    if (url.origin === this.appOrigin || this.foreign.has(url.href)) return true
+    if (url.origin === this.appOrigin || this.foreign.has(url.href) || this.isUserEndpoint(url)) return true
     return this.allowlist.some((e) => originMatches(e, url) && e.purposes.some((p) => this.purposes.includes(p)))
   }
 
@@ -175,7 +195,13 @@ export class Gates {
     const ok = this.allows(url)
     const key = url.protocol.startsWith('ws') ? `${url.protocol}//${url.host}` : url.origin
     const kind =
-      url.origin === this.appOrigin ? 'app' : this.foreign.has(url.href) ? 'foreign' : ok ? 'allowed' : 'blocked'
+      url.origin === this.appOrigin
+        ? 'app'
+        : this.foreign.has(url.href) || this.isUserEndpoint(url)
+          ? 'foreign'
+          : ok
+            ? 'allowed'
+            : 'blocked'
     if (this.contacted.get(key) !== 'blocked') this.contacted.set(key, kind)
     if (!ok) this.blocked.push(raw)
     return ok

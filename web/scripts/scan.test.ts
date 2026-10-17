@@ -2,10 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import { contentSecurityPolicy } from '../src/security/policy.ts'
 import {
   checkIndexHtml,
+  codeRanges,
   decodeSegment,
+  isComputedKey,
   isScannedSource,
   packageOf,
   position,
+  rangeAt,
   scanBundle,
   scanSource,
   setsJitless,
@@ -48,6 +51,35 @@ describe('stripComments', () => {
     const out = stripComments('const v = <p>{x}</p> // gone\nconst w = 1')
     expect(out).not.toContain('gone')
     expect(out).toContain('</p>')
+  })
+})
+
+describe('codeRanges', () => {
+  test('lists comments, strings, template segments and regexes in order', () => {
+    const code = js("a='x';/*c*/b=`t#{d}u`;e=/r/g;// end")
+    expect(codeRanges(code).map((r) => [r.kind, code.slice(r.from, r.to)])).toEqual([
+      ['string', "'x'"],
+      ['comment', '/*c*/'],
+      ['template', js('t#{')],
+      ['template', 'u`'],
+      ['regex', '/r/'],
+      ['comment', '// end'],
+    ])
+    const ranges = codeRanges(code)
+    expect(rangeAt(ranges, code.indexOf('x'))?.kind).toBe('string')
+    expect(rangeAt(ranges, code.indexOf('b'))).toBeUndefined()
+    expect(rangeAt(ranges, code.indexOf('d'))).toBeUndefined()
+  })
+
+  test('tells a computed member key from a listed keyword', () => {
+    const check = (code: string) => {
+      const range = rangeAt(codeRanges(code), code.indexOf('eval'))
+      if (range === undefined) throw new Error(`no literal around eval in ${code}`)
+      return isComputedKey(code, range, 'eval')
+    }
+    for (const code of ['g["eval"]', "g[ 'eval' ]", 'g[`eval`]']) expect(check(code)).toBe(true)
+    for (const code of ['["eval",1]', 'g["evaluate"]', 'x="eval"', 'g[`a eval`]', 'g[`#{x}eval`]'].map(js))
+      expect(check(code)).toBe(false)
   })
 })
 
@@ -174,6 +206,39 @@ describe('scanBundle', () => {
       'a=new Function("x","return x");b=eval(c);d=(0,eval)(e);f=Function.prototype.call;g=h instanceof Function'
     expect(scanBundle('dist/a.js', code).map((h) => h.rule)).toEqual(['eval', 'eval', 'function-constructor'])
     expect(scanBundle('dist/a.js', "x='wasm-unsafe-eval'")).toEqual([])
+  })
+
+  test('ignores names inside comments and literals: highlight.js keywords, Zod messages', () => {
+    const highlight = js(
+      'const _=[`break`,`cd`,`eval`,`exec`],n=`abs.accept.eof.eval.exec`,k={keyword:`call eval file`},q="eval",r=\'Function\',re=/eval|Function/g;',
+    )
+    expect(scanBundle('dist/highlight.js', highlight)).toEqual([])
+    const zodJsonSchema = 'Ya=(e,t,n,r)=>{U(e,t,n,r,`Function types cannot be represented in JSON Schema`)}'
+    expect(scanBundle('dist/schemas.js', zodJsonSchema)).toEqual([])
+    expect(scanBundle('dist/a.js', '/* eval(x) */a=1;// new Function("")\nb=2')).toEqual([])
+    // Template expressions are code again, and so is what follows a literal.
+    expect(scanBundle('dist/a.js', js('a=`x #{eval(b)} y`;c=`eval`+eval(d)')).map((h) => h.column)).toEqual([8, 29])
+  })
+
+  test('still flags a literal used as a computed member key', () => {
+    const code = js('a=globalThis["eval"](b);c=self[ `Function` ](d);e=window[\'eval\'];f=g["eval",h]')
+    expect(scanBundle('dist/a.js', code).map((h) => h.rule)).toEqual(['eval', 'eval', 'function-constructor'])
+  })
+
+  test('recognises the lib0 constructor identity checks precisely', () => {
+    const lib0 =
+      'check(e,t){let n=e.constructor===Function&&e.length<=this.len;return n}lr=e=>{e.length===1&&e[0]?.constructor===Function&&(e=e[0]())}'
+    expect(scanBundle('dist/workspace.js', lib0).map((h) => [h.known?.id, h.library])).toEqual([
+      ['lib0-constructor-identity', 'lib0'],
+      ['lib0-constructor-identity', 'lib0'],
+    ])
+    // A call, a different comparison or a bare reference is not the known site.
+    for (const code of ['x=e.constructor===Function("return 1")', 'x=e.constructor==Function&&1', 'x=Function&&e']) {
+      expect(scanBundle('dist/a.js', code)[0]?.known).toBeUndefined()
+    }
+    // Nor is the same text that a source map places in another package.
+    const other = { sources: ['../node_modules/evil/index.js'], mappings: 'AAAA' }
+    expect(scanBundle('dist/a.js', 'x=e.constructor===Function&&1', other)[0]?.known).toBeUndefined()
   })
 
   test('attributes hits through a source map', () => {

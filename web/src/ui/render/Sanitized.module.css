@@ -1,0 +1,257 @@
+/* Rendered answers: unboxed prose at the reading measure (DESIGN.md, Thread). */
+.prose {
+  max-width: var(--measure-prose);
+  font-size: var(--text-body);
+  line-height: var(--leading-prose);
+  overflow-wrap: anywhere;
+}
+
+.prose > * + * {
+  margin-top: var(--space-3);
+}
+
+.block > * + * {
+  margin-top: var(--space-3);
+}
+
+.block :where(p, ul, ol, blockquote, hr, h1, h2, h3, h4, h5, h6) {
+  margin-block: 0;
+}
+
+.block :where(* + p, * + ul, * + ol, * + blockquote, * + pre) {
+  margin-top: var(--space-3);
+}
+
+.block :where(h1) {
+  font-size: var(--text-headline);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+}
+
+.block :where(h2) {
+  font-size: var(--text-title);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+}
+
+.block :where(h3, h4, h5, h6) {
+  font-size: var(--text-body);
+  font-weight: 650;
+}
+
+.block :where(* + h1, * + h2, * + h3, * + h4, * + h5, * + h6) {
+  margin-top: var(--space-5);
+}
+
+.block :where(ul, ol) {
+  padding-inline-start: 1.4em;
+}
+
+.block :where(li + li) {
+  margin-top: var(--space-1);
+}
+
+.block :where(blockquote) {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--hairline-strong);
+  color: var(--ink-2);
+}
+
+.block :where(hr) {
+  border: 0;
+  border-top: var(--hairline-width) solid var(--hairline);
+}
+
+.block :where(code) {
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-small);
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  font-variant-numeric: normal;
+}
+
+.block :where(pre) {
+  overflow-x: auto;
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline-width) solid var(--code-border);
+  border-radius: var(--radius-surface);
+  background: var(--code-bg);
+}
+
+.block :where(pre code) {
+  padding: 0;
+  background: none;
+}
+
+/* Links of model output never navigate by themselves: they open the interstitial (Sanitized.tsx). */
+.block :where(a[data-href]) {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.block :where(a:not([data-href])) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.block :global(.remote-image) {
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+  overflow-wrap: anywhere;
+}
+
+.block :global(.math-block) {
+  overflow-x: auto;
+  text-align: center;
+}
+
+.block :where(math) {
+  font-size: 1.05em;
+}
+
+.block :where(input[type="checkbox"]) {
+  margin-inline-end: var(--space-2);
+}
+
+/* Tables scroll sideways in a box of their own, so their words are never cut and the page never scrolls. */
+.tableScroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.tableScroll table {
+  border-collapse: collapse;
+  font-size: var(--text-footnote);
+  line-height: var(--leading-body);
+}
+
+.tableScroll :where(th, td) {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--hairline-width) solid var(--hairline);
+  text-align: start;
+  vertical-align: top;
+}
+
+.tableScroll :where(th) {
+  font-weight: 650;
+}
+
+/* Code blocks (DESIGN.md, Code block). */
+.code {
+  margin: 0;
+  overflow: hidden;
+  border: var(--hairline-width) solid var(--code-border);
+  border-radius: var(--radius-surface);
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+.codeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+  border-bottom: var(--hairline-width) solid var(--code-border);
+}
+
+.codeLang {
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.pre {
+  margin: 0;
+  overflow-x: auto;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: var(--leading-code);
+  font-variant-numeric: normal;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 2;
+}
+
+.pre:focus-visible,
+.tableScroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.synKeyword {
+  color: var(--syntax-keyword);
+}
+
+.synString {
+  color: var(--syntax-string);
+}
+
+.synNumber {
+  color: var(--syntax-number);
+}
+
+.synComment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.synFunction {
+  color: var(--syntax-function);
+}
+
+.synType {
+  color: var(--syntax-type);
+}
+
+.synPunctuation {
+  color: var(--syntax-punctuation);
+}
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--accent-ink);
+  font-size: var(--text-footnote);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.copy:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+/* The link interstitial. */
+.link {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.link p {
+  margin: 0;
+}
+
+.linkUrl {
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  overflow-wrap: anywhere;
+}
+
+.linkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

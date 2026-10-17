@@ -148,8 +148,16 @@ describe('spec/network-allowlist.json', () => {
     expect(purposes.sort()).toEqual([...NET_PURPOSES].sort())
   })
 
-  test('lets the M0 shell contact nothing but its own origin', () => {
+  test('lets the app contact its own origin and the default provider hosts, and nothing else', () => {
     expect(allowlist.app).toEqual(['self'])
-    for (const purpose of NET_PURPOSES.filter((p) => p !== 'app')) expect(allowlist[purpose]).toEqual([])
+    expect(allowlist.provider).toEqual([
+      'https://api.anthropic.com',
+      'https://api.openai.com',
+      'https://generativelanguage.googleapis.com',
+      'https://api.mistral.ai',
+      'https://openrouter.ai',
+    ])
+    for (const purpose of NET_PURPOSES.filter((p) => p !== 'app' && p !== 'provider'))
+      expect(allowlist[purpose]).toEqual([])
   })
 })

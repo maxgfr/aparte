@@ -1,0 +1,16 @@
+data: {"id":"5b1e8f0c-7d2a-4c3b-9e6f-1a2b3c4d5e6f","object":"chat.completion.chunk","created":1760700100,"model":"deepseek-reasoner","system_fingerprint":"fp_7c1a9e3f20_prod0820_fp8_kvcache","choices":[{"index":0,"delta":{"role":"assistant","content":null,"reasoning_content":""},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"5b1e8f0c-7d2a-4c3b-9e6f-1a2b3c4d5e6f","object":"chat.completion.chunk","created":1760700100,"model":"deepseek-reasoner","system_fingerprint":"fp_7c1a9e3f20_prod0820_fp8_kvcache","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"17 × 24: 17 × 20 = 340"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"5b1e8f0c-7d2a-4c3b-9e6f-1a2b3c4d5e6f","object":"chat.completion.chunk","created":1760700100,"model":"deepseek-reasoner","system_fingerprint":"fp_7c1a9e3f20_prod0820_fp8_kvcache","choices":[{"index":0,"delta":{"content":null,"reasoning_content":", 17 × 4 = 68, so 408."},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"5b1e8f0c-7d2a-4c3b-9e6f-1a2b3c4d5e6f","object":"chat.completion.chunk","created":1760700100,"model":"deepseek-reasoner","system_fingerprint":"fp_7c1a9e3f20_prod0820_fp8_kvcache","choices":[{"index":0,"delta":{"content":"17 × 24 = 408","reasoning_content":null},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"5b1e8f0c-7d2a-4c3b-9e6f-1a2b3c4d5e6f","object":"chat.completion.chunk","created":1760700100,"model":"deepseek-reasoner","system_fingerprint":"fp_7c1a9e3f20_prod0820_fp8_kvcache","choices":[{"index":0,"delta":{"content":".","reasoning_content":null},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"5b1e8f0c-7d2a-4c3b-9e6f-1a2b3c4d5e6f","object":"chat.completion.chunk","created":1760700100,"model":"deepseek-reasoner","system_fingerprint":"fp_7c1a9e3f20_prod0820_fp8_kvcache","choices":[{"index":0,"delta":{"content":"","reasoning_content":null},"logprobs":null,"finish_reason":"stop"}]}
+
+data: {"id":"5b1e8f0c-7d2a-4c3b-9e6f-1a2b3c4d5e6f","object":"chat.completion.chunk","created":1760700100,"model":"deepseek-reasoner","system_fingerprint":"fp_7c1a9e3f20_prod0820_fp8_kvcache","choices":[],"usage":{"prompt_tokens":12,"completion_tokens":41,"total_tokens":53,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":29},"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":12}}
+
+data: [DONE]
+

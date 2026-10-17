@@ -13,7 +13,8 @@ export const shell = {
   welcomeTitle: 'Private AI chat, on your device',
   welcomeLead:
     'Aparté is a chat with the AI models you choose, running entirely in this browser: conversations are encrypted on this device and synced end to end, with no server of ours in between.',
-  welcomePreview: 'This is an early preview: the app shell is here, the chat comes next.',
+  welcomePreview:
+    'This is an early preview: the chat works on this device, and syncing between your devices comes next.',
   welcomeCreateVault: 'Create your encrypted vault',
   welcomeComingNext: 'Coming next',
   welcomeLearnMore: 'About this build',

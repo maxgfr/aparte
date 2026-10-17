@@ -4,6 +4,49 @@ export const paths = {
   about: '/about',
   createVault: '/vault/new',
   recover: '/recover',
+  /** A new chat (nothing is stored until its first message). */
+  chat: '/chat',
+  /** One chat: `/chat/<conversation id>`. */
+  chatThread: '/chat/:id',
+  /** The conversation list (the sidebar holds it from 1000px). */
+  conversations: '/chats',
+  providers: '/providers',
+  /** A new provider: `/providers/new?catalog=<id>`, `?local=<preset id>` or `?custom`. */
+  providerNew: '/providers/new',
+  /** One provider: `/providers/<provider id>`. */
+  provider: '/providers/:id',
 } as const
 
 export type RouteName = keyof typeof paths
+
+/** The path of one chat. */
+export function chatPath(id: string): string {
+  return `/chat/${encodeURIComponent(id)}`
+}
+
+/** The path of one provider's settings. */
+export function providerPath(id: string): string {
+  return `/providers/${encodeURIComponent(id)}`
+}
+
+/** Where a new provider comes from: a catalog provider, a local server preset, or a custom endpoint. */
+export type ProviderSource =
+  | { readonly from: 'catalog'; readonly id: string }
+  | { readonly from: 'local'; readonly id: string }
+  | { readonly from: 'custom' }
+
+/** The path that creates a provider from `source`. */
+export function newProviderPath(source: ProviderSource): string {
+  if (source.from === 'custom') return `${paths.providerNew}?custom`
+  return `${paths.providerNew}?${source.from}=${encodeURIComponent(source.id)}`
+}
+
+/** The source a `/providers/new` query names (a custom endpoint when it names none). */
+export function providerSourceOf(search: string): ProviderSource {
+  const q = new URLSearchParams(search)
+  const catalog = q.get('catalog')
+  if (catalog) return { from: 'catalog', id: catalog }
+  const local = q.get('local')
+  if (local) return { from: 'local', id: local }
+  return { from: 'custom' }
+}

@@ -47,7 +47,7 @@ Top-level `Y.Map`s, each `id -> Y.Map` of one entity whose fields are `Any` valu
 | `mcp` | `{id, name, transport: 'http' \| 'sse', url, auth: 'none' \| 'oauth' \| 'bearer', enabled: boolean, approvals: object}` |
 | `skills` | `{id, name, description, source: object, files?: blob ref, enabled: boolean}` |
 | `knowledge` | `{id, name, documents: {blob: blob ref, name, mediaType}[]}` |
-| `settings` | not entities: `settingName -> Any`, synced preferences (default model, default effort...) |
+| `settings` | not entities: `settingName -> Any`, synced preferences: `defaultModel: ModelRef \| null`, `defaultEffort: Effort \| null`, `defaultSystem: string`... |
 | `keyslots` | `slotId -> {label: string, createdAt}`: names the user gave the keyslots; the slots themselves are not in the document |
 
 Every entity also has `createdAt` and `updatedAt`, and the trash fields of [3.1](#31-trash). `order` is a fractional
@@ -69,10 +69,13 @@ deleted, and for a conversation its messages are deleted from the shard. Ciphert
 | `folder` | string \| null | folder id |
 | `persona` | string \| null | persona id it started with |
 | `model` | ModelRef \| null | `{provider: providerId, id: modelId}`: the model new turns use |
+| `effort` | Effort \| null | the effort new turns use (`'none' \| 'minimal' \| 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'`); `null`: the synced default |
 | `leaf` | string \| null | the message id of the active branch's last message |
 | `system` | string | the top-level system prompt, frozen when the first message is sent ([5](#5-provider-replay-rules)) |
 | `tools` | ToolSnapshot | the tool set declared when the first message is sent ([5](#5-provider-replay-rules)) |
 | `pinned` | boolean | |
+| `archived` | boolean | hidden from the main list, still searchable; not the trash |
+| `startedAt?` | number | when the first message was appended; from then on `system` and `tools` never change |
 | `createdAt`, `updatedAt`, `deletedAt?`, `purgedAt?` | number | |
 
 `ToolSnapshot` is `{name, source: 'builtin' | 'mcp' | 'skill', origin?: string, fingerprint: string}[]` sorted by
@@ -81,8 +84,13 @@ sent to the provider, so a drifted definition is detected before it is used.
 
 ### 3.3 Provider
 
-`{id, kind, label, baseUrl?: string, models?: string[], defaultModel?: string, syncKey: boolean, secret?: string}`.
-`kind` names the adapter (`anthropic`, `openai`, `openai-compatible`, `ollama`, `webllm`...). No API key is ever a
+`{id, kind, label, baseUrl?: string, preset?: string, models?: string[], defaultModel?: string, syncKey: boolean,
+secret?: string, overrides?: {modelId: object}}`. `kind` names the adapter (`anthropic`, `openai`, `google`,
+`mistral`, `openrouter`, `openai-compatible`, `webllm`, `chrome-ai`); a reader keeps a provider of a kind it does not
+know and leaves it unusable. `openai-compatible` covers every server speaking OpenAI's chat completions; `preset` names
+the one it was set up from (`groq`, `xai`, `deepseek`, `ollama`, `lmstudio`... or `custom`) and `baseUrl` is then
+required. `overrides` holds the user's corrections of a model's resolved capabilities (`Capabilities` in
+`web/src/core/contracts/ai.ts`), by model id. No API key is ever a
 field: `syncKey` says whether the user opted in to syncing the key, and `secret` is then the id of its secret
 ([6](#6-secrets)). With `syncKey` false the key is a device-only record.
 
@@ -98,21 +106,33 @@ One top-level `Y.Map` named `messages`, `messageId -> Y.Map`:
 | `parts` | Part[] | content, [4.2](#42-parts); immutable once committed |
 | `model` | ModelRef \| null | the model that produced an assistant message; `null` otherwise |
 | `createdAt` | number | |
-| `status` | `'done' \| 'stopped' \| 'error'` | `stopped`: the user stopped the stream; `error`: it failed |
-| `usage?` | object | `{input, output, cacheRead?, cacheWrite?, reasoning?}` token counts as reported |
-| `error?` | object | `{code, message}` for `status: 'error'` |
-| `deletedAt?` | number | hidden from the branch view; never removed while the conversation lives |
+| `status` | `'done' \| 'stopped' \| 'error' \| 'refused'` | `stopped`: the user stopped the stream; `error`: it failed; `refused`: the provider declined it (Anthropic `stop_reason: 'refusal'`) |
+| `stop?` | string | why an assistant response ended: `'end' \| 'length' \| 'tool-calls' \| 'stop-sequence' \| 'refusal' \| 'content-filter' \| 'pause' \| 'other'` |
+| `effort?` | string | the effort the response was requested with |
+| `usage?` | object | `{input, output, cacheRead?, cacheWrite?, reasoning?}` token counts as reported; `input` and `output` are totals (cached input and reasoning included) |
+| `error?` | object | `{code, message}` for `status: 'error'`; `code` is a `ChatErrorCode` (`web/src/core/contracts/ai.ts`) |
+| `refusal?` | object | `{category: string \| null, explanation?: string}` for `status: 'refused'`, from the provider's `stop_details` |
+| `deletedAt?` | number | hidden from the branch view; set once, never cleared, never removed while the conversation lives |
 
 ### 4.1 The message tree
 
 Messages form a tree through `parent`. The conversation's `leaf` selects one path from the root; the UI shows that
 path. Sending a message appends a child of `leaf` and moves `leaf`. Editing a message, or regenerating an answer,
 never changes it: it creates a sibling (same `parent`) and moves `leaf` to the new branch. Switching branches only
-moves `leaf`.
+moves `leaf`, to the most recently created descendant at each level below the chosen sibling. Siblings are ordered by
+`createdAt`, then id.
 
 Messages are **immutable**. A response streams in memory; the message is committed to the document once, when it
-ends, is stopped (`status: 'stopped'`, with the parts received so far) or fails (`status: 'error'`). A lock, a sync or
-an update never cuts a stream short (the vault's `holdLock`); a reload mid-stream loses only the uncommitted part.
+ends, is stopped (`status: 'stopped'`, with the parts received so far), fails (`status: 'error'`, with the parts
+received so far) or is refused (`status: 'refused'`, with no parts: the partial output of a refusal is discarded, as
+the provider requires). A lock, a sync or an update never cuts a stream short (the vault's `holdLock`, the PWA's
+`holdReload`); a reload mid-stream loses only the uncommitted message, and the user message it answered stays as the
+leaf. Committing an answer moves `leaf` to it only if `leaf` is still the message it answers: a branch switch made
+during the stream wins. A message sent while an answer streams in the same conversation waits for that answer to be
+committed, then becomes a child of the leaf.
+
+The first message of a conversation sets `startedAt`. Deleting a message (`deletedAt`) is final: the branch view
+hides it, and the request builder leaves it out under rule 7 of [section 5](#5-provider-replay-rules).
 
 ### 4.2 Parts
 
@@ -151,6 +171,16 @@ content-addressed and shared: the same photo in two conversations is stored once
 attach time (resized, EXIF and other metadata removed) and the stored bytes are the ones sent to providers, so a
 replay sends identical bytes.
 
+### 4.5 Local persistence
+
+Until a document's updates are sealed into segments (FORMAT.md section 8.4), they live in the device's `pending`
+queue (FORMAT.md section 11.1), one kind-6 envelope per update, under the document's `docId`. Opening a document
+applies its queue in order. Every local transaction appends its v2 update; an update is appended only after every
+earlier update of the same document was acknowledged, so a later change is never persisted without the one before it.
+Updates applied from the queue or received from another device are not appended again. Compacting a queue appends one
+merged update first and then drops the positions it covers, so an interruption leaves duplicates, which Yjs ignores,
+and never a gap. No plaintext copy of a document exists outside memory.
+
 ## 5. Provider replay rules
 
 Some providers bind a model's reasoning to the exact conversation that produced it. Anthropic signs each thinking
@@ -175,6 +205,26 @@ append-only so a conversation's prefix never changes:
    its reasoning stays valid for it.
 6. **Stable bytes.** Images and documents are sent from blobs, as the same bytes on every turn.
 
+The request for a turn is a function of `system`, `tools`, the committed messages of the path and the target model
+(`planPrompt` in `web/src/core/contracts/chat.ts`), so the same path always gives the same request and a new turn only
+appends to it:
+
+7. **Left out, always the same way.** Assistant messages with status `error` or `refused` and deleted messages are
+   never sent. A message created before a deleted message that precedes it on the path was deleted loses its
+   `reasoning` parts on every later turn: they were signed over a prefix that no longer exists (text and tool calls
+   stay). A `stopped` message loses its `tool-call` parts, which never ran.
+8. **Own provider only.** A `reasoning` part is sent only when its `providerMeta` has an entry for the target
+   provider's kind, and a `provider` part only to its `provider`; reasoning text from another provider is never sent.
+   Within a provider, a model switch replays everything and the provider drops what the new model cannot read.
+9. **No prefill.** A request never ends with an assistant message: regenerating sends the path up to the answer's
+   parent, and "continue" is a new user message.
+10. **System messages degrade deterministically.** A `role: 'system'` message is sent as a mid-conversation system
+    message to a model that supports them, and otherwise as a user message holding only
+    `<system-update>\n…\n</system-update>`. An image sent to a model without vision becomes the text
+    `[image omitted: <name>]`, a PDF sent to a model without PDF input `[document omitted: <name>]`.
+11. **Explicit effort, allowed parameters only.** Every turn to a model that takes effort sends a level explicitly; no
+    request carries a sampling parameter, a forced tool choice or an effort the model's capabilities do not allow.
+
 ## 6. Secrets
 
 Secrets never enter a Yjs document. They are of two kinds.
@@ -185,7 +235,7 @@ Secrets never enter a Yjs document. They are of two kinds.
 |---|---|
 | `sync-credential` | credentials of a sync destination (a GitHub token, S3 keys) |
 | `oauth-token` | OAuth tokens: MCP servers, Dropbox, OneDrive, GitLab |
-| `provider-key` | an API key the user did not opt in to sync |
+| `provider-key` | an API key, under the provider id: the UTF-8 JSON `{"kind": "api-key", "provider": "<providerId>", "key": "<the key>"}` |
 | `device` | the `deviceId` |
 
 The Secret Key is also device-only, in `meta`, wrapped by the device key (FORMAT.md section 11.2). Sync credentials

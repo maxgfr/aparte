@@ -1,0 +1,884 @@
+/* The chat (DESIGN.md: Thread, Composer, Privacy chip). The document scrolls; the header and the composer stick. */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.loading {
+  margin: 0;
+  padding: var(--space-8) var(--gutter);
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+  text-align: center;
+}
+
+/* Header: a compact top bar on phones (back to the list, title, actions), the title alone beside the sidebar. */
+.chatHeader {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 3.25rem;
+  padding: env(safe-area-inset-top) var(--gutter) 0;
+  border-bottom: var(--hairline-width) solid var(--hairline);
+  background: var(--bg);
+}
+
+.headerBack {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  margin-inline-start: calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--accent-ink);
+  text-decoration: none;
+}
+
+.chatTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-body);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.headerIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+}
+
+.headerIcon:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+/* The privacy chip states only what is verified: here, that the chat lives on this device. */
+.privacyChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-pressed);
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 599px) {
+  .privacyChip {
+    display: none;
+  }
+}
+
+@media (min-width: 1000px) {
+  .headerBack {
+    display: none;
+  }
+}
+
+/* The thread: one column at the content width, answers unboxed at the prose measure. */
+.thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-5) var(--gutter) var(--space-6);
+}
+
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin-block: auto;
+  padding-block: var(--space-8);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-large-title);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.emptyBody {
+  max-width: var(--measure-prose);
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.userRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.bubble {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 85%;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-bubble) var(--radius-bubble) var(--radius-bubble-tail) var(--radius-bubble);
+  background: var(--bubble-user);
+  color: var(--bubble-user-ink);
+}
+
+.userText {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.image {
+  display: block;
+  max-width: 100%;
+  max-height: 20rem;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-control);
+  object-fit: contain;
+}
+
+.imageMissing {
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}
+
+.editor {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/* One column that never grows past the thread: a long code line scrolls inside its block, never the page. */
+.answerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The rendered text of an answer: it may shrink so that wide code blocks and tables scroll inside it. */
+.answerContent {
+  min-width: 0;
+}
+
+.answerFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.usage {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--ink-2);
+}
+
+.branch {
+  display: inline-flex;
+  align-items: center;
+}
+
+.branchCount {
+  min-width: 2.5em;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  text-align: center;
+}
+
+.reasoning {
+  max-width: var(--measure-prose);
+  color: var(--ink-2);
+}
+
+.reasoningSummary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.reasoningText {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--hairline-strong);
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.note,
+.errorNote {
+  display: grid;
+  gap: var(--space-1);
+  max-width: var(--measure-prose);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  font-size: var(--text-footnote);
+}
+
+.note p,
+.errorNote p {
+  margin: 0;
+}
+
+.note {
+  border-inline-start: 3px solid var(--warning);
+  background: var(--warning-soft);
+}
+
+.errorNote {
+  border-inline-start: 3px solid var(--danger);
+  background: var(--danger-soft);
+}
+
+.systemNotice {
+  align-self: center;
+  max-width: var(--measure-prose);
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  text-align: center;
+}
+
+.systemNotice summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.systemText {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  font-weight: 400;
+  text-align: start;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.caption {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.footnote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}
+
+.warningText {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--text-footnote);
+  font-weight: 500;
+}
+
+.linkButton {
+  min-height: 32px;
+  margin-inline-start: var(--space-1);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The composer sits on the keyboard's top edge and above the bottom safe area. */
+.composerDock {
+  position: sticky;
+  z-index: 5;
+  bottom: var(--kb-inset, 0px);
+  padding: var(--space-2) var(--gutter) calc(env(safe-area-inset-bottom) + var(--space-2));
+  background: var(--bg);
+}
+
+/* Phones: above the tab bar (which holds the bottom safe area), or on the keyboard while the bar steps aside. */
+@media (max-width: 999px) {
+  :global(html:not([data-keyboard])) .composerDock {
+    bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+    padding-bottom: var(--space-2);
+  }
+}
+
+.composer {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  min-height: var(--composer-min);
+  padding: var(--space-2) var(--space-2) var(--space-1) var(--space-4);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-bubble);
+  background: var(--surface);
+}
+
+.field:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.composerDragging .field {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+.input {
+  width: 100%;
+  min-height: 1.75rem;
+  margin: 0;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: max(16px, var(--text-body));
+  line-height: var(--leading-body);
+  resize: none;
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+
+.toolbarStart {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-inline-start: calc(-1 * var(--space-2));
+}
+
+.toolbarEnd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cameraButton {
+    display: none;
+  }
+}
+
+.send,
+.stop {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.send {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.stop {
+  background: var(--surface-pressed);
+  color: var(--ink);
+}
+
+.send:active:not(:disabled),
+.stop:active {
+  transform: scale(0.96);
+}
+
+.send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  text-align: center;
+}
+
+.modelChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 14rem;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-footnote);
+  cursor: pointer;
+}
+
+.modelChip:hover,
+.effortSelect:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.modelChipName {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effortSelect {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-footnote);
+  cursor: pointer;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  list-style: none;
+}
+
+.attachment {
+  position: relative;
+}
+
+.thumb {
+  display: block;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--radius-control);
+  object-fit: cover;
+}
+
+.thumbPending {
+  display: grid;
+  place-items: center;
+  padding: var(--space-1);
+  overflow: hidden;
+  background: var(--surface-pressed);
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.thumbRemove {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+/* The remove button's target reaches 44px without a larger mark. */
+.thumbRemove::before {
+  position: absolute;
+  inset: -0.5rem;
+  content: "";
+}
+
+/* Conversation list (the Chats screen and the sidebar). */
+.list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.listTop {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.listGroup {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.listGroupTitle {
+  margin: 0;
+  padding-inline: var(--space-3);
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.listItems {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-control);
+}
+
+.listItem:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.listLink {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  align-content: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.listLink[aria-current="page"] {
+  background: var(--accent-soft);
+}
+
+.listTitle {
+  overflow: hidden;
+  font-size: var(--text-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listMeta {
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.listMore {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.listCompact .listTitle {
+  font-size: var(--text-footnote);
+}
+
+/* Model picker. */
+.picker {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.pickerGroup {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.pickerGroupTitle {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.pickerList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pickerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* The effort levels, one radio per row. */
+.effortChoices {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.effortChoices input {
+  accent-color: var(--accent);
+}
+
+.pickerRow:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.pickerRowSelected {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.pickerText,
+.modelDetails {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.modelId {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  font-variant-numeric: normal;
+  overflow-wrap: anywhere;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.badge {
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-pressed);
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+/* Sheets and forms. */
+.systemSheet,
+.actionsSheet,
+.form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* A form's own buttons keep their size; only fields take the full width. */
+.form > button,
+.actionsSheet > button {
+  justify-self: start;
+}
+
+.systemCurrent {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--surface-pressed);
+}
+
+.fieldLabel {
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.625rem var(--space-3);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: max(16px, var(--text-body));
+  line-height: var(--leading-body);
+  resize: vertical;
+}
+
+.textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.sheetActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 650;
+}
+
+.help {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--hairline-width) solid var(--tool-border);
+  border-radius: var(--radius-surface);
+  background: var(--tool-bg);
+  color: var(--tool-ink);
+  font-size: var(--text-footnote);
+}
+
+.help p {
+  margin: 0;
+}
+
+.helpTitle {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 650;
+}
+
+.modelList {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  list-style: none;
+}
+
+.modelItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+}
+
+.modelItem + .modelItem {
+  border-top: var(--hairline-width) solid var(--hairline);
+}
+
+.modelItemActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.inlineForm > :first-child {
+  flex: 1 1 14rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .send,
+  .stop {
+    transition: none;
+  }
+}

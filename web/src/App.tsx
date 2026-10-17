@@ -1,5 +1,6 @@
 import './ui/global.css'
 import type { JSX } from 'react'
+import { ChatProvider } from './app/chat.tsx'
 import { readPref } from './app/prefs.ts'
 import { HashRouter, Routes } from './app/router.tsx'
 import { applyTheme } from './app/theme.ts'
@@ -22,13 +23,15 @@ export function App(): JSX.Element {
     <I18nProvider locale={locale}>
       <ToastProvider>
         <VaultProvider>
-          <HashRouter>
-            <VaultGate>
-              <Shell>
-                <Routes />
-              </Shell>
-            </VaultGate>
-          </HashRouter>
+          <ChatProvider>
+            <HashRouter>
+              <VaultGate>
+                <Shell>
+                  <Routes />
+                </Shell>
+              </VaultGate>
+            </HashRouter>
+          </ChatProvider>
         </VaultProvider>
         <UpdateToast />
       </ToastProvider>

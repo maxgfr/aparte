@@ -1,0 +1,162 @@
+/*
+ * Contract of the chat: turning a conversation path into a provider request that keeps the history append-only, and
+ * the controller that streams a response into memory and commits it once. Implemented by
+ * web/src/core/chat/request.ts (RequestModule, pure) and web/src/core/chat/controller.ts (ControllerModule).
+ *
+ * Invariants:
+ * - A request is a function of the conversation's frozen `system`, its frozen `tools`, the committed messages of the
+ *   path and the target model: the same path sent to the same model gives the same request, and appending a turn only
+ *   appends to it (spec/DATA-MODEL.md section 5). Nothing earlier is rewritten, reordered or trimmed client-side.
+ * - A request never ends with an assistant message (no prefill): regenerating sends the path up to the parent of the
+ *   answer, and "continue" is a new user turn.
+ * - A response streams in memory only. The assistant message is committed once, when the stream finishes (`done`),
+ *   is stopped (`stopped`, with the parts received so far), fails (`error`) or is refused (`refused`, with no parts:
+ *   a refusal's partial output is discarded). A reload mid-stream loses only that uncommitted message.
+ * - While a stream runs, the controller holds the vault lock (`holdLock`) and the PWA reload (`holdReload`), both
+ *   with the reason `chat-stream`, one hold per stream. Both are released once the message is committed and the
+ *   workspace has flushed (or failed to), never before.
+ * - Nothing is written for a turn that cannot start (no model, no key, an unknown provider): `send` rejects first.
+ */
+
+import type { Capabilities, ChatAdapter, Effort, ModelDescriptor, ProviderKeys, ProviderKind, Usage } from './ai.ts'
+import type { Rng } from './crypto.ts'
+import type { Clock } from './vault.ts'
+import type { BlobPort, Conversation, Id, Message, ModelRef, Part, Role, Settings, Workspace } from './workspace.ts'
+
+// Request planning (pure)
+
+/** A message of the plan: committed parts, blob references not yet resolved to bytes. */
+export interface PlannedMessage {
+  readonly role: Role
+  readonly parts: readonly Part[]
+  /** The committed message it comes from. */
+  readonly from: Id
+}
+
+export interface PromptPlan {
+  /** The conversation's `system`, as frozen. */
+  readonly system: string
+  readonly messages: readonly PlannedMessage[]
+}
+
+export interface PlanInput {
+  readonly conversation: Conversation
+  /** `thread.path(...)` up to and including the last message to send, `ref` parts already substituted. */
+  readonly path: readonly Message[]
+  readonly kind: ProviderKind
+  readonly capabilities: Capabilities
+}
+
+export interface RequestModule {
+  /**
+   * The messages a path sends, by these rules, in this order (spec/DATA-MODEL.md section 5):
+   * 1. Assistant messages with status `error` or `refused` are left out, and so are deleted messages.
+   * 2. A message created before a deleted message of the path that precedes it was deleted (`createdAt <=
+   *    deletedAt`) loses its `reasoning` parts: its reasoning was signed over a prefix that no longer exists. Text,
+   *    tool calls and other parts stay.
+   * 3. A `reasoning` part is sent only with a `providerMeta` entry for `kind`; a `provider` part only when its
+   *    `provider` is `kind`. Everything else is left out of the request (never shown to another provider).
+   * 4. A `stopped` assistant message loses its `tool-call` parts (they never ran); a message left with no part is
+   *    left out.
+   * 5. A `role: 'system'` message stays a system message when `capabilities.midConversationSystem`; otherwise it
+   *    becomes a user message whose only part is the text `<system-update>\n${text}\n</system-update>`.
+   * 6. Without `capabilities.vision`, an image part becomes the text part `[image omitted: ${name ?? 'image'}]`;
+   *    without `capabilities.pdf`, an `application/pdf` file part becomes `[document omitted: ${name}]`.
+   * InvalidStateError when the result is empty or ends with an assistant message.
+   */
+  planPrompt(input: PlanInput): PromptPlan
+  /**
+   * The effort a turn is sent with: the conversation's, else the synced default, else the model's default; when the
+   * model does not take that level, the highest accepted level below it, else its lowest level. Null when the model
+   * takes no effort.
+   */
+  pickEffort(
+    conversation: Pick<Conversation, 'effort'>,
+    settings: Pick<Settings, 'defaultEffort'>,
+    capabilities: Capabilities,
+  ): Effort | null
+  /** A title from the first user message: its first non-empty line, whitespace collapsed, at most 60 characters (an ellipsis replaces the rest). */
+  titleFrom(parts: readonly Part[]): string
+  /** Parts whose JSON (spec/FORMAT.md section 3.4) is longer than this many bytes are stored as blobs (`ref` parts). */
+  readonly LARGE_PART_BYTES: 16384
+}
+
+// Controller
+
+/** A response streaming in memory. */
+export interface StreamState {
+  readonly conversationId: Id
+  /** The id the assistant message will be committed under. */
+  readonly messageId: Id
+  readonly parentId: Id
+  readonly model: ModelRef
+  readonly effort: Effort | null
+  /** Parts received so far, in arrival order; a reasoning or text part grows as deltas arrive. */
+  readonly parts: readonly Part[]
+  readonly usage?: Usage
+  readonly startedAt: number
+  /** User messages sent during this stream, waiting for it to commit. */
+  readonly queued: number
+}
+
+/** A turn that was started or queued. */
+export interface Turn {
+  /** The user message of the turn (null for a regeneration, which adds none); allocated even while queued. */
+  readonly userMessageId: Id | null
+  /** Resolves with the committed assistant message, or null when a queued turn was cancelled before it started. */
+  readonly done: Promise<Message | null>
+}
+
+export type ChatEventName = 'stream' | 'commit'
+
+export interface ChatDeps {
+  readonly workspace: Workspace
+  /** The vault's `holdLock` (web/src/core/contracts/vault.ts); InvalidStateError while locking. */
+  readonly holdLock: (reason: string) => () => void
+  /** web/src/pwa/register.ts `holdReload`. */
+  readonly holdReload: (reason: string) => () => void
+  readonly adapter: (kind: ProviderKind) => ChatAdapter
+  readonly keys: ProviderKeys
+  /** The model descriptor for a reference (provider config, catalog, capabilities), or null when unknown. */
+  readonly resolveModel: (ref: ModelRef) => ModelDescriptor | null
+  readonly blobs: BlobPort
+  readonly rng: Rng
+  readonly clock: Clock
+}
+
+export interface ChatController {
+  /**
+   * Appends a user message as a child of the leaf, moves the leaf to it and streams the answer. During a stream in
+   * the same conversation, the message is queued and sent (as a child of the leaf then) once the stream commits.
+   * Rejects, having written nothing, with InvalidStateError when the conversation has no model or the vault is
+   * locking, and InvalidInputError when the model is unknown, the provider needs a key and none is stored, or
+   * `parts` is empty.
+   */
+  send(conversationId: Id, parts: readonly Part[]): Promise<Turn>
+  /**
+   * Streams a new answer as a sibling of `messageId` (an assistant message) or as a new child of it (a user message),
+   * with the conversation's current model and effort. InvalidStateError while a stream runs in that conversation.
+   */
+  regenerate(conversationId: Id, messageId: Id): Promise<Turn>
+  /** Creates a sibling of user message `messageId` with `parts`, moves the leaf to it and streams the answer. */
+  edit(conversationId: Id, messageId: Id, parts: readonly Part[]): Promise<Turn>
+  /**
+   * Appends a committed `role: 'system'` message (a persona or system prompt change) as a child of the leaf and moves
+   * the leaf to it. Before the first message it updates `system` instead and returns null.
+   */
+  appendSystem(conversationId: Id, text: string): Promise<Id | null>
+  /** Stops the conversation's stream (committed as `stopped`) and cancels its queued turns. No-op without a stream. */
+  stop(conversationId: Id): void
+  /** The conversation's stream, or null. */
+  stream(conversationId: Id): StreamState | null
+  /** Conversations with a stream running. */
+  streaming(): readonly Id[]
+  /** Calls `fn` on every stream change and every commit; returns the unsubscribe function. */
+  subscribe(fn: (event: ChatEventName, conversationId: Id) => void): () => void
+  /** Stops every stream (each committed as `stopped`), for the vault's `onLock`. Resolves once all are committed. */
+  dispose(): Promise<void>
+}
+
+export interface ControllerModule {
+  createChatController(deps: ChatDeps): ChatController
+}
