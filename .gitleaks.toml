@@ -1,0 +1,12 @@
+# gitleaks configuration: the default rules, plus an allowlist for the published test material. The keys, IVs and
+# ciphertexts under spec/kat and spec/vectors are fixed, public test inputs (RFC and Wycheproof known answers, and the
+# aparte/1 cross-implementation vectors); they protect nothing and must stay byte-exact.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public cryptographic test vectors"
+paths = [
+  '''(^|/)spec/kat/[^/]+\.json$''',
+  '''(^|/)spec/vectors/[^/]+\.json$''',
+]
