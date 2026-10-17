@@ -66,7 +66,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "aparte"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "aparte-crypto",
@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-crypto"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aes-gcm",
  "aparte-format",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-format"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aparte-crypto",
  "flate2",
