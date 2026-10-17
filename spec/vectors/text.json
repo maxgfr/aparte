@@ -1,0 +1,150 @@
+{
+  "base32": [
+    {
+      "hex": "",
+      "text": ""
+    },
+    {
+      "hex": "00",
+      "text": "aa"
+    },
+    {
+      "hex": "ff",
+      "text": "74"
+    },
+    {
+      "hex": "0000",
+      "text": "aaaa"
+    },
+    {
+      "hex": "ffffffffff",
+      "text": "77777777"
+    },
+    {
+      "hex": "000102030405060708090a0b0c0d0e0f",
+      "text": "aaaqeayeaudaocajbifqydiob4"
+    },
+    {
+      "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "text": "aaaqeayeaudaocajbifqydiob4ibceqtcqkrmfyydenbwha5dypq"
+    }
+  ],
+  "base32Invalid": [
+    {
+      "text": "a",
+      "error": "invalid-input"
+    },
+    {
+      "text": "aaa",
+      "error": "invalid-input"
+    },
+    {
+      "text": "aaaaaa",
+      "error": "invalid-input"
+    },
+    {
+      "text": "AA",
+      "error": "invalid-input"
+    },
+    {
+      "text": "ab=",
+      "error": "invalid-input"
+    },
+    {
+      "text": "a0",
+      "error": "invalid-input"
+    },
+    {
+      "text": "a1",
+      "error": "invalid-input"
+    },
+    {
+      "text": "a8",
+      "error": "invalid-input"
+    },
+    {
+      "text": "a9",
+      "error": "invalid-input"
+    },
+    {
+      "text": "ab",
+      "error": "invalid-input"
+    },
+    {
+      "text": "ac",
+      "error": "invalid-input"
+    },
+    {
+      "text": "aj",
+      "error": "invalid-input"
+    },
+    {
+      "text": "ai ",
+      "error": "invalid-input"
+    }
+  ],
+  "base64url": [
+    {
+      "hex": "",
+      "text": ""
+    },
+    {
+      "hex": "00",
+      "text": "AA"
+    },
+    {
+      "hex": "ff",
+      "text": "_w"
+    },
+    {
+      "hex": "fbff",
+      "text": "-_8"
+    },
+    {
+      "hex": "fbffbf",
+      "text": "-_-_"
+    },
+    {
+      "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "text": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    }
+  ],
+  "base64urlInvalid": [
+    {
+      "text": "A",
+      "error": "invalid-input"
+    },
+    {
+      "text": "AB==",
+      "error": "invalid-input"
+    },
+    {
+      "text": "A+8",
+      "error": "invalid-input"
+    },
+    {
+      "text": "A/8",
+      "error": "invalid-input"
+    },
+    {
+      "text": "AB",
+      "error": "invalid-input"
+    },
+    {
+      "text": "AR",
+      "error": "invalid-input"
+    },
+    {
+      "text": "AAA=",
+      "error": "invalid-input"
+    },
+    {
+      "text": "A A",
+      "error": "invalid-input"
+    },
+    {
+      "text": "_x",
+      "error": "invalid-input"
+    }
+  ]
+}

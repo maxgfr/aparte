@@ -45,6 +45,15 @@ export interface LocalMeta {
   keyslots(): Promise<readonly { readonly slot: string; readonly bytes: Bytes }[]>
   putKeyslot(slot: string, bytes: Uint8Array): Promise<void>
   deleteKeyslot(slot: string): Promise<void>
+  /**
+   * Makes a vault exist, in one transaction: unless `vault` is already set, removes every entry (the leftovers of an
+   * interrupted creation) and writes `entries` and `keyslots`. Returns false, having written nothing, when `vault` is
+   * already set: another page of this device created a vault first.
+   */
+  initVault(input: {
+    readonly entries: Pick<MetaValues, 'fmt' | 'vault'> & Partial<Pick<MetaValues, 'device-key' | 'secret-key'>>
+    readonly keyslots: readonly { readonly slot: string; readonly bytes: Uint8Array }[]
+  }): Promise<boolean>
   /** Removes every entry, for a device that leaves the vault. */
   clear(): Promise<void>
 }

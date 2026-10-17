@@ -39,5 +39,14 @@ export default defineConfig({
   },
   plugins: [react(), cspPlugin({ origin, base }), VitePWA(pwaOptions(base))],
   worker: { format: 'es' },
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    rollupOptions: {
+      output: {
+        // A stable name for the passphrase strength dictionaries, so the service worker can leave them out of the
+        // precache (pwa.config.ts) and fetch them only on the vault creation screen.
+        manualChunks: (id: string) => (id.includes('@zxcvbn-ts/') ? 'zxcvbn' : undefined),
+      },
+    },
+  },
 })

@@ -158,6 +158,77 @@
       }
     ]
   },
+  "keyslotTexts": {
+    "$comment": "Each case starts from the text of the \"passphrase-secret-key\" keyslot file and replaces the first occurrence of `find` with `replace`, so it can hold JSON no parsed value serializes back to: a number beyond binary64, nesting deeper than a parser's default limit, an escaped surrogate, a repeated member. FORMAT.md sections 3.5 and 6.7 fix the error of each.",
+    "base": "passphrase-secret-key",
+    "cases": [
+      {
+        "id": "m-beyond-binary64",
+        "find": "\"m\":19456",
+        "replace": "\"m\":1e400"
+      },
+      {
+        "id": "m-integer-beyond-binary64",
+        "find": "\"m\":19456",
+        "replace": "\"m\":10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "id": "kdf-extra-deep",
+        "find": "\"secretKey\":true",
+        "replace": "\"secretKey\":true,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+      },
+      {
+        "id": "kdf-name-lone-surrogate",
+        "find": "\"secretKey\":true",
+        "replace": "\"secretKey\":true,\"\\udfff\":1"
+      },
+      {
+        "id": "format-lone-high",
+        "find": "\"format\":\"aparte/1\"",
+        "replace": "\"format\":\"\\ud800\""
+      },
+      {
+        "id": "format-two-highs",
+        "find": "\"format\":\"aparte/1\"",
+        "replace": "\"format\":\"\\ud800\\ud800\""
+      },
+      {
+        "id": "format-lone-in-replaced-duplicate",
+        "find": "\"format\":\"aparte/1\"",
+        "replace": "\"format\":\"\\ud800\",\"format\":\"aparte/1\""
+      },
+      {
+        "id": "format-pair",
+        "find": "\"format\":\"aparte/1\"",
+        "replace": "\"format\":\"\\ud83d\\ude00\""
+      },
+      {
+        "id": "format-escaped-backslash",
+        "find": "\"format\":\"aparte/1\"",
+        "replace": "\"format\":\"\\\\ud800\""
+      },
+      {
+        "id": "kind-lone-high",
+        "find": "\"kind\":\"passphrase\"",
+        "replace": "\"kind\":\"\\ud800\""
+      },
+      {
+        "id": "alg-lone-low",
+        "find": "\"alg\":\"argon2id\"",
+        "replace": "\"alg\":\"\\udc00\""
+      },
+      {
+        "id": "type-beyond-binary64",
+        "find": "\"type\":\"keyslot\"",
+        "replace": "\"type\":1e400"
+      },
+      {
+        "id": "extra-deep",
+        "find": "{\"format\"",
+        "replace": "{\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]],\"format\""
+      }
+    ]
+  },
   "envelopes": [
     {
       "id": "segment-plain",

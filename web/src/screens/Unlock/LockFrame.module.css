@@ -1,0 +1,79 @@
+.room {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 100dvh;
+  padding: max(var(--space-10), env(safe-area-inset-top)) var(--gutter)
+    max(var(--space-10), env(safe-area-inset-bottom));
+  background: var(--lock-bg);
+  color: var(--lock-ink);
+  outline: none;
+  animation: settle var(--dur) var(--ease-out);
+}
+
+.panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 24rem;
+}
+
+.mark {
+  border-radius: var(--radius-surface);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--text-large-title);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.015em;
+  text-align: center;
+}
+
+/* The form under the title: full width of the panel, fields and buttons aligned to the start. */
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+.lead {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  text-align: center;
+}
+
+.notice {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  text-align: center;
+}
+
+.error {
+  color: var(--danger);
+  font-size: var(--text-footnote);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room {
+    animation-duration: 1ms;
+  }
+}

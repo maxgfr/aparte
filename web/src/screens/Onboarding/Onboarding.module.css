@@ -1,0 +1,122 @@
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  max-width: 34rem;
+}
+
+.lead {
+  max-width: 60ch;
+  color: var(--ink-2);
+}
+
+.chooser {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.generated,
+.custom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+/* The generated words are data the user copies letter for letter: monospace, where every character is distinct. */
+.generated input {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.strength {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: calc(-1 * var(--space-1));
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  max-width: 16rem;
+}
+
+.bar {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--hairline-strong);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.strength[data-tone="weak"] .bar[data-on="true"] {
+  background: var(--danger);
+}
+
+.strength[data-tone="fair"] .bar[data-on="true"] {
+  background: var(--warning);
+}
+
+.strength[data-tone="good"] .bar[data-on="true"] {
+  background: var(--success);
+}
+
+.strengthText {
+  min-height: 1.2em;
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+}
+
+.strength[data-tone="weak"] .strengthText {
+  color: var(--danger);
+}
+
+.strength[data-tone="fair"] .strengthText {
+  color: var(--warning);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  cursor: pointer;
+}
+
+.check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+}
+
+.status {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.error {
+  color: var(--danger);
+  font-size: var(--text-footnote);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}

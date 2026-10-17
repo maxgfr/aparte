@@ -2,6 +2,8 @@
 export const paths = {
   welcome: '/',
   about: '/about',
+  createVault: '/vault/new',
+  recover: '/recover',
 } as const
 
 export type RouteName = keyof typeof paths

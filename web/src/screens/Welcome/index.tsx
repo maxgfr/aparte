@@ -1,40 +1,38 @@
 import { LockKeyhole } from 'lucide-react'
-import { useId } from 'react'
 import { Link } from 'wouter'
 import { paths } from '../../app/routes.ts'
+import { useVault } from '../../app/vault.tsx'
 import { useT } from '../../i18n/react.tsx'
-import { Button, buttonClass } from '../../ui/components/Button.tsx'
+import { buttonClass } from '../../ui/components/Button.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
 import styles from './Welcome.module.css'
 
 /**
- * The start screen of the preview: what Aparté is, that this build is the empty shell, and the first step of the
- * real app shown but not yet available (the vault arrives in the next milestone).
+ * The start screen of the preview: what Aparté is and, on a device without a vault, the first step (creating it).
+ * With the vault open it says so and offers to lock it; the chat arrives in a later milestone.
  */
 export default function Welcome() {
   const t = useT()
-  const comingId = useId()
+  const { status } = useVault()
+  const absent = status.state === 'absent'
   return (
     <Screen title={t('shell.welcomeTitle')}>
       <div className={styles.intro}>
         <p className={styles.lead}>{t('shell.welcomeLead')}</p>
         <p className={styles.preview}>{t('shell.welcomePreview')}</p>
+        {!absent && (
+          <p className={styles.preview} role="status">
+            {status.state === 'locking' ? t('vault.lockDeferred') : t('vault.homeUnlocked')}
+          </p>
+        )}
       </div>
       <div className={styles.actions}>
-        <div className={styles.primary}>
-          <Button
-            variant="primary"
-            size="large"
-            icon={<LockKeyhole size={18} strokeWidth={2} aria-hidden="true" />}
-            disabled
-            aria-describedby={comingId}
-          >
+        {absent && (
+          <Link href={paths.createVault} className={buttonClass({ variant: 'primary', size: 'large' })}>
+            <LockKeyhole size={18} strokeWidth={2} aria-hidden="true" />
             {t('shell.welcomeCreateVault')}
-          </Button>
-          <span id={comingId} className={styles.badge}>
-            {t('shell.welcomeComingNext')}
-          </span>
-        </div>
+          </Link>
+        )}
         <Link href={paths.about} className={buttonClass({ variant: 'plain' })}>
           {t('shell.welcomeLearnMore')}
         </Link>

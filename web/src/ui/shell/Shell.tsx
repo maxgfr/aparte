@@ -1,8 +1,9 @@
-import { Info, type LucideIcon, MessageSquareLock } from 'lucide-react'
+import { Info, Lock, type LucideIcon, MessageSquareLock } from 'lucide-react'
 import { type ReactNode, useEffect, useRef } from 'react'
 import { Link, useLocation } from 'wouter'
 import { sectionOf } from '../../app/hashLocation.ts'
 import { paths } from '../../app/routes.ts'
+import { useVault } from '../../app/vault.tsx'
 import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
 import { PreviewBanner } from '../PreviewBanner.tsx'
@@ -41,6 +42,8 @@ export function Shell({ children }: { readonly children: ReactNode }) {
   const [location] = useLocation()
   const main = useFocusMainOnNavigation(location)
   const section = sectionOf(location)
+  const { status, lock } = useVault()
+  const canLock = status.state === 'unlocked' || status.state === 'locking'
   return (
     <div className={styles.shell}>
       {/* A button, not a "#main" link: the hash holds the route, so a fragment link would navigate away. */}
@@ -63,6 +66,12 @@ export function Shell({ children }: { readonly children: ReactNode }) {
             )
           })}
         </ul>
+        {canLock && (
+          <button type="button" className={styles.lock} onClick={() => void lock()}>
+            <Lock className={styles.tabIcon} size={22} strokeWidth={1.75} aria-hidden="true" />
+            <span>{t('vault.lock')}</span>
+          </button>
+        )}
       </nav>
       <main id="main" ref={main} className={styles.main} tabIndex={-1}>
         <PreviewBanner />

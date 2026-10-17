@@ -103,6 +103,21 @@ members in the order this document lists them, no insignificant whitespace, stri
 escapes them, integers in plain decimal, absent optional members omitted (never `null`). That is the output of
 `JSON.stringify` on an object built in that order, and of `serde_json::to_vec` on a struct declared in that order.
 
+### 3.5 Reading JSON
+
+A reader reads JSON (RFC 8259) as `JSON.parse` does, so that two readers reach the same verdict on the same bytes:
+
+- No limit on nesting depth or on the magnitude of a number. Such a value is valid JSON, judged by the rule of the
+  member that holds it: `1e400` (beyond binary64) is a number out of every bound, and an array nested 200 deep is a
+  value of the wrong type, or an extra member. A reader built on a parser with such limits (serde_json stops at 128
+  levels and refuses `1e400`) skips the values it does not need without building them.
+- A repeated member name keeps its last value. No file of this format repeats one, so the canonical-form check that
+  follows rejects the file.
+- A `\u` escape of a surrogate (`d800` to `dfff`) that is not a high surrogate immediately followed by a `\u` escape of
+  a low surrogate makes the text not well-formed Unicode ([section 1](#1-conventions)): `corrupt`, before any other
+  check, wherever the escape is (a member name, a string, a member that a later repeat replaces). An escaped
+  backslash followed by `ud800` (`"\\ud800"`) is not an escape of a surrogate.
+
 ## 4. Identifiers
 
 | Id | Size | Text form | Scope |
@@ -153,7 +168,9 @@ K_local(name) = HKDF(ikm = K_local-enc, salt = vaultId, info = "aparte/1/local|"
 ```
 
 `name` is the object name of [section 8](#8-object-names) or the local record name of
-[section 11.3](#113-local-record-names), as ASCII. Each is an AES-256-GCM key. Because every name has its own key, no
+[section 11.3](#113-local-record-names), as ASCII. A name is one or more printable ASCII characters (`21` to `7e`):
+an implementation derives no key for any other name (empty, with a space or a control character, or not ASCII) and
+refuses it (`invalid-input`). Each is an AES-256-GCM key. Because every name has its own key, no
 key encrypts more than a handful of messages (an object is written once, plus retries; a local record once per
 update), far from the 2^32 random-IV limit of AES-GCM.
 
@@ -270,11 +287,13 @@ The RNG order matters only to reproduce the vectors with a queued RNG; productio
 
 A reader MUST perform these steps in order and stop at the first failure:
 
-1. Parse the bytes as JSON. Not UTF-8, not JSON, not an object, a member outside `kdf` that is missing, extra or of
-   the wrong type, a base64url or base32 field outside `kdf` that does not decode strictly or has the wrong length,
+1. Parse the bytes as JSON ([3.5](#35-reading-json)). Not UTF-8, an escaped lone surrogate anywhere in the text, not
+   JSON, not an object, a member outside `kdf` that is missing, extra or of the wrong type (a number beyond binary64 or
+   a deep nesting there is of the wrong type), a base64url or base32 field outside `kdf` that does not decode strictly or has the wrong length,
    `type` other than `keyslot`, or `slot` that differs from the file name: `corrupt`.
 2. `format` other than `aparte/1`, an unknown `kind`, or any rule of [6.3](#63-kdf-objects-and-bounds) broken
-   (including a missing or extra `kdf` member and an `alg` that does not match `kind`): `unsupported-keyslot`.
+   (including a missing or extra `kdf` member, whatever its value, and an `alg` that does not match `kind`):
+   `unsupported-keyslot`.
 3. Serialize the parsed value again ([6.1](#61-file)); if the bytes differ from the input: `corrupt`. A file is
    valid only in its single canonical form, so two parsers can never disagree about what it says.
 4. `vault` differs from the vault being opened: `corrupt`.
@@ -301,13 +320,15 @@ SKT = "A1-" || s[0..5] || "-" || s[5..10] || "-" || s[10..15] || "-" || s[15..20
 `b32(SK || C)` is 31 characters; the first 30 carry the 128 bits of `SK` and the first 22 bits of `C`. Parsing:
 remove every space and hyphen, require the remaining text to be `A1` (case-insensitive) followed by exactly 30
 characters of the base32 alphabet (case-insensitive), decode those 150 bits, and compare the 22 checksum bits; any
-failure is `invalid-input`. A typo is detected with probability 1 - 2^-22.
+failure is `invalid-input`. Case-insensitive means ASCII case only: the text is checked to be ASCII before any case
+mapping, so a character such as U+212A KELVIN SIGN, which Unicode lowercases to `k`, is refused. A typo is detected with probability 1 - 2^-22.
 
 ### 6.9 Recovery key text
 
 The recovery key `R` is 32 random bytes, shown once as the 52 characters of `uppercase(b32(R))` in 13 groups of 4
-separated by hyphens. Parsing removes spaces and hyphens, lowercases, and requires a strict base32 decode to exactly
-32 bytes (`invalid-input` otherwise). There is no checksum beyond the 4 zero bits of the last character: a typo
+separated by hyphens. Parsing removes spaces and hyphens, requires what is left to be ASCII letters and digits, lowercases
+(ASCII case only, as in [6.8](#68-secret-key-text)), and requires a strict base32 decode to exactly 32 bytes
+(`invalid-input` otherwise). There is no checksum beyond the 4 zero bits of the last character: a typo
 surfaces as `wrong-secret` at step 6.
 
 ### 6.10 Changing the passphrase and removing slots
@@ -316,6 +337,9 @@ Changing the passphrase opens a current slot (to recover `MK`), creates a new pa
 `salt`, same `SK`), persists it, and only then removes the old slot: locally at once, on the remote where the store
 allows deletion. On an append-only store (Git history) the old slot stays readable forever; see
 [section 14](#14-known-limits). A vault always keeps at least one slot that is not a recovery slot.
+
+Recovery opens a recovery slot, creates a passphrase slot for the new passphrase, persists it, and then removes the
+other passphrase slots in the same way: the forgotten (or compromised) passphrase stops opening the vault.
 
 ## 7. Envelope
 
@@ -553,8 +577,11 @@ that `ktag` of `id` equals the name's `ktag`. `hlc` is a hybrid logical clock:
 payload = u8(len(purpose)) || purpose || u16be(len(id)) || id || value
 ```
 
-`purpose` matches `[a-z][a-z0-9-]{0,31}`; `id` is 0 to 1024 bytes of UTF-8; `value` is the record's bytes. A reader
-recomputes the record name from `purpose` and `id` and rejects a mismatch (`corrupt`).
+`purpose` matches `[a-z][a-z0-9-]{0,31}`; `id` is 0 to 1024 bytes of UTF-8; `value` is the record's bytes. A writer
+refuses a purpose or id outside these rules, and no local record name is derived for one (`invalid-input`). A reader
+rejects a payload whose lengths run past its end, whose purpose breaks the rule or whose `id` is not UTF-8 or above
+1024 bytes (`corrupt`, although the envelope authenticated), then recomputes the record name from `purpose` and `id`
+and rejects a mismatch (`corrupt`), comparing in constant time ([section 2](#2-primitives)).
 
 ## 10. Store rules and anti-rollback
 
@@ -622,7 +649,16 @@ The Secret Key must be available before unlocking, so it cannot be a local recor
 remember it (the default), it is stored wrapped by `device-key`: a same-origin script can use that key but not export
 it, and the stored bytes are not the Secret Key. A copy of the browser profile holds both, so the Secret Key protects
 the remote, not a stolen device ([section 14](#14-known-limits)). Without `secret-key`, unlocking asks for the
-Emergency Kit. Non-sensitive UI preferences live in `localStorage` (`web/src/app/prefs.ts`), never in `meta`.
+Emergency Kit. A `secret-key` that does not unwrap under `device-key` counts as none: unlocking asks for the
+Emergency Kit (and a Secret Key typed in then replaces both entries), and recovery pairs the new passphrase with a new
+Secret Key under a new `device-key`. Non-sensitive UI preferences live in `localStorage` (`web/src/app/prefs.ts`),
+never in `meta`.
+
+Several pages of one origin (tabs, the installed app) share the database. A vault is created in one readwrite
+transaction on `meta` that first reads `vault`: when it is set, nothing is written and the creation is refused, so a
+page that loaded before the vault existed cannot replace it. Otherwise the transaction removes every entry (leftovers
+of an interrupted creation) and writes `fmt`, the keyslots, `device-key`, `secret-key` and `vault`. Unlocking and
+every slot change read the keyslots from `meta` again, so a slot another page added or removed is seen at once.
 
 ### 11.3 Local record names
 

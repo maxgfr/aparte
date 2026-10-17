@@ -10,5 +10,17 @@ homepage.workspace = true
 authors.workspace = true
 publish = false
 
+[dependencies]
+flate2 = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# The vectors example and the integration tests need the crypto layer; a dev-dependency cycle is allowed by Cargo.
+aparte-crypto = { workspace = true }
+proptest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
 [lints]
 workspace = true

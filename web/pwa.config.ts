@@ -52,6 +52,8 @@ export function pwaOptions(base: string): Partial<VitePWAOptions> {
       globIgnores: [
         // Splash screens are fetched by iOS at install, not by the app: no point precaching dozens of large PNGs.
         '**/apple-splash-*',
+        // The passphrase strength dictionaries (about 1.5 MB) only serve the vault creation screen: fetched on demand.
+        '**/zxcvbn-*.js',
         // Sandbox frames have an opaque origin, so the worker never sees their requests: precaching them is waste.
         'sandbox/**',
         // The OAuth callback must always come from the network as deployed.

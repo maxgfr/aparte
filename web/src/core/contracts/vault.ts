@@ -60,7 +60,10 @@ export interface VaultStatus {
   /** Reasons of the active holds. */
   readonly holds: readonly string[]
   readonly autoLock: AutoLockPolicy
-  /** Whether this device remembers the Secret Key (unlocking then needs only the passphrase). */
+  /**
+   * Whether this device remembers the Secret Key (unlocking then needs only the passphrase). Turns false once the
+   * stored copy fails to unwrap; unlocking with the Secret Key typed in then stores it again.
+   */
   readonly secretKeyOnDevice: boolean
 }
 
@@ -126,13 +129,29 @@ export interface Vault {
   status(): VaultStatus
   /** Returns the unsubscribe function. */
   subscribe(listener: (event: VaultEvent) => void): () => void
-  /** absent -> unlocked: a new master key, vault id, device id, passphrase slot and optional recovery slot. */
+  /**
+   * absent -> unlocked: a new master key, vault id, device id, passphrase slot and optional recovery slot.
+   * InvalidStateError, with nothing written, when the device already holds a vault (another page created it); the
+   * vault is then `locked`.
+   */
   create(input: CreateVaultInput): Promise<CreatedVault>
   /**
    * locked -> unlocked. WrongSecretError (state back to locked) when no slot opens; InvalidInputError for a malformed
    * text or a missing Secret Key; InvalidStateError in any state but locked.
    */
   unlock(credential: UnlockCredential): Promise<void>
+  /**
+   * Unlocks as `unlock` does and, in the same step, replaces every recovery slot with a new one: for an Emergency Kit
+   * that was never confirmed. Returns the new kit texts (the Secret Key of the slot that opened, or null).
+   */
+  unlockAndRenewKit(
+    credential: UnlockCredential,
+  ): Promise<{ readonly secretKey: string | null; readonly recoveryKey: string }>
+  /**
+   * Re-reads `meta`, for a change made by another page of this device: a vault created (absent -> locked), or
+   * keyslots added or removed. Unlocking and slot changes re-read the keyslots on their own.
+   */
+  refresh(): Promise<void>
   /** Locks now when nothing holds the lock; otherwise enters `locking` and waits, unless `force`. */
   lock(options?: { readonly force?: boolean }): Promise<void>
   /** Records user activity: restarts the idle timer and cancels a pending grace period. */
@@ -151,12 +170,15 @@ export interface Vault {
   /** Adds a recovery slot after opening a slot with `current`; the text is shown once. */
   addRecoveryKey(current: UnlockCredential): Promise<{ readonly slot: string; readonly recoveryKey: string }>
   /**
-   * locked -> unlocked with a recovery key, adding a passphrase slot for `next`. When this device has no Secret Key, a
-   * new one is generated for the new slot and returned (to show as a new Emergency Kit).
+   * locked -> unlocked with a recovery key, adding a passphrase slot for `next`. When this device has no usable Secret
+   * Key (none kept, or a stored copy that no longer unwraps), a new one is generated for the new slot and returned (to
+   * show as a new Emergency Kit). With `replace`, every other passphrase slot is removed once the new one is persisted
+   * (spec/FORMAT.md section 6.10): the forgotten passphrase stops opening the vault on this device.
    */
   recover(input: {
     readonly recoveryKey: string
     readonly next: string
+    readonly replace?: boolean
   }): Promise<{ readonly added: string; readonly secretKey: string | null }>
   /** Removes a slot; InvalidStateError when it would leave no slot other than recovery slots. Needs `unlocked`. */
   removeSlot(slot: string): Promise<void>

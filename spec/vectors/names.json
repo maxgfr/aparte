@@ -1,0 +1,127 @@
+{
+  "devices": [
+    {
+      "device": "a",
+      "deviceId": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+      "dtag": "4p6hmywopyzr2fmb"
+    },
+    {
+      "device": "b",
+      "deviceId": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "dtag": "c5qfro7qdtg7cgzs"
+    }
+  ],
+  "docs": [
+    {
+      "docId": "index",
+      "stag": "uu4hhmnnvmbx7jsk"
+    },
+    {
+      "docId": "c00",
+      "stag": "w3pxsbvvnqnfr5x5"
+    },
+    {
+      "docId": "c07",
+      "stag": "azkolopkq3e7cfts"
+    },
+    {
+      "docId": "c15",
+      "stag": "oxt2qzllb3hukpgd"
+    }
+  ],
+  "shards": [
+    {
+      "convId": "0102030405060708090a0b0c0d0e0f10",
+      "shard": "c02"
+    },
+    {
+      "convId": "0205080b0e1114171a1d202326292c2f",
+      "shard": "c00"
+    },
+    {
+      "convId": "fef7f0e9e2dbd4cdc6bfb8b1aaa39c95",
+      "shard": "c04"
+    }
+  ],
+  "segments": [
+    {
+      "doc": "index",
+      "device": "a",
+      "seq": 1,
+      "name": "d/uu4hhmnnvmbx7jsk/s/4p6hmywopyzr2fmb/0000000/0000000001-44pgbk3x"
+    },
+    {
+      "doc": "index",
+      "device": "a",
+      "seq": 999,
+      "name": "d/uu4hhmnnvmbx7jsk/s/4p6hmywopyzr2fmb/0000000/0000000999-5gi4r6sx"
+    },
+    {
+      "doc": "index",
+      "device": "a",
+      "seq": 1000,
+      "name": "d/uu4hhmnnvmbx7jsk/s/4p6hmywopyzr2fmb/0000001/0000001000-vqbz4ilu"
+    },
+    {
+      "doc": "c07",
+      "device": "b",
+      "seq": 1234567,
+      "name": "d/azkolopkq3e7cfts/s/c5qfro7qdtg7cgzs/0001234/0001234567-242hzbgy"
+    },
+    {
+      "doc": "c15",
+      "device": "b",
+      "seq": 9999999999,
+      "name": "d/oxt2qzllb3hukpgd/s/c5qfro7qdtg7cgzs/9999999/9999999999-5kkexumf"
+    }
+  ],
+  "checkpoints": [
+    {
+      "doc": "c03",
+      "device": "a",
+      "seq": 42,
+      "name": "d/2inptm7ov3gtbh5j/c/4p6hmywopyzr2fmb/0000000042-pa6lswce"
+    }
+  ],
+  "chunks": [
+    {
+      "id": "rr52rw6ulkvnpgbmiv2sugfdkq",
+      "name": "b/rr/rr52rw6ulkvnpgbmiv2sugfdkq"
+    },
+    {
+      "id": "aptfg573lotd3knrxmskgnapnk",
+      "name": "b/ap/aptfg573lotd3knrxmskgnapnk"
+    }
+  ],
+  "manifests": [
+    {
+      "id": "iin6vmfectloejfe6g3uxg2h2r",
+      "name": "m/ii/iin6vmfectloejfe6g3uxg2h2r"
+    }
+  ],
+  "secrets": [
+    {
+      "secretId": "0102030405060708090a0b0c0d0e0f10",
+      "seq": 1,
+      "ktag": "7wdckvfn53olkn4e",
+      "name": "k/7wdckvfn53olkn4e/0000000001-cfn343sj"
+    }
+  ],
+  "local": [
+    {
+      "purpose": "device",
+      "id": "id",
+      "name": "y7ofhpmpsmco53gmjou6tli23j"
+    },
+    {
+      "purpose": "oauth-token",
+      "id": "mcp:https://mcp.example.org",
+      "name": "a7q324zcybb75vsqoy54tnr4mq"
+    },
+    {
+      "purpose": "pending",
+      "id": "index|1",
+      "name": "z52yxb2ady43mhg5drf4on2ggy"
+    }
+  ]
+}

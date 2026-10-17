@@ -32,13 +32,27 @@ clap = { version = "4.6.7", default-features = false, features = [
     "suggestions",
 ] }
 clap_complete = { version = "4.6.11", default-features = false }
-serde_json = { version = "1.0.154", default-features = false, features = ["std"] }
+serde = { version = "1.0.229", default-features = false, features = ["std"] }
+serde_json = { version = "1.0.154", default-features = false, features = ["std", "raw_value"] }
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3.23", default-features = false }
+
+# Cryptography and the aparte/1 encodings: pure Rust only (deny.toml bans OpenSSL).
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "alloc"] }
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "zeroize"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+getrandom = { version = "0.4.3", default-features = false }
+hkdf = { version = "0.13.0", default-features = false }
+hmac = { version = "0.13.0", default-features = false }
+sha2 = { version = "0.11.1", default-features = false }
+subtle = { version = "2.6.1", default-features = false }
+unicode-normalization = { version = "0.1.26", default-features = false }
+zeroize = { version = "1.9.1", default-features = false, features = ["alloc"] }
 
 # Tests
 assert_cmd = { version = "2.2.2", default-features = false }
 predicates = { version = "3.1.4", default-features = false }
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 
 [profile.release]
 lto = "fat"

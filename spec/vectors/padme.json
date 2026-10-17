@@ -1,0 +1,189 @@
+{
+  "padme": [
+    {
+      "length": 0,
+      "padme": 0,
+      "paddedSize": 64
+    },
+    {
+      "length": 1,
+      "padme": 1,
+      "paddedSize": 64
+    },
+    {
+      "length": 2,
+      "padme": 2,
+      "paddedSize": 64
+    },
+    {
+      "length": 3,
+      "padme": 3,
+      "paddedSize": 64
+    },
+    {
+      "length": 4,
+      "padme": 4,
+      "paddedSize": 64
+    },
+    {
+      "length": 5,
+      "padme": 5,
+      "paddedSize": 64
+    },
+    {
+      "length": 7,
+      "padme": 7,
+      "paddedSize": 64
+    },
+    {
+      "length": 8,
+      "padme": 8,
+      "paddedSize": 64
+    },
+    {
+      "length": 9,
+      "padme": 10,
+      "paddedSize": 64
+    },
+    {
+      "length": 15,
+      "padme": 16,
+      "paddedSize": 64
+    },
+    {
+      "length": 16,
+      "padme": 16,
+      "paddedSize": 64
+    },
+    {
+      "length": 17,
+      "padme": 18,
+      "paddedSize": 64
+    },
+    {
+      "length": 31,
+      "padme": 32,
+      "paddedSize": 64
+    },
+    {
+      "length": 32,
+      "padme": 32,
+      "paddedSize": 64
+    },
+    {
+      "length": 33,
+      "padme": 36,
+      "paddedSize": 64
+    },
+    {
+      "length": 63,
+      "padme": 64,
+      "paddedSize": 72
+    },
+    {
+      "length": 64,
+      "padme": 64,
+      "paddedSize": 72
+    },
+    {
+      "length": 65,
+      "padme": 72,
+      "paddedSize": 72
+    },
+    {
+      "length": 100,
+      "padme": 104,
+      "paddedSize": 104
+    },
+    {
+      "length": 127,
+      "padme": 128,
+      "paddedSize": 144
+    },
+    {
+      "length": 128,
+      "padme": 128,
+      "paddedSize": 144
+    },
+    {
+      "length": 129,
+      "padme": 144,
+      "paddedSize": 144
+    },
+    {
+      "length": 255,
+      "padme": 256,
+      "paddedSize": 272
+    },
+    {
+      "length": 256,
+      "padme": 256,
+      "paddedSize": 272
+    },
+    {
+      "length": 257,
+      "padme": 272,
+      "paddedSize": 272
+    },
+    {
+      "length": 1000,
+      "padme": 1024,
+      "paddedSize": 1024
+    },
+    {
+      "length": 1023,
+      "padme": 1024,
+      "paddedSize": 1088
+    },
+    {
+      "length": 1024,
+      "padme": 1024,
+      "paddedSize": 1088
+    },
+    {
+      "length": 1025,
+      "padme": 1088,
+      "paddedSize": 1088
+    },
+    {
+      "length": 4096,
+      "padme": 4096,
+      "paddedSize": 4352
+    },
+    {
+      "length": 65535,
+      "padme": 65536,
+      "paddedSize": 67584
+    },
+    {
+      "length": 65536,
+      "padme": 65536,
+      "paddedSize": 67584
+    },
+    {
+      "length": 65537,
+      "padme": 67584,
+      "paddedSize": 67584
+    },
+    {
+      "length": 1000000,
+      "padme": 1015808,
+      "paddedSize": 1015808
+    },
+    {
+      "length": 2097152,
+      "padme": 2097152,
+      "paddedSize": 2162688
+    },
+    {
+      "length": 2097156,
+      "padme": 2162688,
+      "paddedSize": 2162688
+    },
+    {
+      "length": 2097157,
+      "padme": 2162688,
+      "paddedSize": 2162688
+    }
+  ]
+}

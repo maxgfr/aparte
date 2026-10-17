@@ -1,6 +1,7 @@
 import type { about } from './en/about.ts'
 import type { common } from './en/common.ts'
 import type { shell } from './en/shell.ts'
+import type { vault } from './en/vault.ts'
 
 export interface Plural {
   readonly one: string
@@ -19,9 +20,10 @@ type Source = {
   readonly common: typeof common
   readonly shell: typeof shell
   readonly about: typeof about
+  readonly vault: typeof vault
 }
 export type Namespace = keyof Source
-const NAMESPACES: readonly Namespace[] = ['common', 'shell', 'about']
+const NAMESPACES: readonly Namespace[] = ['common', 'shell', 'about', 'vault']
 export type Catalog = { readonly [N in Namespace]: Shape<Source[N]> }
 
 /**
@@ -40,12 +42,13 @@ const loaded = new Map<Locale, Catalog>()
 
 const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
   en: async () => {
-    const [common, shell, about] = await Promise.all([
+    const [common, shell, about, vault] = await Promise.all([
       import('./en/common.ts'),
       import('./en/shell.ts'),
       import('./en/about.ts'),
+      import('./en/vault.ts'),
     ])
-    return { common: common.common, shell: shell.shell, about: about.about }
+    return { common: common.common, shell: shell.shell, about: about.about, vault: vault.vault }
   },
   pseudo: async () => {
     const [{ pseudoCatalog }, en] = await Promise.all([import('./pseudo.ts'), loadCatalog('en')])

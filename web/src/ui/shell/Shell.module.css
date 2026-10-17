@@ -159,3 +159,12 @@
     color: var(--accent-ink);
   }
 }
+
+/* Locking is always one press away while the vault is open, on the sidebar and on the phone tab bar alike. */
+.lock {
+  composes: tab;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}

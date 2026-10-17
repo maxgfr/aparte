@@ -4,6 +4,7 @@ import { readPref } from './app/prefs.ts'
 import { HashRouter, Routes } from './app/router.tsx'
 import { applyTheme } from './app/theme.ts'
 import { ToastProvider } from './app/toast.tsx'
+import { VaultGate, VaultProvider } from './app/vault.tsx'
 import { detectFromEnvironment } from './i18n/index.ts'
 import { I18nProvider } from './i18n/react.tsx'
 import { Shell } from './ui/shell/Shell.tsx'
@@ -20,11 +21,15 @@ export function App(): JSX.Element {
   return (
     <I18nProvider locale={locale}>
       <ToastProvider>
-        <HashRouter>
-          <Shell>
-            <Routes />
-          </Shell>
-        </HashRouter>
+        <VaultProvider>
+          <HashRouter>
+            <VaultGate>
+              <Shell>
+                <Routes />
+              </Shell>
+            </VaultGate>
+          </HashRouter>
+        </VaultProvider>
         <UpdateToast />
       </ToastProvider>
     </I18nProvider>

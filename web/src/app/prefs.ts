@@ -1,7 +1,7 @@
 /*
  * Device-local interface preferences: the only module that touches localStorage. What it may hold is listed in
- * PREFS below and is never sensitive (a theme, a layout choice): no secret, no key, no conversation, no provider or
- * account detail. Anything that matters goes into the encrypted vault instead. Every read is validated, so a value
+ * PREFS below and is never sensitive (a theme, a layout choice, the fact that an Emergency Kit still waits to be
+ * confirmed): no secret, no key, no conversation, no provider or account detail. Anything that matters goes into the encrypted vault instead. Every read is validated, so a value
  * written by an older build or edited by hand falls back to the default rather than reaching the UI.
  */
 
@@ -15,15 +15,29 @@ interface PrefSpec<T> {
 
 const THEMES: readonly Theme[] = ['system', 'light', 'dark']
 
+/**
+ * An Emergency Kit shown but not yet confirmed, as `<origin>:<base32 vaultId>`, or '' for none. It outlives the page
+ * (a closed tab, a crash, a phone reclaiming the app), so the next unlock shows a new kit instead of losing it.
+ */
+export type KitPending = '' | `${'create' | 'recover'}:${string}`
+
+const KIT_PENDING = /^(?:create|recover):[a-z2-7]{26}$/
+
 /** Every preference this device may keep, with its type. */
 interface Prefs {
   theme: Theme
+  kitPending: KitPending
 }
 
 export type PrefName = keyof Prefs
 
 const PREFS: { readonly [N in PrefName]: PrefSpec<Prefs[N]> } = {
   theme: { key: 'aparte:theme', fallback: 'system', parse: (raw) => THEMES.find((t) => t === raw) },
+  kitPending: {
+    key: 'aparte:kit-pending',
+    fallback: '',
+    parse: (raw) => (KIT_PENDING.test(raw) ? (raw as KitPending) : undefined),
+  },
 }
 
 /** The subset of Storage used here, so tests pass an in-memory one. */
