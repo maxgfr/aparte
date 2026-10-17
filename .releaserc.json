@@ -1,0 +1,32 @@
+{
+  "branches": ["main"],
+  "tagFormat": "v${version}",
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
+    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    [
+      "@semantic-release/exec",
+      {
+        "verifyReleaseCmd": "if [ -n \"$EXPECTED_VERSION\" ]; then [ \"$EXPECTED_VERSION\" = \"${nextRelease.version}\" ] || { echo \"built $EXPECTED_VERSION but would release ${nextRelease.version}\" >&2; exit 1; }; elif [ -n \"$GITHUB_OUTPUT\" ]; then echo \"version=${nextRelease.version}\" >> \"$GITHUB_OUTPUT\"; fi",
+        "prepareCmd": "scripts/cli-version.sh ${nextRelease.version} && scripts/cli-release-commit.sh ${nextRelease.version}"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          { "path": "dist/aparte-aarch64-apple-darwin", "name": "aparte-aarch64-apple-darwin" },
+          { "path": "dist/aparte-x86_64-apple-darwin", "name": "aparte-x86_64-apple-darwin" },
+          { "path": "dist/aparte-aarch64-unknown-linux-gnu", "name": "aparte-aarch64-unknown-linux-gnu" },
+          { "path": "dist/aparte-x86_64-unknown-linux-gnu", "name": "aparte-x86_64-unknown-linux-gnu" },
+          { "path": "dist/SHA256SUMS", "name": "SHA256SUMS" }
+        ],
+        "releaseNameTemplate": "Aparté <%= nextRelease.version %>",
+        "releaseBodyTemplate": "<%= nextRelease.notes %>\n\nThe web app is live at https://maxgfr.github.io/aparte/.\n\nPrebuilt `aparte` CLI binaries for macOS and Linux (arm64, x86_64). Install with Homebrew: `brew install maxgfr/tap/aparte`, or download the binary for your platform, check it against SHA256SUMS and its build provenance (`gh attestation verify aparte-<target> --repo maxgfr/aparte`).",
+        "successComment": false,
+        "failComment": false,
+        "releasedLabels": false
+      }
+    ]
+  ]
+}

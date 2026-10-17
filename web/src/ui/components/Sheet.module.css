@@ -1,0 +1,131 @@
+.sheet {
+  width: min(100%, 34rem);
+  max-height: min(90dvh, calc(100dvh - var(--kb-inset) - 2rem));
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--lift);
+  overflow: auto;
+}
+
+.sheet::backdrop {
+  background: var(--scrim);
+}
+
+.sheet[open] {
+  animation: rise var(--dur) var(--ease-out);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-2) var(--space-2) var(--space-5);
+  background: var(--surface);
+}
+
+.title {
+  font-size: var(--text-title);
+  font-weight: 700;
+}
+
+.body {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-5) var(--space-5);
+}
+
+/*
+ * Movement only, no fade: the sheet's text keeps its full contrast from the first frame (a lagging opacity
+ * under load would otherwise leave it faded for a while).
+ */
+@keyframes rise {
+  from {
+    transform: translateY(1rem);
+  }
+}
+
+@media (max-width: 599px) {
+  .sheet {
+    width: 100%;
+    max-width: none;
+    margin: auto 0 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    margin-bottom: var(--kb-inset);
+  }
+}
+
+/*
+ * Filled: the whole screen on phones, down to the keyboard's top edge, inside the safe areas. Its body fills it and
+ * scrolls its own parts; the sheet itself never scrolls.
+ */
+.sheet.fill {
+  width: 100%;
+  max-width: none;
+  height: calc(100dvh - var(--kb-inset));
+  max-height: none;
+  margin: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+/* The keyboard covers the home indicator: the composer sits right on top of it. */
+:global(html[data-keyboard="open"]) .sheet.fill {
+  padding-bottom: 0;
+}
+
+.fill[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.fill .body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+/* From 600px: a full-height panel on the right, the page dimmed beside it (unless `fullscreen`). */
+@media (min-width: 600px) {
+  .sheet.fill:not(.fullscreen) {
+    width: min(var(--chat-width, 24rem), 100%);
+    margin: 0 0 0 auto;
+    padding-left: 0;
+    border-left: var(--hairline-width) solid var(--hairline);
+    box-shadow: var(--lift);
+  }
+
+  .fill:not(.fullscreen)[open] {
+    animation-name: slide;
+  }
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(1.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet[open] {
+    animation-name: fade;
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

@@ -1,0 +1,177 @@
+name: Release
+# On every push to main: CI again, then semantic-release reads the conventional commits since the last v* tag.
+# A fix, feat, perf or breaking change releases a new version (tag v<version>, a GitHub-signed release commit,
+# the four CLI binaries and SHA256SUMS that the Homebrew tap downloads, with build provenance). Whether or not
+# there is a release, main is deployed to GitHub Pages once CI is green.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: 1.99.0
+  SEMANTIC_RELEASE: >-
+    npx --yes
+    -p semantic-release@25.0.9
+    -p @semantic-release/exec@7.1.0
+    -p @semantic-release/github@12.0.10
+    -p conventional-changelog-conventionalcommits@9.3.1
+    semantic-release
+jobs:
+  ci:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+
+  version:
+    name: Next version
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      # semantic-release checks it could push to main, even in a dry run.
+      contents: write
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - id: next
+        name: Resolve the next release without publishing
+        env:
+          # GITHUB_TOKEN, not GH_TOKEN: semantic-release only adds the x-access-token: prefix
+          # that git needs for this token to GITHUB_TOKEN.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: $SEMANTIC_RELEASE --dry-run
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: version
+    if: needs.version.outputs.version != ''
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, os: macos-14 }
+          # Cross-compiled on Apple silicon; Rosetta runs it for the checks below.
+          - { target: x86_64-apple-darwin, os: macos-14 }
+          # The oldest supported Ubuntu keeps the glibc requirement at 2.35.
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+      # No build cache here: a release binary is compiled from a clean slate.
+      - name: Set the resolved version before compilation
+        run: scripts/cli-version.sh "$VERSION"
+      - run: cargo build --release --locked -p aparte --target "$TARGET"
+      - name: Refuse a binary that needs a glibc newer than 2.35
+        if: runner.os == 'Linux'
+        run: |
+          required=$(objdump -T "target/$TARGET/release/aparte" | grep -o 'GLIBC_[0-9.]*' | sed 's/^GLIBC_//' | sort -Vu | tail -1)
+          echo "highest required glibc: $required"
+          test -n "$required"
+          highest=$(printf '%s\n%s\n' "$required" 2.35 | sort -V | tail -1)
+          if [ "$highest" != 2.35 ]; then
+            echo "binary requires glibc $required, above 2.35" >&2
+            exit 1
+          fi
+      - name: Check the binary reports the release version
+        run: |
+          out=$("target/$TARGET/release/aparte" --version)
+          echo "$out"
+          test "$out" = "aparte $VERSION" || { echo "the binary reports '$out', expected 'aparte $VERSION'" >&2; exit 1; }
+      - run: '"target/$TARGET/release/aparte" selftest'
+      - name: Stage the binary
+        run: |
+          mkdir -p dist
+          cp "target/$TARGET/release/aparte" "dist/aparte-$TARGET"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aparte-${{ matrix.target }}
+          path: dist/aparte-${{ matrix.target }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      # The signed release commit, the tag and the GitHub release.
+      contents: write
+      # Build provenance: an OIDC token to sign the attestation and the right to store it.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: aparte-*
+          path: dist
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: |
+          chmod +x aparte-*
+          test "$(find . -maxdepth 1 -name 'aparte-*' | wc -l)" -eq 4
+          sha256sum aparte-* > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/aparte-*
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Refuse publishing an outdated branch head
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BUILD_SHA"
+      # Stamps the version, commits it to main through the API (signed by GitHub), tags it and publishes the
+      # release. Commits and tags pushed with GITHUB_TOKEN trigger no workflow, so this does not loop.
+      - name: Release versioned binaries and checksums
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_VERSION: ${{ needs.version.outputs.version }}
+        run: $SEMANTIC_RELEASE
+
+  deploy:
+    name: Deploy
+    needs: [ci, version, publish]
+    # Deploys main after a green CI: with the new version when one was released, else with the latest tag.
+    # A release that was resolved but failed to build or publish blocks the deploy.
+    if: >-
+      always() &&
+      needs.ci.result == 'success' &&
+      needs.version.result == 'success' &&
+      (needs.publish.result == 'success' ||
+       (needs.version.outputs.version == '' && needs.publish.result == 'skipped'))
+    # What deploy.yml's jobs need: read the code, then publish to Pages with an OIDC token.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      version: ${{ needs.version.outputs.version }}

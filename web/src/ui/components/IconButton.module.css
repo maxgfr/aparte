@@ -1,0 +1,25 @@
+.iconButton {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--accent-ink);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--surface-pressed);
+}
+
+.iconButton[aria-pressed="true"] {
+  background: var(--accent-soft);
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

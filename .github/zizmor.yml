@@ -1,0 +1,5 @@
+rules:
+  # The self-repository form (`uses: $/...`) is not understood by actionlint yet, which the same gates run.
+  # The reusable workflows called with `./` are this repository's own, at the commit being run.
+  self-repository:
+    disable: true

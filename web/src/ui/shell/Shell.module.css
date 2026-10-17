@@ -1,0 +1,161 @@
+.shell {
+  /* #root is a flex column filling the viewport; the shell takes all of it. */
+  flex: 1;
+  min-height: 100dvh;
+}
+
+.skip {
+  position: fixed;
+  z-index: 50;
+  top: calc(env(safe-area-inset-top) + var(--space-2));
+  left: var(--gutter);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip:focus-visible {
+  transform: none;
+}
+
+.main {
+  min-width: 0;
+  padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+}
+
+/* The main landmark takes focus after a navigation (for screen readers); it is not a control, so no ring. */
+.main:focus {
+  outline: none;
+}
+
+/* Phones and narrow windows: bottom tab bar. */
+.nav {
+  position: fixed;
+  z-index: 10;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  border-top: var(--hairline-width) solid var(--hairline);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: saturate(1.6) blur(16px);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+}
+
+/* Phones: the bar carries no brand (the screen title says where you are). */
+.brand {
+  display: none;
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tabs {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tab {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.125rem;
+  min-height: var(--tabbar-height);
+  padding: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+  hyphens: auto;
+}
+
+.tab[aria-current="page"] {
+  color: var(--accent-ink);
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Wide windows: sidebar. */
+@media (min-width: 1000px) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .main {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .nav {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    height: 100dvh;
+    padding: calc(env(safe-area-inset-top) + var(--space-5)) var(--space-3) var(--space-5)
+      max(var(--space-3), env(safe-area-inset-left));
+    overflow-y: auto;
+    border-top: 0;
+    border-right: var(--hairline-width) solid var(--hairline);
+    background: var(--bg-sidebar);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .brand {
+    display: block;
+    padding-inline: var(--space-3);
+  }
+
+  .tabs {
+    grid-auto-flow: row;
+    gap: 2px;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 2.5rem;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-control);
+    color: var(--ink);
+    font-size: var(--text-footnote);
+    font-weight: 500;
+    text-align: start;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .tab:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+
+  .tab[aria-current="page"] {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  .tabIcon {
+    color: var(--ink-2);
+  }
+
+  [aria-current="page"] > .tabIcon {
+    color: var(--accent-ink);
+  }
+}

@@ -1,0 +1,125 @@
+.group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.groupTitle {
+  padding-inline: var(--space-4);
+  font-size: var(--text-title);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+}
+
+.footer {
+  padding-inline: var(--space-4);
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--lift);
+  overflow: hidden;
+}
+
+.item + .item .row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: var(--row-inset, var(--space-4));
+  border-top: var(--hairline-width) solid var(--hairline);
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 3.25rem;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+}
+
+.withLeading {
+  --row-inset: calc(var(--space-4) + 1.75rem + var(--space-3));
+}
+
+a.row,
+button.row {
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+a.row:hover,
+button.row:hover {
+  background: var(--surface-pressed);
+}
+
+a.row:focus-visible,
+button.row:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--radius-surface);
+}
+
+.leading {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  color: var(--ink-2);
+}
+
+.text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.125rem;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.subtitle {
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}
+
+.trailing {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-3);
+}
+
+/* Title and controls side by side when they fit, the controls on a line of their own, at the end, when not. */
+.wrap {
+  flex-wrap: wrap;
+}
+
+.wrap .text {
+  flex: 1 1 12rem;
+}
+
+.wrap .trailing {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-inline-start: auto;
+}
+
+.chevron {
+  color: var(--ink-3);
+}

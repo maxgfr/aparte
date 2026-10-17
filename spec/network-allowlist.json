@@ -1,0 +1,17 @@
+{
+  "$comment": "Hosts the deployed web app may contact, by network purpose (NetPurpose in web/src/security/net.ts, the only module that calls fetch). Each value is an array of entries: \"self\" for the app's own origin, or a bare origin such as \"https://example.org\". An empty array means the app contacts no fixed host for that purpose. Hosts the user enters (a provider endpoint, an MCP server, a sync relay) are not fixed and are not listed; net.ts still requires HTTPS or the loopback for them and shows each one in the transparency panel. Adding a host here is a reviewed change.",
+  "$purposes": {
+    "app": "The app's own files: the shell, its chunks, the manifest, the service worker and its precache.",
+    "provider": "Placeholder: fixed model provider endpoints, if a default is ever shipped. User-entered endpoints are not listed.",
+    "mcp": "Placeholder: fixed MCP servers. User-added servers are not listed.",
+    "sync": "Placeholder: fixed relays for end-to-end encrypted sync. Carries ciphertext only.",
+    "download": "Placeholder: pinned, hash-checked downloads such as in-browser model weights or runtimes.",
+    "catalog": "Placeholder: the model catalog the app refreshes, if it is fetched rather than bundled."
+  },
+  "app": ["self"],
+  "provider": [],
+  "mcp": [],
+  "sync": [],
+  "download": [],
+  "catalog": []
+}

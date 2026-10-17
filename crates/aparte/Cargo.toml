@@ -1,0 +1,33 @@
+[package]
+name = "aparte"
+description = "Command-line companion of Aparté, the private end-to-end-encrypted AI chat"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "aparte"
+path = "src/main.rs"
+
+[dependencies]
+aparte-format = { workspace = true }
+aparte-crypto = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+clap_complete = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "ansi", "std"] }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

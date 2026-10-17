@@ -1,0 +1,275 @@
+/*
+ * Design tokens for Aparté, "the private room". Light and dark are designed separately, not inverted: light is ink on
+ * warm paper under daylight; dark is a lamplit room, warm charcoal rather than blue-black, with surfaces lifted one
+ * tone at a time and a paler lamp green that carries dark ink. Every colour is tuned per theme, so a token added here
+ * must be given a value in both dark blocks as well.
+ * `data-theme` on <html> forces a theme; otherwise the system preference wins. The dark set is written twice (media
+ * query and attribute) because a custom property block cannot be shared between the two selectors.
+ * The property names from the cursus token set are kept on purpose, so components ported from it work unchanged; the
+ * additions below them (prose, chat, code, diff, tool calls, lock screen) are Aparté's own.
+ */
+:root {
+  color-scheme: light;
+
+  /* Type: system stacks only, no web fonts. Fixed rem scale (~1.2 ratio). */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* The one voice of the room: large titles and the lock screen only, in the platform's own serif. */
+  --font-display: ui-serif, "New York", "Iowan Old Style", "Apple Garamond", Georgia, Cambria, "Noto Serif", serif;
+  --text-caption: 0.8125rem; /* 13 */
+  --text-footnote: 0.9375rem; /* 15 */
+  --text-body: 1.0625rem; /* 17 */
+  --text-title: 1.25rem; /* 20 */
+  --text-headline: 1.5rem; /* 24 */
+  --text-large-title: 2.125rem; /* 34 */
+  --text-code: 0.875rem; /* 14: monospace reads larger than the sans at the same size. */
+  --leading-tight: 1.15;
+  --leading-body: 1.45;
+  /* Long answers are read, not scanned: looser leading and a capped measure. */
+  --leading-prose: 1.6;
+  --leading-code: 1.5;
+  --measure-prose: 68ch;
+
+  /* Space: 4-pt rhythm. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  /* Shape. */
+  --radius-surface: 12px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+  /* Small details inside text or charts (inline code, keycaps, diff markers). */
+  --radius-small: 4px;
+  /* Chat bubbles: a surface radius with one tightened corner on the speaker's side. */
+  --radius-bubble: 18px;
+  --radius-bubble-tail: 6px;
+  --hairline-width: 1px;
+
+  /* Layout. */
+  --content-max: 720px;
+  --sidebar-width: 260px;
+  --tabbar-height: 3.5rem;
+  --gutter: max(var(--space-4), env(safe-area-inset-left), env(safe-area-inset-right));
+  /* Height of the on-screen keyboard, written by the shell from visualViewport; 0 while it is down. */
+  --kb-inset: 0px;
+  /* The composer's minimum height: one line of 16px input plus its padding, at a 44px touch target or more. */
+  --composer-min: 3rem;
+
+  /* Motion. */
+  --dur: 200ms;
+  --dur-fast: 150ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Light palette: warm paper, deep ink, one lamp green. */
+  --bg: #f6f4ef;
+  --bg-sidebar: #efece5;
+  --surface: #fffdf9;
+  --surface-pressed: #f0ece4;
+  /* Selected segment / raised chip inside a pressed track. */
+  --surface-raised: #fffdf9;
+  --ink: #1b1a17;
+  --ink-2: #57534b;
+  /* Still at least 4.5:1 on --bg and --bg-sidebar, so it may carry text. */
+  --ink-3: #6b665d;
+  --hairline: #e6e1d7;
+  --hairline-strong: #d3ccbf;
+  /* Field and control outlines: at least 3:1 against the ground (WCAG 1.4.11), unlike the hairlines. */
+  --control-border: #8c8577;
+  --accent: #1d6b5a;
+  --accent-hover: #175a4b;
+  --on-accent: #fffdf9;
+  --accent-soft: #e3f1ec;
+  --accent-ink: #17604f;
+  --focus: #1d6b5a;
+  --danger: #b4322a;
+  --danger-soft: #fbe9e6;
+  --warning: #8f4f08;
+  --warning-soft: #fbf0dc;
+  --success: #2f6b2f;
+  --success-soft: #e6f2e2;
+  --lift: 0 1px 2px rgb(27 26 23 / 0.07);
+  --scrim: rgb(27 26 23 / 0.36);
+  --selection: rgb(29 107 90 / 0.2);
+
+  /* Identity hues (named after cursus courses; here they tag projects, providers or threads). Each stays off the
+     accent's hue so a tag never reads as "act here": the teal is a petrol cyan, the green a leaf green. */
+  --course-blue: #4b55c8;
+  --course-teal: #16809a;
+  --course-green: #3f8a3a;
+  --course-amber: #b07c0c;
+  --course-orange: #d0612b;
+  --course-red: #c8424f;
+  --course-purple: #8150c4;
+  --course-graphite: #77716a;
+
+  /* Chat. The user's words sit in a quiet paper bubble; the model's answer is unbubbled prose on the ground, because
+     it is the thing being read. */
+  --bubble-user: #ebe6dc;
+  --bubble-user-ink: #1b1a17;
+
+  /* Code blocks and inline code. */
+  --code-bg: #f3f0e9;
+  --code-ink: #1b1a17;
+  --code-border: #e6e1d7;
+  --syntax-comment: #6b665d;
+  --syntax-keyword: #7a3e8f;
+  --syntax-string: #2f6b2f;
+  --syntax-number: #9a4a06;
+  --syntax-function: #1f5a8a;
+  --syntax-type: #b0420f;
+  --syntax-punctuation: #57534b;
+
+  /* Diffs: tinted rows with ink of the same hue; the +/- marker carries the meaning for colour-blind readers. */
+  --diff-add-bg: #e4f1df;
+  --diff-add-ink: #22561f;
+  --diff-del-bg: #f9e4e1;
+  --diff-del-ink: #8e2a22;
+
+  /* Tool calls: a recessed card, one step below the surface, so a tool's work reads as an aside to the answer. */
+  --tool-bg: #f3f0e9;
+  --tool-border: #e6e1d7;
+  --tool-ink: #57534b;
+
+  /* Lock screen: the closed room, one tone deeper than the ground. */
+  --lock-bg: #ebe7de;
+  --lock-surface: #fffdf9;
+  --lock-ink: #1b1a17;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121110;
+    --bg-sidebar: #171614;
+    --surface: #1d1c1a;
+    --surface-pressed: #262422;
+    --surface-raised: #3a3734;
+    --ink: #efeae1;
+    --ink-2: #c3bcb0;
+    --ink-3: #a39c90;
+    --hairline: #2c2a27;
+    --hairline-strong: #3d3a36;
+    --control-border: #6e685f;
+    --accent: #7fcab4;
+    --accent-hover: #98d6c4;
+    --on-accent: #062019;
+    --accent-soft: #16302a;
+    --accent-ink: #9fdcc9;
+    --focus: #8fd3bf;
+    --danger: #ff8f84;
+    --danger-soft: #3a1d1a;
+    --warning: #f0b468;
+    --warning-soft: #33250f;
+    --success: #8fd17f;
+    --success-soft: #17301a;
+    --lift: 0 1px 0 rgb(0 0 0 / 0.45);
+    --scrim: rgb(0 0 0 / 0.6);
+    --selection: rgb(127 202 180 / 0.3);
+    --course-blue: #8a92ff;
+    --course-teal: #4cc0d8;
+    --course-green: #79c86e;
+    --course-amber: #e8b54a;
+    --course-orange: #ff9a66;
+    --course-red: #ff7a85;
+    --course-purple: #b893ff;
+    --course-graphite: #a8a196;
+    --bubble-user: #2a2724;
+    --bubble-user-ink: #efeae1;
+    --code-bg: #1a1917;
+    --code-ink: #efeae1;
+    --code-border: #2c2a27;
+    --syntax-comment: #a39c90;
+    --syntax-keyword: #d3a6e6;
+    --syntax-string: #a6d49a;
+    --syntax-number: #f0b77a;
+    --syntax-function: #8cc0ee;
+    --syntax-type: #f2a37e;
+    --syntax-punctuation: #c3bcb0;
+    --diff-add-bg: #17301a;
+    --diff-add-ink: #a6d99b;
+    --diff-del-bg: #3a1d1a;
+    --diff-del-ink: #ffaba0;
+    --tool-bg: #191816;
+    --tool-border: #2c2a27;
+    --tool-ink: #c3bcb0;
+    --lock-bg: #0d0c0b;
+    --lock-surface: #1d1c1a;
+    --lock-ink: #efeae1;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121110;
+  --bg-sidebar: #171614;
+  --surface: #1d1c1a;
+  --surface-pressed: #262422;
+  --surface-raised: #3a3734;
+  --ink: #efeae1;
+  --ink-2: #c3bcb0;
+  --ink-3: #a39c90;
+  --hairline: #2c2a27;
+  --hairline-strong: #3d3a36;
+  --control-border: #6e685f;
+  --accent: #7fcab4;
+  --accent-hover: #98d6c4;
+  --on-accent: #062019;
+  --accent-soft: #16302a;
+  --accent-ink: #9fdcc9;
+  --focus: #8fd3bf;
+  --danger: #ff8f84;
+  --danger-soft: #3a1d1a;
+  --warning: #f0b468;
+  --warning-soft: #33250f;
+  --success: #8fd17f;
+  --success-soft: #17301a;
+  --lift: 0 1px 0 rgb(0 0 0 / 0.45);
+  --scrim: rgb(0 0 0 / 0.6);
+  --selection: rgb(127 202 180 / 0.3);
+  --course-blue: #8a92ff;
+  --course-teal: #4cc0d8;
+  --course-green: #79c86e;
+  --course-amber: #e8b54a;
+  --course-orange: #ff9a66;
+  --course-red: #ff7a85;
+  --course-purple: #b893ff;
+  --course-graphite: #a8a196;
+  --bubble-user: #2a2724;
+  --bubble-user-ink: #efeae1;
+  --code-bg: #1a1917;
+  --code-ink: #efeae1;
+  --code-border: #2c2a27;
+  --syntax-comment: #a39c90;
+  --syntax-keyword: #d3a6e6;
+  --syntax-string: #a6d49a;
+  --syntax-number: #f0b77a;
+  --syntax-function: #8cc0ee;
+  --syntax-type: #f2a37e;
+  --syntax-punctuation: #c3bcb0;
+  --diff-add-bg: #17301a;
+  --diff-add-ink: #a6d99b;
+  --diff-del-bg: #3a1d1a;
+  --diff-del-ink: #ffaba0;
+  --tool-bg: #191816;
+  --tool-border: #2c2a27;
+  --tool-ink: #c3bcb0;
+  --lock-bg: #0d0c0b;
+  --lock-surface: #1d1c1a;
+  --lock-ink: #efeae1;
+}
+
+/* Reduced motion keeps a short crossfade (state changes stay perceptible) and drops every fast movement. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 120ms;
+    --dur-fast: 0ms;
+  }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "aparte-crypto"
+description = "Key derivation, keyslots and authenticated encryption of the aparte/1 format"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+aparte-format = { workspace = true }
+
+[lints]
+workspace = true

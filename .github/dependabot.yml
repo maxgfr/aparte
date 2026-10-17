@@ -1,0 +1,48 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      # The RustCrypto crates share the digest and cipher traits and must move together, majors included.
+      rustcrypto:
+        patterns:
+          - sha2
+          - hmac
+          - hkdf
+          - digest
+          - crypto-common
+          - block-buffer
+          - cipher
+          - aead
+          - chacha20
+          - chacha20poly1305
+          - poly1305
+          - aes-gcm
+          - argon2
+          - password-hash
+          - universal-hash
+        update-types: [major, minor, patch]
+      cargo-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]

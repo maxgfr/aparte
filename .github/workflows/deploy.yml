@@ -1,0 +1,116 @@
+name: Deploy
+# Builds the web app for https://maxgfr.github.io/aparte/, deploys it to GitHub Pages, then checks that the
+# live site serves exactly this build with its Content-Security-Policy.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version baked into the web build (empty uses the latest tag)
+        type: string
+        required: false
+        default: ''
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version baked into the web build (empty uses the latest tag)
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+env:
+  BUN_VERSION: 1.4.3
+  SITE_URL: https://maxgfr.github.io/aparte/
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      index-sha256: ${{ steps.marker.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Tags let the build fall back to the latest release version when none is given.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+        working-directory: web
+      - name: Build
+        working-directory: web
+        env:
+          VITE_BASE: /aparte/
+          APP_VERSION: ${{ inputs.version }}
+        run: bun run build
+      - run: bun run scan
+        working-directory: web
+      # index.html names every hashed entry asset, so its digest identifies this build on the live site.
+      - id: marker
+        name: Fingerprint the build
+        run: echo "sha256=$(sha256sum web/dist/index.html | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web/dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # deploy-pages publishes the uploaded artifact with an OIDC token.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  smoke:
+    name: Smoke test the live site
+    needs: [build, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Wait until the live site serves this build
+        env:
+          EXPECTED: ${{ needs.build.outputs.index-sha256 }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          # The Pages CDN caches for minutes; a unique query string asks the origin for a fresh copy.
+          for attempt in $(seq 1 40); do
+            if curl -fsSL -o index.html "${SITE_URL}?smoke=${RUN_ID}-${attempt}"; then
+              got=$(sha256sum index.html | cut -d' ' -f1)
+              if [ "$got" = "$EXPECTED" ]; then
+                echo "attempt $attempt: the live index.html is this build ($got)"
+                exit 0
+              fi
+              echo "attempt $attempt: live index.html is $got, waiting for $EXPECTED"
+            else
+              echo "attempt $attempt: ${SITE_URL} is unreachable"
+            fi
+            sleep 15
+          done
+          echo "the live site never served this build" >&2
+          exit 1
+      - name: Check the Content-Security-Policy and the service worker
+        run: |
+          grep -Eq '<meta http-equiv="Content-Security-Policy" content="[^"]*default-src '"'"'none'"'"'' index.html ||
+            { echo "index.html has no Content-Security-Policy meta with default-src 'none'" >&2; exit 1; }
+          grep -q "require-trusted-types-for 'script'" index.html ||
+            { echo "the Content-Security-Policy does not require Trusted Types" >&2; exit 1; }
+          if grep -q '%APARTE_CSP%' index.html; then
+            echo "the CSP placeholder was not replaced" >&2
+            exit 1
+          fi
+          curl -fsS -o /dev/null "${SITE_URL}sw.js"
+          echo "CSP meta present and the service worker is served"

@@ -1,0 +1,42 @@
+/* A value shown at the end of a row: quiet, and never wrapped mid-token (a commit hash, a version). */
+.value {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+.value[data-state="enforced"],
+.value[data-state="active"],
+.value[data-state="persisted"] {
+  color: var(--success);
+  font-weight: 600;
+}
+
+/* Laid out like a list group, for content that is prose rather than rows. */
+.section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.sectionTitle {
+  padding-inline: var(--space-4);
+  font-size: var(--text-title);
+  font-weight: 700;
+}
+
+.note,
+.warning {
+  max-width: 65ch;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  box-shadow: var(--lift);
+}
+
+.warning {
+  border-inline-start: 3px solid var(--warning);
+  background: var(--warning-soft);
+  box-shadow: none;
+}

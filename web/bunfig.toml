@@ -1,0 +1,5 @@
+[test]
+preload = ["fake-indexeddb/auto"]
+pathIgnorePatterns = ["e2e/**", "node_modules/**"]
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = ["tests/**", "src/core/contracts/**"]

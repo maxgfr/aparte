@@ -1,0 +1,266 @@
+@import "./tokens.css";
+
+/*
+ * Base element styles. Everything here is element-level or a single utility class; components own their own layout.
+ * The page's Content-Security-Policy allows stylesheets from the app's own path only, so nothing here may rely on an
+ * external resource (no url() to another origin, no @import beyond the tokens).
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--bg);
+  /* What scrolls into view (a focused field, the composer) stays clear of the on-screen keyboard while it is up. */
+  scroll-padding-bottom: calc(var(--kb-inset, 0px) + var(--space-4));
+}
+
+/* Phones: and clear of the bottom bar while the keyboard is down (the bar steps aside when it rises). */
+@media (max-width: 999px) {
+  html:not([data-keyboard]) {
+    scroll-padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + var(--space-4));
+  }
+}
+
+/* iOS keeps the page at its full height under the keyboard: room below the content lets the end of a thread scroll
+   above it. */
+html[data-keyboard] {
+  --kb-room: var(--kb-inset, 0px);
+}
+
+body {
+  margin: 0;
+  padding-bottom: var(--kb-room, 0px);
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: break-word;
+}
+
+/* The app root fills the viewport so a screen can pin its composer to the bottom without measuring. */
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote,
+pre {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: var(--leading-tight);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+img,
+video {
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* iOS zooms into inputs under 16px. */
+input,
+select,
+textarea {
+  font-size: max(1rem, 16px);
+}
+
+::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+
+a {
+  color: var(--accent-ink);
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  text-decoration-thickness: 0.1em;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  font-variant-ligatures: none;
+  font-variant-numeric: normal;
+}
+
+pre {
+  line-height: var(--leading-code);
+  tab-size: 2;
+  overflow-x: auto;
+  overflow-wrap: normal;
+}
+
+/* Inline code inside prose; code blocks reset the chip in their own component. */
+:not(pre) > code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-small);
+  background: var(--code-bg);
+  color: var(--code-ink);
+  overflow-wrap: anywhere;
+}
+
+kbd {
+  padding: 0.05em 0.4em;
+  border: var(--hairline-width) solid var(--hairline-strong);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  font-size: var(--text-caption);
+}
+
+hr {
+  height: var(--hairline-width);
+  margin: var(--space-6) 0;
+  border: 0;
+  background: var(--hairline);
+}
+
+mark {
+  border-radius: 2px;
+  background: var(--warning-soft);
+  color: inherit;
+}
+
+table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+/* `hidden` hides, including on elements whose component sets a display; a component that styles `display` on a
+   class must not be given `hidden` and a visible state at the same time. */
+[hidden] {
+  display: none;
+}
+
+::selection {
+  background: var(--selection);
+  color: inherit;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* A field already draws its own focused border; the ring hugs it instead of floating 2px away. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+}
+
+* {
+  scrollbar-color: var(--hairline-strong) transparent;
+  scrollbar-width: thin;
+  caret-color: var(--accent);
+}
+
+/* Windows High Contrast and other forced palettes: keep focus visible in the system's own colour. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* View transitions between screens share the system's duration and ease. */
+::view-transition-group(*) {
+  animation-duration: var(--dur);
+  animation-timing-function: var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: var(--dur);
+    animation-timing-function: linear;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* The bottom bar steps aside while the on-screen keyboard is open (phones), so the composer sits on the keyboard. */
+@media (max-width: 999px) {
+  :root {
+    --toast-offset: var(--tabbar-height);
+  }
+
+  html[data-keyboard="open"] [data-tabbar] {
+    display: none;
+  }
+}

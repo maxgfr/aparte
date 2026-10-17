@@ -1,0 +1,91 @@
+.screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  /* No safe-area inset on top: the preview banner above every screen clears the status bar. */
+  padding: var(--space-4) var(--gutter) var(--space-10);
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  min-width: 0;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-inline-start: calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--accent-ink);
+  font-size: var(--text-body);
+  text-decoration: none;
+}
+
+.back:hover {
+  background: var(--surface-pressed);
+}
+
+.title {
+  /*
+   * Takes what the trailing control leaves (zero basis: the full title width never forces a wrap).
+   * Never narrower than its longest unbreakable word, so it cannot run under the control; only a
+   * word too long to sit beside the control sends the control to its own row.
+   */
+  flex: 1 1 0%;
+  min-width: min(100%, min-content);
+  overflow-wrap: break-word;
+  hyphens: auto;
+  font-size: var(--text-large-title);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}
+
+.trailing {
+  /* Pinned to the title's first line: as tall as one title line, controls centred on it. */
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  height: calc(var(--text-large-title) * var(--leading-tight));
+  margin-inline-start: auto;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
+}
+
+/* Above the title: the back link, as on an iOS large-title screen. */
+.bar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 2.75rem;
+  margin-block-start: calc(-1 * var(--space-2));
+}

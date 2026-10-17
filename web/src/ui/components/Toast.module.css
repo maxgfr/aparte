@@ -1,0 +1,74 @@
+.region {
+  position: fixed;
+  z-index: 20;
+  right: var(--gutter);
+  bottom: calc(var(--toast-offset, 0px) + env(safe-area-inset-bottom) + var(--space-4) + var(--kb-inset));
+  left: var(--gutter);
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  max-width: 30rem;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-radius: var(--radius-surface);
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: var(--lift);
+  font-size: var(--text-footnote);
+  pointer-events: auto;
+  animation: enter var(--dur) var(--ease-out);
+}
+
+.message {
+  flex: 1 1 12rem;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* A 44px hit area; the negative block margin keeps the toast as compact as a 36px button. */
+.action {
+  min-height: 2.75rem;
+  margin-block: -0.25rem;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: color-mix(in srgb, var(--bg) 14%, transparent);
+}
+
+.action:focus-visible {
+  outline-color: var(--bg);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation-name: fade;
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
