@@ -1,0 +1,577 @@
+{
+  "$comment": "Fixed inputs of the aparte/1 vectors (spec/vectors/README.md). Byte strings are lowercase hex; text is a JSON string. Nothing here is an expected output: both implementations compute the vector files from these values.",
+  "format": "aparte/1",
+  "mk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "vaultId": "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+  "otherVaultId": "e0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+  "deviceIds": {
+    "a": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+    "b": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+  },
+  "argon2": {
+    "m": 19456,
+    "t": 2,
+    "p": 1
+  },
+  "passphrases": {
+    "ascii": "correct horse battery staple",
+    "unicode": "\ufb01anc\u00e9e \u216b caf\u00e9 \uff031",
+    "unicodeEquivalent": "fiance\u0301e XII cafe\u0301 #1",
+    "wrong": "correct horse battery stapler"
+  },
+  "secretKey": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+  "recoveryKey": "7f7e7d7c7b7a797877767574737271706f6e6d6c6b6a69686766656463626160",
+  "keyslots": [
+    {
+      "id": "passphrase-secret-key",
+      "kind": "passphrase",
+      "passphrase": "unicode",
+      "secretKey": true,
+      "slotId": "11111111111111111111111111111111",
+      "salt": "22222222222222222222222222222222",
+      "iv": "333333333333333333333333"
+    },
+    {
+      "id": "passphrase-only",
+      "kind": "passphrase",
+      "passphrase": "ascii",
+      "secretKey": false,
+      "slotId": "44444444444444444444444444444444",
+      "salt": "55555555555555555555555555555555",
+      "iv": "666666666666666666666666"
+    },
+    {
+      "id": "recovery",
+      "kind": "recovery",
+      "slotId": "77777777777777777777777777777777",
+      "iv": "888888888888888888888888"
+    },
+    {
+      "id": "passkey",
+      "kind": "passkey",
+      "slotId": "99999999999999999999999999999999",
+      "iv": "aaaaaaaaaaaaaaaaaaaaaaaa",
+      "credentialId": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "rpId": "aparte.example",
+      "prfSalt": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "prfOutput": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "maliciousKeyslots": {
+    "$comment": "Each case starts from the \"passphrase-secret-key\" keyslot file, sets the member at `path` to `value` (or deletes it when `delete` is true, or adds it when absent), and serialises the result in the writer order of FORMAT.md section 6.2. Every case must be rejected before Argon2 runs.",
+    "base": "passphrase-secret-key",
+    "cases": [
+      {
+        "id": "m-below",
+        "path": "kdf.m",
+        "value": 19455
+      },
+      {
+        "id": "m-above",
+        "path": "kdf.m",
+        "value": 262145
+      },
+      {
+        "id": "m-huge",
+        "path": "kdf.m",
+        "value": 4294967296
+      },
+      {
+        "id": "m-fraction",
+        "path": "kdf.m",
+        "value": 65536.5
+      },
+      {
+        "id": "m-string",
+        "path": "kdf.m",
+        "value": "65536"
+      },
+      {
+        "id": "t-below",
+        "path": "kdf.t",
+        "value": 1
+      },
+      {
+        "id": "t-above",
+        "path": "kdf.t",
+        "value": 11
+      },
+      {
+        "id": "p-below",
+        "path": "kdf.p",
+        "value": 0
+      },
+      {
+        "id": "p-above",
+        "path": "kdf.p",
+        "value": 5
+      },
+      {
+        "id": "p-negative",
+        "path": "kdf.p",
+        "value": -1
+      },
+      {
+        "id": "v-old",
+        "path": "kdf.v",
+        "value": 16
+      },
+      {
+        "id": "alg-argon2i",
+        "path": "kdf.alg",
+        "value": "argon2i"
+      },
+      {
+        "id": "salt-short",
+        "path": "kdf.salt",
+        "value": "IiIiIiIiIiIiIiIiIiIi"
+      },
+      {
+        "id": "salt-long",
+        "path": "kdf.salt",
+        "value": "IiIiIiIiIiIiIiIiIiIiIiI"
+      },
+      {
+        "id": "secret-key-string",
+        "path": "kdf.secretKey",
+        "value": "true"
+      },
+      {
+        "id": "kdf-extra-member",
+        "path": "kdf.lanes",
+        "value": 1
+      },
+      {
+        "id": "kdf-missing-t",
+        "path": "kdf.t",
+        "delete": true
+      },
+      {
+        "id": "kind-unknown",
+        "path": "kind",
+        "value": "password"
+      },
+      {
+        "id": "format-future",
+        "path": "format",
+        "value": "aparte/2"
+      }
+    ]
+  },
+  "envelopes": [
+    {
+      "id": "segment-plain",
+      "kind": 1,
+      "compression": "none",
+      "iv": "a0a1a2a3a4a5a6a7a8a9aaab",
+      "name": "d/aaaaaaaaaaaaaaaa/s/bbbbbbbbbbbbbbbb/0000000/0000000001-cccccccc",
+      "payload": "0000002a7b2276223a312c22646f63223a22696e646578222c22646576696365223a2278222c22736571223a317d000102030405060708090a0b0c0d0e0f"
+    },
+    {
+      "id": "segment-deflate",
+      "kind": 1,
+      "compression": "precompressed",
+      "iv": "a1a2a3a4a5a6a7a8a9aaabac",
+      "name": "d/aaaaaaaaaaaaaaaa/s/bbbbbbbbbbbbbbbb/0000000/0000000002-dddddddd",
+      "payload": "6170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f647920",
+      "deflated": "4b2c482c2a49d53754284e4dcf4dcd2b5148ca4fa954481c151da1a200"
+    },
+    {
+      "id": "checkpoint-deflate",
+      "kind": 2,
+      "compression": "precompressed",
+      "iv": "a2a3a4a5a6a7a8a9aaabacad",
+      "name": "d/aaaaaaaaaaaaaaaa/c/bbbbbbbbbbbbbbbb/0000000002-eeeeeeee",
+      "payload": "000000107b2276223a312c2263223a747275657d6170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f647920",
+      "deflated": "63606010a8562a53b232d4514a56b22a292a4dad4d2c482c2a49d53754284e4dcf4dcd2b5148ca4fa95418151da9a200"
+    },
+    {
+      "id": "checkpoint-plain",
+      "kind": 2,
+      "compression": "none",
+      "iv": "a3a4a5a6a7a8a9aaabacadae",
+      "name": "d/aaaaaaaaaaaaaaaa/c/bbbbbbbbbbbbbbbb/0000000003-ffffffff",
+      "payload": "000000107b2276223a312c2263223a747275657d6170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f647920"
+    },
+    {
+      "id": "chunk",
+      "kind": 3,
+      "compression": "none",
+      "iv": "a4a5a6a7a8a9aaabacadaeaf",
+      "name": "b/gg/gggggggggggggggggggggggggg",
+      "payload": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7"
+    },
+    {
+      "id": "manifest",
+      "kind": 4,
+      "compression": "none",
+      "iv": "a5a6a7a8a9aaabacadaeafb0",
+      "name": "m/hh/hhhhhhhhhhhhhhhhhhhhhhhhhh",
+      "payload": "7b2276223a312c2274797065223a22696d6167652f6a706567222c2273697a65223a323039373135332c22736861323536223a223437444551706a38484253612d5f54496d572d354a4365755165526b6d354e4d704a575a47336853754655222c226368756e6b73223a5b226161616161616161616161616161616161616161616161616161222c226262626262626262626262626262626262626262626262626262225d2c226e616d65223a2270686f746f2e6a7067227d"
+    },
+    {
+      "id": "secret",
+      "kind": 5,
+      "compression": "none",
+      "iv": "a6a7a8a9aaabacadaeafb0b1",
+      "name": "k/iiiiiiiiiiiiiiii/0000000001-jjjjjjjj",
+      "payload": "7b2276223a312c226964223a226165626167626166617964717163696b626d67713264696f6261222c22686c63223a22313736303030303030303030302e303030302e61616161616161616161616161616161222c2276616c7565223a7b226b696e64223a226170692d6b6579222c2270726f7669646572223a22616e7468726f706963222c226b6579223a22736b2d746573742d6e6f742d612d7265616c2d6b6579227d7d"
+    },
+    {
+      "id": "local",
+      "kind": 6,
+      "compression": "none",
+      "iv": "a7a8a9aaabacadaeafb0b1b2",
+      "name": "kkkkkkkkkkkkkkkkkkkkkkkkkk",
+      "payload": "0664657669636500026964d0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+    },
+    {
+      "id": "empty",
+      "kind": 3,
+      "compression": "none",
+      "iv": "a8a9aaabacadaeafb0b1b2b3",
+      "name": "b/ll/llllllllllllllllllllllllll",
+      "payload": ""
+    },
+    {
+      "id": "boundary-60",
+      "kind": 3,
+      "compression": "none",
+      "iv": "a9aaabacadaeafb0b1b2b3b4",
+      "name": "b/mm/mmmmmmmmmmmmmmmmmmmmmmmmmm",
+      "payload": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b"
+    },
+    {
+      "id": "boundary-61",
+      "kind": 3,
+      "compression": "none",
+      "iv": "aaabacadaeafb0b1b2b3b4b5",
+      "name": "b/nn/nnnnnnnnnnnnnnnnnnnnnnnnnn",
+      "payload": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c"
+    }
+  ],
+  "tamper": {
+    "$comment": "Mutations of the sealed \"segment-plain\" envelope (or, for kind \"raw\", a ciphertext built by hand with the object key of that envelope and the given plaintext). Offsets are into the sealed bytes; a negative truncate length counts from the end. The expected error of each case is fixed by FORMAT.md section 7.5.",
+    "base": "segment-plain",
+    "cases": [
+      {
+        "id": "magic",
+        "op": "xor",
+        "offset": 0,
+        "mask": "01"
+      },
+      {
+        "id": "version",
+        "op": "set",
+        "offset": 4,
+        "value": "02"
+      },
+      {
+        "id": "kind-unknown",
+        "op": "set",
+        "offset": 5,
+        "value": "07"
+      },
+      {
+        "id": "kind-mismatch",
+        "op": "set",
+        "offset": 5,
+        "value": "02"
+      },
+      {
+        "id": "flags-unknown",
+        "op": "set",
+        "offset": 6,
+        "value": "02"
+      },
+      {
+        "id": "flags-compress",
+        "op": "set",
+        "offset": 6,
+        "value": "01"
+      },
+      {
+        "id": "epoch",
+        "op": "set",
+        "offset": 7,
+        "value": "01"
+      },
+      {
+        "id": "iv",
+        "op": "xor",
+        "offset": 8,
+        "mask": "80"
+      },
+      {
+        "id": "ciphertext",
+        "op": "xor",
+        "offset": 20,
+        "mask": "01"
+      },
+      {
+        "id": "tag",
+        "op": "xor",
+        "offset": -1,
+        "mask": "01"
+      },
+      {
+        "id": "trailing-byte",
+        "op": "append",
+        "value": "00"
+      },
+      {
+        "id": "truncated-tag",
+        "op": "truncate",
+        "length": -1
+      },
+      {
+        "id": "truncated-short",
+        "op": "truncate",
+        "length": 99
+      },
+      {
+        "id": "name-swap",
+        "op": "open-as",
+        "name": "d/aaaaaaaaaaaaaaaa/s/bbbbbbbbbbbbbbbb/0000000/0000000002-cccccccc"
+      },
+      {
+        "id": "vault-swap",
+        "op": "open-with-vault",
+        "vault": "otherVaultId"
+      },
+      {
+        "id": "padding-non-zero",
+        "op": "raw",
+        "iv": "b0b1b2b3b4b5b6b7b8b9babb",
+        "plaintext": "00000004deadbeef0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "id": "length-beyond",
+        "op": "raw",
+        "iv": "b1b2b3b4b5b6b7b8b9babbbc",
+        "plaintext": "0000003d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "id": "padding-excess",
+        "op": "raw",
+        "iv": "b2b3b4b5b6b7b8b9babbbcbd",
+        "plaintext": "00000004deadbeef00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "id": "deflate-garbage",
+        "op": "raw",
+        "iv": "b3b4b5b6b7b8b9babbbcbdbe",
+        "flags": "01",
+        "plaintext": "00000004ffffffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "names": {
+    "docIds": [
+      "index",
+      "c00",
+      "c07",
+      "c15"
+    ],
+    "convIds": [
+      "0102030405060708090a0b0c0d0e0f10",
+      "0205080b0e1114171a1d202326292c2f",
+      "fef7f0e9e2dbd4cdc6bfb8b1aaa39c95"
+    ],
+    "segments": [
+      {
+        "doc": "index",
+        "device": "a",
+        "seq": 1,
+        "payload": "0000002a7b2276223a312c22646f63223a22696e646578222c22646576696365223a2278222c22736571223a317d000102030405060708090a0b0c0d0e0f"
+      },
+      {
+        "doc": "index",
+        "device": "a",
+        "seq": 999,
+        "payload": "0000002a7b2276223a312c22646f63223a22696e646578222c22646576696365223a2278222c22736571223a317d000102030405060708090a0b0c0d0e0f"
+      },
+      {
+        "doc": "index",
+        "device": "a",
+        "seq": 1000,
+        "payload": "0000002a7b2276223a312c22646f63223a22696e646578222c22646576696365223a2278222c22736571223a317d000102030405060708090a0b0c0d0e0f"
+      },
+      {
+        "doc": "c07",
+        "device": "b",
+        "seq": 1234567,
+        "payload": "0000002a7b2276223a312c22646f63223a22696e646578222c22646576696365223a2278222c22736571223a317d000102030405060708090a0b0c0d0e0f"
+      },
+      {
+        "doc": "c15",
+        "device": "b",
+        "seq": 9999999999,
+        "payload": ""
+      }
+    ],
+    "checkpoints": [
+      {
+        "doc": "c03",
+        "device": "a",
+        "seq": 42,
+        "payload": "000000107b2276223a312c2263223a747275657d6170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f6479206170617274652f31207365676d656e7420626f647920"
+      }
+    ],
+    "chunks": [
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7",
+      ""
+    ],
+    "manifests": [
+      "{\"v\":1,\"type\":\"image/jpeg\",\"size\":2097153,\"sha256\":\"47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU\",\"chunks\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bbbbbbbbbbbbbbbbbbbbbbbbbb\"],\"name\":\"photo.jpg\"}"
+    ],
+    "secrets": [
+      {
+        "id": "0102030405060708090a0b0c0d0e0f10",
+        "seq": 1,
+        "payload": "7b2276223a312c226964223a226165626167626166617964717163696b626d67713264696f6261222c22686c63223a22313736303030303030303030302e303030302e61616161616161616161616161616161222c2276616c7565223a7b226b696e64223a226170692d6b6579222c2270726f7669646572223a22616e7468726f706963222c226b6579223a22736b2d746573742d6e6f742d612d7265616c2d6b6579227d7d"
+      }
+    ],
+    "local": [
+      {
+        "purpose": "device",
+        "id": "id"
+      },
+      {
+        "purpose": "oauth-token",
+        "id": "mcp:https://mcp.example.org"
+      },
+      {
+        "purpose": "pending",
+        "id": "index|1"
+      }
+    ]
+  },
+  "padme": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+    9,
+    15,
+    16,
+    17,
+    31,
+    32,
+    33,
+    63,
+    64,
+    65,
+    100,
+    127,
+    128,
+    129,
+    255,
+    256,
+    257,
+    1000,
+    1023,
+    1024,
+    1025,
+    4096,
+    65535,
+    65536,
+    65537,
+    1000000,
+    2097152,
+    2097156,
+    2097157
+  ],
+  "framing": {
+    "segment": {
+      "header": {
+        "v": 1,
+        "doc": "c07",
+        "device": "aaaaaaaaaaaaaaaa",
+        "seq": 3,
+        "time": 1760000000000,
+        "seen": {
+          "bbbbbbbbbbbbbbbb": 12,
+          "aaaaaaaaaaaaaaab": 4
+        },
+        "blobs": [
+          "zzzzzzzzzzzzzzzzzzzzzzzzzz",
+          "mmmmmmmmmmmmmmmmmmmmmmmmmm"
+        ]
+      },
+      "update": "0000020102030405"
+    },
+    "checkpoint": {
+      "header": {
+        "v": 1,
+        "doc": "index",
+        "device": "aaaaaaaaaaaaaaaa",
+        "seq": 7,
+        "time": 1760000000001,
+        "seen": {
+          "bbbbbbbbbbbbbbbb": 12
+        },
+        "blobs": [],
+        "covers": {
+          "bbbbbbbbbbbbbbbb": 12,
+          "aaaaaaaaaaaaaaaa": 7
+        }
+      },
+      "update": "00000a0b0c"
+    },
+    "local": {
+      "purpose": "oauth-token",
+      "id": "mcp:https://mcp.example.org",
+      "value": "7b22746f6b656e223a2278227d"
+    }
+  },
+  "text": {
+    "base32": [
+      "",
+      "00",
+      "ff",
+      "0000",
+      "ffffffffff",
+      "000102030405060708090a0b0c0d0e0f",
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    ],
+    "base32Invalid": [
+      "a",
+      "aaa",
+      "aaaaaa",
+      "AA",
+      "ab=",
+      "a0",
+      "a1",
+      "a8",
+      "a9",
+      "ab",
+      "ac",
+      "aj",
+      "ai "
+    ],
+    "base64url": [
+      "",
+      "00",
+      "ff",
+      "fbff",
+      "fbffbf",
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    ],
+    "base64urlInvalid": [
+      "A",
+      "AB==",
+      "A+8",
+      "A/8",
+      "AB",
+      "AR",
+      "AAA=",
+      "A A",
+      "_x"
+    ]
+  }
+}

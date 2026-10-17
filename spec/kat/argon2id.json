@@ -1,0 +1,124 @@
+{
+  "$comment": "Argon2id known answers, version 0x13 (19). Every byte value is lowercase hex. `rfc9106` is the Argon2id vector of RFC 9106 section 5.3; it uses a secret K and associated data X. hash-wasm 4.12 (the web implementation) hard-codes len(X) = 0 in its initial hash (dist/index.esm.js, argon2Internal), so the TypeScript tests check this vector against an independent reference Argon2id written in the test, then check hash-wasm against that reference without X. `reference` are the Argon2id cases of the reference implementation (P-H-C/phc-winner-argon2, src/test.c, version 0x13 block): no secret, no associated data, run directly through every implementation.",
+  "rfc9106": {
+    "source": "https://www.rfc-editor.org/rfc/rfc9106.txt",
+    "retrieved": "2026-10-17",
+    "tests": [
+      {
+        "tcId": 1,
+        "version": 19,
+        "memoryKiB": 32,
+        "passes": 3,
+        "parallelism": 4,
+        "tagLength": 32,
+        "password": "0101010101010101010101010101010101010101010101010101010101010101",
+        "salt": "02020202020202020202020202020202",
+        "secret": "0303030303030303",
+        "ad": "040404040404040404040404",
+        "tag": "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659"
+      }
+    ]
+  },
+  "reference": {
+    "source": "https://raw.githubusercontent.com/P-H-C/phc-winner-argon2/master/src/test.c",
+    "retrieved": "2026-10-17",
+    "tests": [
+      {
+        "tcId": 1,
+        "version": 19,
+        "memoryKiB": 65536,
+        "passes": 2,
+        "parallelism": 1,
+        "tagLength": 32,
+        "password": "70617373776f7264",
+        "salt": "736f6d6573616c74",
+        "tag": "09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7",
+        "encoded": "$argon2id$v=19$m=65536,t=2,p=1$c29tZXNhbHQ$CTFhFdXPJO1aFaMaO6Mm5c8y7cJHAph8ArZWb2GRPPc"
+      },
+      {
+        "tcId": 2,
+        "version": 19,
+        "memoryKiB": 262144,
+        "passes": 2,
+        "parallelism": 1,
+        "tagLength": 32,
+        "password": "70617373776f7264",
+        "salt": "736f6d6573616c74",
+        "tag": "78fe1ec91fb3aa5657d72e710854e4c3d9b9198c742f9616c2f085bed95b2e8c",
+        "encoded": "$argon2id$v=19$m=262144,t=2,p=1$c29tZXNhbHQ$eP4eyR+zqlZX1y5xCFTkw9m5GYx0L5YWwvCFvtlbLow"
+      },
+      {
+        "tcId": 3,
+        "version": 19,
+        "memoryKiB": 256,
+        "passes": 2,
+        "parallelism": 1,
+        "tagLength": 32,
+        "password": "70617373776f7264",
+        "salt": "736f6d6573616c74",
+        "tag": "9dfeb910e80bad0311fee20f9c0e2b12c17987b4cac90c2ef54d5b3021c68bfe",
+        "encoded": "$argon2id$v=19$m=256,t=2,p=1$c29tZXNhbHQ$nf65EOgLrQMR/uIPnA4rEsF5h7TKyQwu9U1bMCHGi/4"
+      },
+      {
+        "tcId": 4,
+        "version": 19,
+        "memoryKiB": 256,
+        "passes": 2,
+        "parallelism": 2,
+        "tagLength": 32,
+        "password": "70617373776f7264",
+        "salt": "736f6d6573616c74",
+        "tag": "6d093c501fd5999645e0ea3bf620d7b8be7fd2db59c20d9fff9539da2bf57037",
+        "encoded": "$argon2id$v=19$m=256,t=2,p=2$c29tZXNhbHQ$bQk8UB/VmZZF4Oo79iDXuL5/0ttZwg2f/5U52iv1cDc"
+      },
+      {
+        "tcId": 5,
+        "version": 19,
+        "memoryKiB": 65536,
+        "passes": 1,
+        "parallelism": 1,
+        "tagLength": 32,
+        "password": "70617373776f7264",
+        "salt": "736f6d6573616c74",
+        "tag": "f6a5adc1ba723dddef9b5ac1d464e180fcd9dffc9d1cbf76cca2fed795d9ca98",
+        "encoded": "$argon2id$v=19$m=65536,t=1,p=1$c29tZXNhbHQ$9qWtwbpyPd3vm1rB1GThgPzZ3/ydHL92zKL+15XZypg"
+      },
+      {
+        "tcId": 6,
+        "version": 19,
+        "memoryKiB": 65536,
+        "passes": 4,
+        "parallelism": 1,
+        "tagLength": 32,
+        "password": "70617373776f7264",
+        "salt": "736f6d6573616c74",
+        "tag": "9025d48e68ef7395cca9079da4c4ec3affb3c8911fe4f86d1a2520856f63172c",
+        "encoded": "$argon2id$v=19$m=65536,t=4,p=1$c29tZXNhbHQ$kCXUjmjvc5XMqQedpMTsOv+zyJEf5PhtGiUghW9jFyw"
+      },
+      {
+        "tcId": 7,
+        "version": 19,
+        "memoryKiB": 65536,
+        "passes": 2,
+        "parallelism": 1,
+        "tagLength": 32,
+        "password": "646966666572656e7470617373776f7264",
+        "salt": "736f6d6573616c74",
+        "tag": "0b84d652cf6b0c4beaef0dfe278ba6a80df6696281d7e0d2891b817d8c458fde",
+        "encoded": "$argon2id$v=19$m=65536,t=2,p=1$c29tZXNhbHQ$C4TWUs9rDEvq7w3+J4umqA32aWKB1+DSiRuBfYxFj94"
+      },
+      {
+        "tcId": 8,
+        "version": 19,
+        "memoryKiB": 65536,
+        "passes": 2,
+        "parallelism": 1,
+        "tagLength": 32,
+        "password": "70617373776f7264",
+        "salt": "6469666673616c74",
+        "tag": "bdf32b05ccc42eb15d58fd19b1f856b113da1e9a5874fdcc544308565aa8141c",
+        "encoded": "$argon2id$v=19$m=65536,t=2,p=1$ZGlmZnNhbHQ$vfMrBczELrFdWP0ZsfhWsRPaHppYdP3MVEMIVlqoFBw"
+      }
+    ]
+  }
+}
