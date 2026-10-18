@@ -18,9 +18,11 @@
     "build",
     "scripts",
     "e2e",
+    "e2e-live",
     "vite.config.ts",
     "pwa.config.ts",
     "playwright.config.ts",
+    "playwright.live.config.ts",
     "pwa-assets.config.ts"
   ]
 }

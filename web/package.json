@@ -69,6 +69,7 @@
     "catalog": "bun scripts/build-catalog.ts",
     "pin:models": "bun scripts/pin-local-models.ts",
     "test:e2e": "bunx playwright test",
+    "test:live": "APARTE_LIVE=1 bunx playwright test --config playwright.live.config.ts",
     "check": "bun run typecheck && bun run lint && bun run test && bun run build && bun run scan && bun run size"
   }
 }

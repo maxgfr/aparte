@@ -156,9 +156,12 @@ const preset = (page: Page, name: string) => {
   return page.getByRole('link', { name: starts }).or(page.getByRole('button', { name: starts }))
 }
 
-/** Adds a provider with its key from the Models screen, and checks the connection test passes. */
-export async function addProvider(page: Page, providers: ProviderMock, setup: ProviderSetup): Promise<void> {
-  providers.expectKey(setup.kind, setup.key)
+/**
+ * Adds a provider with its key from the Models screen, and checks the connection test passes. `providers` is the mock
+ * that plays it, or null when the live suite (e2e-live/) talks to the real provider.
+ */
+export async function addProvider(page: Page, providers: ProviderMock | null, setup: ProviderSetup): Promise<void> {
+  providers?.expectKey(setup.kind, setup.key)
   await navigate(page, chat.navProviders)
   await expect(page.getByRole('heading', { level: 1, name: chat.providersTitle })).toBeVisible()
   // The screen may list the presets at once, or behind an "Add a provider" control.
@@ -184,7 +187,7 @@ export async function addProvider(page: Page, providers: ProviderMock, setup: Pr
     page.getByText(new RegExp(`^${chat.providerModelsRefreshed.replace('{count}', '\\d+').replace('.', '\\.')}$`)),
   ).toBeVisible(ANSWER_WAIT)
   // A connection test and a model refresh list the models and never generate.
-  expect(providers.generations(setup.kind)).toHaveLength(0)
+  if (providers) expect(providers.generations(setup.kind)).toHaveLength(0)
 }
 
 export const composer = (page: Page) => page.getByRole('region', { name: chat.composerLabel, exact: true })
