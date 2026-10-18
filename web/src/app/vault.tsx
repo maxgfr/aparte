@@ -114,13 +114,16 @@ function noticeChannel(onNotice: (notice: Notice) => void) {
   }
 }
 
-/** The kit still pending for this vault, if any. */
-function pendingKit(vaultId: string | null): 'create' | 'recover' | null {
+/** The kit still pending for this vault, if any; a `create` one carries the vault's proof (prefs.ts `KitPending`). */
+function pendingKit(
+  vaultId: string | null,
+): { readonly origin: 'create'; readonly proof: string } | { readonly origin: 'recover' } | null {
   const pending = readPref('kitPending')
   if (vaultId === null || pending === '') return null
-  const [origin, id] = pending.split(':')
+  const [origin, id, proof] = pending.split(':')
   if (id !== vaultId) return null
-  return origin === 'create' || origin === 'recover' ? origin : null
+  if (origin === 'create' && proof !== undefined) return { origin, proof }
+  return origin === 'recover' ? { origin } : null
 }
 
 let opening: Promise<Vault> | null = null
@@ -273,7 +276,7 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
         store.refresh()
         throw error
       }
-      writePref('kitPending', `create:${created.vaultId}`)
+      writePref('kitPending', created.kitProof === null ? '' : `create:${created.vaultId}:${created.kitProof}`)
       post.current({ type: 'changed' })
       setLastLock(null)
       setKit({ ...created, origin: 'create' })
@@ -292,12 +295,18 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
       }
       setRenewingKit(true)
       try {
-        if (pending === 'create') {
-          // The recovery key of the kit nobody confirmed is replaced, in the same step as the unlock.
-          const renewed = await vault.unlockAndRenewKit(credential)
+        if (pending.origin === 'create') {
+          // The recovery key of the kit nobody confirmed is replaced, in the same step as the unlock; a marker the
+          // vault did not make only unlocks.
+          const renewed = await vault.unlockAndRenewKit(credential, pending.proof)
+          if (renewed === null) {
+            writePref('kitPending', '')
+            return
+          }
+          writePref('kitPending', `create:${vaultId}:${renewed.kitProof}`)
           post.current({ type: 'changed' })
           post.current({ type: 'kit' })
-          setKit({ vaultId, ...renewed, origin: 'renew' })
+          setKit({ vaultId, secretKey: renewed.secretKey, recoveryKey: renewed.recoveryKey, origin: 'renew' })
         } else {
           await vault.unlock(credential)
           const secretKey = await vault.secretKeyText()
@@ -321,7 +330,7 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
       if (recovered.secretKey !== null && vaultId !== null) {
         writePref('kitPending', `recover:${vaultId}`)
         setKit({ vaultId, secretKey: recovered.secretKey, recoveryKey: null, origin: 'recover' })
-      } else if (pendingKit(vaultId) === 'create') {
+      } else if (pendingKit(vaultId)?.origin === 'create') {
         // The recovery key of that kit was just used: it is kept, and the Secret Key stays on this device.
         writePref('kitPending', '')
       }

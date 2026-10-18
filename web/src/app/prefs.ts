@@ -16,12 +16,16 @@ interface PrefSpec<T> {
 const THEMES: readonly Theme[] = ['system', 'light', 'dark']
 
 /**
- * An Emergency Kit shown but not yet confirmed, as `<origin>:<base32 vaultId>`, or '' for none. It outlives the page
- * (a closed tab, a crash, a phone reclaiming the app), so the next unlock shows a new kit instead of losing it.
+ * An Emergency Kit shown but not yet confirmed, as `create:<base32 vaultId>:<kit proof>` or `recover:<base32
+ * vaultId>`, or '' for none. It outlives the page (a closed tab, a crash, a phone reclaiming the app), so the next
+ * unlock shows a new kit instead of losing it. Any page of a shared origin can write localStorage, so the value is a
+ * request, not a decision: a renewal (which retires the recovery key of the kit) happens only for a proof the vault
+ * itself made (core/contracts/vault.ts `CreatedVault.kitProof`), and `recover:` only shows the user the Secret Key
+ * of the vault they just unlocked.
  */
-export type KitPending = '' | `${'create' | 'recover'}:${string}`
+export type KitPending = '' | `create:${string}:${string}` | `recover:${string}`
 
-const KIT_PENDING = /^(?:create|recover):[a-z2-7]{26}$/
+const KIT_PENDING = /^(?:create:[a-z2-7]{26}:[A-Za-z0-9_-]{59}|recover:[a-z2-7]{26})$/
 
 /** Where dictation runs on this device (core/contracts/media.ts `DictationEngine`). */
 export type Dictation = 'local' | 'api' | 'browser'

@@ -29,6 +29,7 @@ import {
   LockedError,
   type NamesModule,
   type RecoveryModule,
+  type Rng,
   type SecretKeyModule,
   type SlotSecret,
   type Subkeys,
@@ -42,6 +43,7 @@ import type {
   CreateVaultInput,
   KeyslotFile,
   LockReason,
+  RenewedKit,
   SlotInfo,
   UnlockCredential,
   Vault,
@@ -101,6 +103,34 @@ function checkPolicy(policy: AutoLockPolicy): AutoLockPolicy {
 
 /** AAD of the device-wrapped Secret Key (spec/FORMAT.md section 11.2). */
 const deviceSecretAad = (vault: string): Bytes => B.utf8(`aparte/1|device-secret-key|${vault}`)
+
+/**
+ * The pending-kit proof (CreatedVault.kitProof): web-only, kept in localStorage beside the marker, never in a store.
+ * `kit-pending` is not a 26-character local record name, so its K_local is used for nothing else (as `inbox-key`).
+ */
+const KIT_PROOF_NAME = 'kit-pending'
+const kitProofAad = (vault: string): Bytes => B.utf8(`aparte/1|kit-pending|${vault}`)
+const KIT_PROOF_BYTES = IV_BYTES + ID_BYTES + 16
+
+/** Proof that the vault `vault` showed a kit for the recovery slot `slot`. */
+async function makeKitProof(subkeys: Subkeys, vault: string, slot: string, rng: Rng): Promise<string> {
+  const iv = rng.bytes(IV_BYTES)
+  const key = await K.localKey(subkeys, KIT_PROOF_NAME)
+  return B.base64urlEncode(B.concat(iv, await K.aesGcmEncrypt(key, iv, B.base32Decode(slot), kitProofAad(vault))))
+}
+
+/** The recovery slot a proof names, or null when it is not one this vault made. */
+async function openKitProof(subkeys: Subkeys, vault: string, proof: string): Promise<string | null> {
+  try {
+    const bytes = B.base64urlDecode(proof)
+    if (bytes.length !== KIT_PROOF_BYTES) return null
+    const key = await K.localKey(subkeys, KIT_PROOF_NAME)
+    const slot = await K.aesGcmDecrypt(key, bytes.subarray(0, IV_BYTES), bytes.subarray(IV_BYTES), kitProofAad(vault))
+    return B.base32Encode(slot)
+  } catch {
+    return null
+  }
+}
 
 /** Reports an error thrown by a listener or a cleanup without letting it stop the state machine. */
 function report(error: unknown): void {
@@ -254,12 +284,14 @@ class VaultImpl implements Vault {
         ]
         if (rk) keyslots.push(await KS.createKeyslot({ kind: 'recovery', mk, vaultId, recoveryKey: rk }, { rng }))
         const vaultText = B.base32Encode(vaultId)
+        const subkeys = await K.deriveSubkeys(mk, vaultId)
+        const recoverySlot = keyslots.find((k) => k.kind === 'recovery')?.slot
         const created: CreatedVault = {
           vaultId: vaultText,
           secretKey: sk ? await SK.formatSecretKey(sk) : null,
           recoveryKey: rk ? RK.formatRecoveryKey(rk) : null,
+          kitProof: recoverySlot ? await makeKitProof(subkeys, vaultText, recoverySlot, rng) : null,
         }
-        const subkeys = await K.deriveSubkeys(mk, vaultId)
         const slots = keyslots.map((keyslot) => ({ id: keyslot.slot, keyslot, bytes: KS.serializeKeyslot(keyslot) }))
         const device = remember && sk ? await this.wrapSecretKey(sk, vaultText, await newDeviceKey()) : {}
 
@@ -362,10 +394,14 @@ class VaultImpl implements Vault {
     return this.unlockWith(credential, async () => undefined)
   }
 
-  unlockAndRenewKit(
-    credential: UnlockCredential,
-  ): Promise<{ readonly secretKey: string | null; readonly recoveryKey: string }> {
+  unlockAndRenewKit(credential: UnlockCredential, kitProof: string): Promise<RenewedKit | null> {
     return this.unlockWith(credential, async (opened) => {
+      const vault = this.requireVaultText()
+      const subkeys = await K.deriveSubkeys(opened.mk, this.requireVaultId())
+      // Only a proof this vault made, for a recovery slot it still holds, asks for a renewal: the marker it comes with
+      // is in localStorage, which every page of the origin can write.
+      const named = await openKitProof(subkeys, vault, kitProof)
+      if (named === null || this.slots.get(named)?.keyslot.kind !== 'recovery') return null
       const rk = RK.generateRecoveryKey(this.deps.rng)
       try {
         const added = await this.addSlot(
@@ -381,6 +417,7 @@ class VaultImpl implements Vault {
         return {
           secretKey: opened.secretKey ? await SK.formatSecretKey(opened.secretKey) : null,
           recoveryKey: RK.formatRecoveryKey(rk),
+          kitProof: await makeKitProof(subkeys, vault, added, this.deps.rng),
         }
       } finally {
         rk.fill(0)

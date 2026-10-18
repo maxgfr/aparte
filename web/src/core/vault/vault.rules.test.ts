@@ -224,10 +224,13 @@ describe('renewing an Emergency Kit never confirmed', () => {
     const { vault } = await setup()
     const kit = await vault.create({ passphrase: PASS })
     await vault.lock()
-    const renewed = await vault.unlockAndRenewKit({ kind: 'passphrase', passphrase: PASS })
+    const renewed = await vault.unlockAndRenewKit({ kind: 'passphrase', passphrase: PASS }, kit.kitProof as string)
+    if (renewed === null) throw new Error('the kit was not renewed')
     expect(vault.status().state).toBe('unlocked')
     expect(renewed.secretKey).toBe(kit.secretKey)
     expect(renewed.recoveryKey).not.toBe(kit.recoveryKey)
+    // The proof names the new slot: a kit renewed and still not confirmed is renewed again at the next unlock.
+    expect(renewed.kitProof).not.toBe(kit.kitProof)
     expect(vault.status().slots.filter((s) => s.kind === 'recovery')).toHaveLength(1)
     await vault.lock()
     await expect(vault.unlock({ kind: 'recovery', recoveryKey: kit.recoveryKey as string })).rejects.toBeInstanceOf(
@@ -239,14 +242,51 @@ describe('renewing an Emergency Kit never confirmed', () => {
 
   test('a wrong passphrase changes nothing', async () => {
     const { vault } = await setup()
-    await vault.create({ passphrase: PASS })
+    const kit = await vault.create({ passphrase: PASS })
     await vault.lock()
     const before = vault.status().slots
-    await expect(vault.unlockAndRenewKit({ kind: 'passphrase', passphrase: NEXT })).rejects.toBeInstanceOf(
-      WrongSecretError,
-    )
+    await expect(
+      vault.unlockAndRenewKit({ kind: 'passphrase', passphrase: NEXT }, kit.kitProof as string),
+    ).rejects.toBeInstanceOf(WrongSecretError)
     expect(vault.status().state).toBe('locked')
     expect(vault.status().slots).toEqual(before)
+  })
+
+  test('a renewal asked without the proof the vault made only unlocks: the confirmed kit keeps working', async () => {
+    // The pending-kit marker lives in localStorage, which any page of a shared origin can write: a planted one must
+    // not make the next unlock drop the recovery key the user printed.
+    const { vault } = await setup()
+    const kit = await vault.create({ passphrase: PASS })
+    const other = (await setup()).vault
+    const elsewhere = await other.create({ passphrase: PASS })
+    const recovery = vault.status().slots.filter((s) => s.kind === 'recovery')
+    await vault.lock()
+    for (const forged of ['', 'AAAA', elsewhere.kitProof as string, `${kit.kitProof}A`]) {
+      expect(await vault.unlockAndRenewKit({ kind: 'passphrase', passphrase: PASS }, forged)).toBeNull()
+      expect(vault.status().state).toBe('unlocked')
+      expect(vault.status().slots.filter((s) => s.kind === 'recovery')).toEqual(recovery)
+      await vault.lock()
+    }
+    await vault.unlock({ kind: 'recovery', recoveryKey: kit.recoveryKey as string })
+    expect(vault.status().state).toBe('unlocked')
+  })
+
+  test('a proof whose recovery slot is gone renews nothing', async () => {
+    // Replayed after a renewal: the slot it names was replaced, so it no longer names a kit waiting for confirmation.
+    const { vault } = await setup()
+    const kit = await vault.create({ passphrase: PASS })
+    await vault.lock()
+    const renewed = await vault.unlockAndRenewKit({ kind: 'passphrase', passphrase: PASS }, kit.kitProof as string)
+    await vault.lock()
+    expect(await vault.unlockAndRenewKit({ kind: 'passphrase', passphrase: PASS }, kit.kitProof as string)).toBeNull()
+    await vault.lock()
+    await vault.unlock({ kind: 'recovery', recoveryKey: renewed?.recoveryKey as string })
+    expect(vault.status().state).toBe('unlocked')
+  })
+
+  test('creation without a recovery key makes no proof', async () => {
+    const { vault } = await setup()
+    expect((await vault.create({ passphrase: PASS, recoveryKey: false })).kitProof).toBeNull()
   })
 })
 

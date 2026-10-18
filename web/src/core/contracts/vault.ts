@@ -99,6 +99,22 @@ export interface CreatedVault {
   readonly secretKey: string | null
   /** Recovery key text, or null without a recovery slot. */
   readonly recoveryKey: string | null
+  /**
+   * Proof that this vault showed a kit for its recovery slot, for the pending-kit marker the app keeps until the user
+   * confirms the kit (`unlockAndRenewKit`); null without a recovery slot. base64url of `iv || AES-GCM(K_local
+   * ("kit-pending"), iv, slotId, "aparte/1|kit-pending|" || vault)`: only an open vault can make one, so a marker
+   * another page of the origin wrote cannot ask for a renewal.
+   */
+  readonly kitProof: string | null
+}
+
+/** A kit renewed by `unlockAndRenewKit`. */
+export interface RenewedKit {
+  /** The Secret Key of the slot that opened, or null. */
+  readonly secretKey: string | null
+  readonly recoveryKey: string
+  /** The proof for the new recovery slot (as `CreatedVault.kitProof`). */
+  readonly kitProof: string
 }
 
 export interface Clock {
@@ -160,11 +176,11 @@ export interface Vault {
   unlock(credential: UnlockCredential): Promise<void>
   /**
    * Unlocks as `unlock` does and, in the same step, replaces every recovery slot with a new one: for an Emergency Kit
-   * that was never confirmed. Returns the new kit texts (the Secret Key of the slot that opened, or null).
+   * that was never confirmed. Returns the new kit texts (the Secret Key of the slot that opened, or null). The
+   * renewal happens only when `kitProof` is one this vault made (`CreatedVault.kitProof`, `RenewedKit.kitProof`) for
+   * a recovery slot it still holds; otherwise this only unlocks and returns null.
    */
-  unlockAndRenewKit(
-    credential: UnlockCredential,
-  ): Promise<{ readonly secretKey: string | null; readonly recoveryKey: string }>
+  unlockAndRenewKit(credential: UnlockCredential, kitProof: string): Promise<RenewedKit | null>
   /**
    * Re-reads `meta`, for a change made by another page of this device: a vault created (absent -> locked), or
    * keyslots added or removed. Unlocking and slot changes re-read the keyslots on their own.
