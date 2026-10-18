@@ -89,15 +89,13 @@ for (const locale of ['fr', 'de'] as const) {
     const t = await translator(locale)
     const key = `sk-ant-api03-i18n-${locale}`
 
-    // The first launch, under the query override, lands in a chat; then the start screen.
+    // The first launch, under the query override, lands in the home, a new chat.
     await page.goto(`./?locale=${locale}`)
     await expect(page.getByRole('textbox', { name: t('chat.composerLabel'), exact: true })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}-`))
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
     await expect(page.getByText(t('vault.hintBody'))).toBeVisible()
     await check(page, info, locale, 'first chat')
-    await open(page, '/', t('shell.welcomeTitle'))
-    await check(page, info, locale, 'welcome')
 
     // Passphrase protection, from the settings.
     await open(page, '/protection', t('vault.protectionTitle'))

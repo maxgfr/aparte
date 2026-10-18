@@ -175,7 +175,7 @@ export default function VoiceScreen() {
   const voices = useLocalVoiceCount()
   const browserService = useBrowserRecognition()
 
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open' || session === null) {
     return (
       <Screen title={t('media.settingsTitle')} back={paths.providers}>

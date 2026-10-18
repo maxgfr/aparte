@@ -94,7 +94,7 @@ export default function Recovery() {
         </p>
       </form>
       <div className={frame.links}>
-        <Button variant="plain" onClick={() => goBack(paths.welcome)} disabled={busy}>
+        <Button variant="plain" onClick={() => goBack(paths.home)} disabled={busy}>
           {t('vault.backToUnlock')}
         </Button>
       </div>

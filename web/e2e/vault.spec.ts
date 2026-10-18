@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
+import { chat } from '../src/i18n/en/chat.ts'
 import { common } from '../src/i18n/en/common.ts'
-import { shell } from '../src/i18n/en/shell.ts'
 import { vault } from '../src/i18n/en/vault.ts'
 import { openApp, openProtect } from './fixtures/chat-ui.ts'
 import { accessible, expect, test } from './gates.ts'
@@ -18,7 +18,10 @@ const ARGON2_WAIT = { timeout: 60_000 }
 const SECRET_KEY = /^A1(-[A-Z2-7]{5}){6}$/
 const RECOVERY_KEY = /^[A-Z2-7]{4}(-[A-Z2-7]{4}){12}$/
 
-const welcomeHeading = (page: Page) => page.getByRole('heading', { level: 1, name: shell.welcomeTitle })
+/** The home, a new chat: its composer shows once the vault is open. */
+const home = (page: Page) => page.getByRole('textbox', { name: chat.composerLabel, exact: true })
+/** The Lock button: shown only while a vault a passphrase protects is open. */
+const lockButton = (page: Page) => page.getByRole('button', { name: vault.lock, exact: true })
 const lockHeading = (page: Page) => page.getByRole('heading', { level: 1, name: common.appName, exact: true })
 
 /**
@@ -48,7 +51,7 @@ async function confirmKit(page: Page) {
   await expect(proceed).toBeDisabled()
   await page.getByLabel(vault.kitConfirm).check()
   await proceed.click()
-  await expect(welcomeHeading(page)).toBeVisible()
+  await expect(home(page)).toBeVisible()
 }
 
 async function unlock(page: Page, passphrase: string) {
@@ -69,12 +72,12 @@ test('create, Emergency Kit, lock, wrong passphrase, unlock and recovery', async
   await expect(page.getByText(vault.kitPassphraseLine)).toBeHidden()
   await expect(page.getByRole('button', { name: vault.kitPrint })).toBeVisible()
   await confirmKit(page)
-  await expect(page.getByText(vault.homeUnlocked)).toBeVisible()
+  await expect(lockButton(page)).toBeVisible()
 
   // A reload forgets every key: the vault comes back locked, and nothing of the app shows behind the lock.
   await page.reload()
   await expect(lockHeading(page)).toBeVisible()
-  await expect(welcomeHeading(page)).toHaveCount(0)
+  await expect(home(page)).toHaveCount(0)
   await expect(page.getByRole('navigation')).toHaveCount(0)
   // The Secret Key is remembered on this device: only the passphrase is asked for.
   await expect(page.getByLabel(vault.secretKeyLabel)).toHaveCount(0)
@@ -87,7 +90,7 @@ test('create, Emergency Kit, lock, wrong passphrase, unlock and recovery', async
   await accessible(page, 'lock screen with an error')
 
   await unlock(page, passphrase)
-  await expect(welcomeHeading(page)).toBeVisible(ARGON2_WAIT)
+  await expect(home(page)).toBeVisible(ARGON2_WAIT)
 
   // The lock button locks at once when nothing holds the lock.
   await page.getByRole('button', { name: vault.lock, exact: true }).click()
@@ -106,7 +109,7 @@ test('create, Emergency Kit, lock, wrong passphrase, unlock and recovery', async
   // Case, spaces and hyphens do not matter in a recovery key.
   await recoveryField.fill(recoveryKey.toLowerCase().replaceAll('-', ' '))
   await page.getByRole('button', { name: vault.recover }).click()
-  await expect(welcomeHeading(page)).toBeVisible(ARGON2_WAIT)
+  await expect(home(page)).toBeVisible(ARGON2_WAIT)
   await expect(page.getByText(vault.recovered)).toBeVisible()
   // The device kept its Secret Key, so no new Emergency Kit was needed.
   await expect(page.getByRole('heading', { name: vault.kitTitle })).toHaveCount(0)
@@ -115,7 +118,7 @@ test('create, Emergency Kit, lock, wrong passphrase, unlock and recovery', async
   await page.getByRole('button', { name: vault.lock, exact: true }).click()
   await expect(lockHeading(page)).toBeVisible()
   await unlock(page, next)
-  await expect(welcomeHeading(page)).toBeVisible(ARGON2_WAIT)
+  await expect(home(page)).toBeVisible(ARGON2_WAIT)
 })
 
 test('the vault locks itself after five idle minutes', async ({ page }) => {
@@ -127,7 +130,7 @@ test('the vault locks itself after five idle minutes', async ({ page }) => {
   await expect(lockHeading(page)).toBeVisible()
   await expect(page.getByText(vault.lockedIdle)).toBeVisible()
   await unlock(page, passphrase)
-  await expect(welcomeHeading(page)).toBeVisible(ARGON2_WAIT)
+  await expect(home(page)).toBeVisible(ARGON2_WAIT)
 })
 
 test('a custom passphrase must be strong and typed twice the same', async ({ page }) => {

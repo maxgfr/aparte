@@ -22,7 +22,7 @@ export default function KnowledgeScreen() {
   const [, navigate] = useLocation()
   const [name, setName] = useState('')
 
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open' || session === null) {
     return (
       <Screen title={t('knowledge.title')}>

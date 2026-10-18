@@ -5,7 +5,6 @@ import type { Shape } from '../index.ts'
 export const shell = {
   skipToContent: 'Zum Inhalt springen',
   navMain: 'Hauptnavigation',
-  navHome: 'Start',
   navAbout: 'Info',
   navMore: 'Mehr',
   moreTitle: 'Mehr',
@@ -27,13 +26,6 @@ export const shell = {
   updateApply: 'Aktualisieren',
   updateWaiting: 'Wird nach Abschluss der aktuellen Antwort aktualisiert…',
   offlineReady: 'Aparté funktioniert jetzt offline.',
-  welcomeTitle: 'Privater KI-Chat auf Ihrem Gerät',
-  welcomeLead:
-    'Aparté ist ein Chat mit den KI-Modellen Ihrer Wahl, der vollständig in diesem Browser läuft: Ihre Chats werden auf diesem Gerät verschlüsselt und Ende-zu-Ende synchronisiert, ohne einen Server von uns dazwischen.',
-  welcomePreview:
-    'Ihre Geräte synchronisieren Ende-zu-Ende über Speicher, der Ihnen gehört: ein GitHub-Repository, ein Bucket, ein Ordner oder ein Archiv.',
-  welcomeComingNext: 'Als Nächstes',
-  welcomeLearnMore: 'Über diese Version',
   notFoundTitle: 'Hier gibt es nichts',
   notFoundBody: 'Diese Adresse passt zu keinem Bildschirm von Aparté.',
   notFoundHome: 'Zur Startseite',

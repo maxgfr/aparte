@@ -119,8 +119,6 @@ export const vault = {
   eraseFailedTitle: 'The erase did not finish',
   eraseFailedBody: 'The browser refused to delete part of the data. Reload the app, then try again.',
 
-  homeUnlocked: 'Your vault is open on this device. It locks itself after a few minutes without activity.',
-  homeDevice: 'Your chats are encrypted on this device and open without a prompt. No passphrase protects them yet.',
   hintBody: 'Anyone who opens this browser can read these chats. Add a passphrase when you want them locked.',
   hintDismiss: 'Dismiss',
 

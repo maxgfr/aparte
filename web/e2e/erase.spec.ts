@@ -202,7 +202,7 @@ test('erasing from the settings, models included, starts every open tab over', a
   // The other tab dropped its keys and started over on the new vault, at the app's start.
   await expect(composer(second)).toBeVisible({ timeout: 30_000 })
   await expect.poll(async () => (await vaultId(second)) === (await vaultId(page))).toBe(true)
-  expect(new URL(second.url()).hash).toBe('#/chat')
+  expect(['', '#', '#/']).toContain(new URL(second.url()).hash)
 
   const after = await names(page)
   expect(after.caches).not.toContain('aparte-webllm/model')

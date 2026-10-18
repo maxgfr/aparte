@@ -11,7 +11,7 @@ export default function NotFound() {
     <Screen title={t('shell.notFoundTitle')}>
       <p>{t('shell.notFoundBody')}</p>
       <p>
-        <Link href={paths.welcome} className={buttonClass({ variant: 'primary' })}>
+        <Link href={paths.home} className={buttonClass({ variant: 'primary' })}>
           {t('shell.notFoundHome')}
         </Link>
       </p>

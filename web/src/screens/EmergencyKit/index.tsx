@@ -28,7 +28,7 @@ export default function EmergencyKit() {
 
   const done = () => {
     dismissKit()
-    navigate(paths.welcome, { replace: true })
+    navigate(paths.home, { replace: true })
   }
 
   return (

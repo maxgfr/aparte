@@ -1,14 +1,10 @@
 import { type ReactNode, Suspense } from 'react'
 import { Redirect, Route, Router, Switch, useLocation } from 'wouter'
-import Welcome from '../screens/Welcome/index.tsx'
 import { useHashLocation, useHashSearch } from './hashLocation.ts'
 import { lazyChunk, ScreenBoundary } from './lazyChunk.tsx'
 import { paths } from './routes.ts'
 
-/*
- * The start screen ships in the entry chunk, so the first paint needs no extra request; every other screen is a
- * chunk of its own, loaded when first visited.
- */
+/* Every screen is a chunk of its own, loaded when first visited; the home is a new chat. */
 const About = lazyChunk(() => import('../screens/About/index.tsx').then((m) => m.default))
 const NotFound = lazyChunk(() => import('../screens/NotFound/index.tsx').then((m) => m.default))
 const Protect = lazyChunk(() => import('../screens/Protect/index.tsx').then((m) => m.default))
@@ -49,7 +45,7 @@ export function Routes() {
     <ScreenBoundary key={location}>
       <Suspense fallback={null}>
         <Switch>
-          <Route path={paths.welcome} component={Welcome} />
+          <Route path={paths.home} component={Chat} />
           <Route path={paths.about} component={About} />
           <Route path={paths.protection} component={Protection} />
           <Route path={paths.protect} component={Protect} />
@@ -78,7 +74,7 @@ export function Routes() {
           <Route path={paths.share} component={Share} />
           {/* Recovery is a screen of the lock gate; once the vault is open, its address leads home. */}
           <Route path={paths.recover}>
-            <Redirect to={paths.welcome} replace />
+            <Redirect to={paths.home} replace />
           </Route>
           <Route component={NotFound} />
         </Switch>

@@ -1,5 +1,6 @@
-import type { Page } from '@playwright/test'
+import type { FrameLocator, Page } from '@playwright/test'
 import { about } from '../src/i18n/en/about.ts'
+import { chat } from '../src/i18n/en/chat.ts'
 import { shell } from '../src/i18n/en/shell.ts'
 import { REFUSAL } from '../src/security/frame.ts'
 import { accessible, expect, test } from './gates.ts'
@@ -17,10 +18,14 @@ function directives(policy: string): Map<string, string[]> {
   return out
 }
 
-/** The start screen, named in the hash: the bare address of a vault no passphrase protects opens a new chat. */
-async function openWelcome(page: Page) {
+/** The composer of the home's new chat: on screen only once the app runs, its vault open. */
+const homeComposer = (scope: Page | FrameLocator) =>
+  scope.getByRole('textbox', { name: chat.composerLabel, exact: true })
+
+/** The home, named in the hash: a new chat, its composer ready once the vault this device made is open. */
+async function openHome(page: Page) {
   await page.goto('./#/')
-  await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
+  await expect(homeComposer(page)).toBeVisible()
 }
 
 /**
@@ -41,20 +46,20 @@ async function waitForController(page: Page) {
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true)
 }
 
-test('the welcome screen renders clean and accessible, with no preview notice now that aparte/1 is frozen', async ({
+test('the home is a new chat, clean and accessible, with no preview notice now that aparte/1 is frozen', async ({
   page,
 }) => {
-  await openWelcome(page)
-  await expect(page.getByText(shell.welcomePreview)).toBeVisible()
+  await openHome(page)
+  await expect(page.getByRole('heading', { level: 1, name: chat.untitled, exact: true })).toBeVisible()
   await expect(page.getByRole('complementary', { name: 'Preview notice' })).toHaveCount(0)
-  await accessible(page, 'welcome')
+  await accessible(page, 'home')
 })
 
 test('the served page carries a CSP that restricts scripts to the app path and requires Trusted Types', async ({
   page,
   baseURL,
 }) => {
-  await openWelcome(page)
+  await openHome(page)
   const meta = page.locator('meta[http-equiv="Content-Security-Policy"]')
   await expect(meta).toHaveCount(1)
   const policy = directives((await meta.getAttribute('content')) ?? '')
@@ -89,7 +94,7 @@ test('the served page carries a CSP that restricts scripts to the app path and r
 })
 
 test('Trusted Types are enforced where the browser supports them', async ({ page, browserName, gates }) => {
-  await openWelcome(page)
+  await openHome(page)
   const supported = await page.evaluate(() => 'trustedTypes' in window)
   // Chromium has shipped Trusted Types since 83: there, missing support is a failure, not a skip.
   if (browserName === 'chromium') expect(supported).toBe(true)
@@ -149,11 +154,11 @@ test('the app refuses to run inside a frame', async ({ page, context, baseURL, b
     frame.src = src
   }, app.href)
   const framed = page.frameLocator('iframe')
-  // The refusal replaces the body before the app is imported: no root, no welcome, a message instead.
+  // The refusal replaces the body before the app is imported: no root, no chat, a message instead.
   await expect(framed.getByRole('heading', { level: 1, name: REFUSAL.title })).toBeVisible()
   await expect(framed.getByText(REFUSAL.framed)).toBeVisible()
   await expect(framed.locator('#root')).toHaveCount(0)
-  await expect(framed.getByRole('heading', { name: shell.welcomeTitle })).toHaveCount(0)
+  await expect(homeComposer(framed)).toHaveCount(0)
 })
 
 test('the app refuses to run when opened by another page', async ({ page, context, baseURL }) => {
@@ -167,11 +172,11 @@ test('the app refuses to run when opened by another page', async ({ page, contex
   await expect(popup.getByRole('heading', { level: 1, name: REFUSAL.title })).toBeVisible()
   await expect(popup.getByText(REFUSAL.opened)).toBeVisible()
   await expect(popup.locator('#root')).toHaveCount(0)
-  await expect(popup.getByRole('heading', { name: shell.welcomeTitle })).toHaveCount(0)
+  await expect(homeComposer(popup)).toHaveCount(0)
 })
 
 test('once loaded, the shell opens offline', async ({ page, context, browserName }) => {
-  await openWelcome(page)
+  await openHome(page)
   await waitForController(page)
   if (browserName === 'firefox') {
     // Firefox's offline mode fails a navigation before its service worker sees it, which no real offline visit does.
@@ -183,14 +188,14 @@ test('once loaded, the shell opens offline', async ({ page, context, browserName
     test.info().annotations.push({ type: 'offline', description: 'firefox: every network request failed by a route' })
   } else await context.setOffline(true)
   await page.reload()
-  await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
+  await expect(homeComposer(page)).toBeVisible()
   // Served by the worker, not by a network that happened to answer.
   expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true)
   await context.setOffline(false)
 })
 
 test('navigations served by the service worker carry the security headers', async ({ page, browserName, baseURL }) => {
-  await openWelcome(page)
+  await openHome(page)
   await waitForController(page)
   const response = await page.reload()
   if (browserName !== 'chromium') {
@@ -224,11 +229,14 @@ test('navigations served by the service worker carry the security headers', asyn
 })
 
 test('About shows the build version and the security status', async ({ page, browserName }) => {
-  await openWelcome(page)
-  await page
-    .getByRole('link', { name: new RegExp(`^(${shell.welcomeLearnMore}|${shell.navAbout})$`) })
-    .first()
-    .click()
+  await openHome(page)
+  // The About tab from 1000px; on a phone, About is a row of More.
+  const aboutTab = page.getByRole('navigation').getByRole('link', { name: shell.navAbout, exact: true })
+  if (await aboutTab.isVisible()) await aboutTab.click()
+  else {
+    await page.getByRole('navigation').getByRole('link', { name: shell.navMore, exact: true }).click()
+    await page.getByRole('link', { name: new RegExp(`^${shell.moreAbout}`) }).click()
+  }
   await expect(page.getByRole('heading', { level: 1, name: about.title })).toBeVisible()
   await expect(page.getByText(about.version, { exact: true })).toBeVisible()
   await expect(page.getByText(/^\d+\.\d+\.\d+(-[\w.]+)?$/).first()).toBeVisible()
@@ -249,7 +257,7 @@ test('About shows the build version and the security status', async ({ page, bro
 })
 
 test('the web app manifest is valid and scoped to the app path', async ({ page, request, baseURL }) => {
-  await openWelcome(page)
+  await openHome(page)
   const href = await page.locator('link[rel="manifest"]').getAttribute('href')
   expect(href).toBeTruthy()
   const manifestUrl = new URL(href ?? '', page.url())

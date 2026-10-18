@@ -1,6 +1,7 @@
 /** Every screen's path inside the hash. Links and the router read them from here, never as literals. */
 export const paths = {
-  welcome: '/',
+  /** The app's home: a new chat, as `chat`. */
+  home: '/',
   about: '/about',
   /** Whether a passphrase protects the vault, and the actions that add or remove it. */
   protection: '/protection',

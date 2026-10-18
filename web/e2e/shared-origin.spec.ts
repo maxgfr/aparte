@@ -1,6 +1,6 @@
-import type { BrowserContext, Page } from '@playwright/test'
+import type { BrowserContext, FrameLocator, Page } from '@playwright/test'
+import { chat } from '../src/i18n/en/chat.ts'
 import { common } from '../src/i18n/en/common.ts'
-import { shell } from '../src/i18n/en/shell.ts'
 import { vault } from '../src/i18n/en/vault.ts'
 import { REFUSAL } from '../src/security/frame.ts'
 import {
@@ -59,10 +59,14 @@ async function siblingPage(context: BrowserContext, origin: string): Promise<Pag
   return page
 }
 
-/** The start screen, named in the hash: the bare address of a vault no passphrase protects opens a new chat. */
-async function openWelcome(page: Page) {
+/** The composer of the home's new chat: on screen only once the app runs, its vault open. */
+const homeComposer = (scope: Page | FrameLocator) =>
+  scope.getByRole('textbox', { name: chat.composerLabel, exact: true })
+
+/** The home, named in the hash: a new chat, its composer ready once the vault this device made is open. */
+async function openHome(page: Page) {
   await page.goto('./#/')
-  await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
+  await expect(homeComposer(page)).toBeVisible()
 }
 
 /** Waits until this app's service worker controls the page (as e2e/shell.spec.ts does). */
@@ -128,7 +132,7 @@ test('an entry a sibling page plants in the precache is never served', async ({
   browserName,
 }) => {
   const origin = new URL(baseURL ?? '').origin
-  await openWelcome(page)
+  await openHome(page)
   await waitForController(page)
   const sibling = await siblingPage(context, origin)
   const planted = await sibling.evaluate(
@@ -158,7 +162,7 @@ test('an entry a sibling page plants in the precache is never served', async ({
   expect(planted.filter((u) => new URL(u).pathname.endsWith('.js')).length).toBeGreaterThan(0)
 
   const response = await page.reload()
-  await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
+  await expect(homeComposer(page)).toBeVisible()
   // Playwright tells a response the worker made from one the network sent in Chromium only.
   if (browserName === 'chromium') expect(response?.fromServiceWorker()).toBe(true)
   expect(await page.title()).not.toContain(PLANTED)
@@ -181,7 +185,7 @@ test('a window a sibling page opens on the app is cut off from it, even with its
   baseURL,
 }) => {
   const origin = new URL(baseURL ?? '').origin
-  await openWelcome(page)
+  await openHome(page)
   await waitForController(page)
   const sibling = await siblingPage(context, origin)
   const opened = context.waitForEvent('page')
@@ -193,7 +197,7 @@ test('a window a sibling page opens on the app is cut off from it, even with its
   }, `${origin}${BASE}#/`)
   const popup = await opened
   // The app runs in the popup: served by its worker with Cross-Origin-Opener-Policy, it is in a context of its own.
-  await expect(popup.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
+  await expect(homeComposer(popup)).toBeVisible()
   await expect
     .poll(() => sibling.evaluate(() => (window as unknown as { opened: Window | null }).opened?.closed))
     .toBe(true)
@@ -227,7 +231,7 @@ test('a sibling page cannot frame the app, with the service worker or without it
       // A cross-origin parent (the evil page's own frames never are): nothing to replace.
     }
   })
-  await openWelcome(page)
+  await openHome(page)
   await waitForController(page)
   const sibling = await siblingPage(context, origin)
 
@@ -253,14 +257,14 @@ test('a sibling page that unregisters the service worker costs the app its heade
   const origin = new URL(baseURL ?? '').origin
   const app = `${origin}${BASE}`
   gates.expectConsoleError(FRAME_REFUSED)
-  await openWelcome(page)
+  await openHome(page)
   await waitForController(page)
   const sibling = await siblingPage(context, origin)
   expect(await unregisterApp(sibling, app)).toBe(1)
 
   // The next visit loads from the network with the meta policy, and registers the worker again.
   await page.reload()
-  await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
+  await expect(homeComposer(page)).toBeVisible()
   await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1)
   await waitForController(page)
   await expect

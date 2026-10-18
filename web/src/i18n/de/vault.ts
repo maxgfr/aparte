@@ -128,9 +128,6 @@ export const vault = {
   eraseFailedBody:
     'Der Browser hat sich geweigert, einen Teil der Daten zu löschen. Laden Sie die App neu und versuchen Sie es erneut.',
 
-  homeUnlocked: 'Ihr Tresor ist auf diesem Gerät geöffnet. Er sperrt sich nach einigen Minuten ohne Aktivität selbst.',
-  homeDevice:
-    'Ihre Chats sind auf diesem Gerät verschlüsselt und öffnen sich ohne Abfrage. Noch schützt sie keine Passphrase.',
   hintBody:
     'Wer diesen Browser öffnet, kann diese Chats lesen. Fügen Sie eine Passphrase hinzu, wenn Sie sie sperren möchten.',
   hintDismiss: 'Ausblenden',

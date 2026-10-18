@@ -514,7 +514,7 @@ export default function ProviderScreen({ params }: { params?: { id?: string } })
   const t = useT()
   const { status } = useVault()
   const state = useSessionState()
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open') {
     return (
       <Screen title={t('chat.providersTitle')} back={paths.providers}>

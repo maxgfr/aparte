@@ -442,7 +442,7 @@ export default function Sync() {
   const { status: vault } = useVault()
   const session = useSessionState()
   const sync = useSync()
-  if (vault.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (vault.state === 'absent') return <Redirect to={paths.home} replace />
   if (vault.protection === 'device') return <NeedsPassphrase />
   if (session.status !== 'open' || !sync.ready) {
     return (

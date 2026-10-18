@@ -40,7 +40,7 @@ export default function StatsScreen() {
   const t = useT()
   const state = useSessionState()
   const { status } = useVault()
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open') {
     return (
       <Screen title={t('stats.title')}>

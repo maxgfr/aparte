@@ -160,7 +160,7 @@ export default function SkillsScreen() {
   const folderId = useId()
   const sorted = useMemo(() => [...skills].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)), [skills])
 
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open' || session === null) {
     return (
       <Screen title={t('skills.title')} back={paths.more}>

@@ -30,7 +30,7 @@ export default function McpServersScreen() {
   const state = useSessionState()
   const servers = useMcpServers()
   useMcp()
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open') {
     return (
       <Screen title={t('mcp.title')} back={paths.providers}>

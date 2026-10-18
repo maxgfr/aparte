@@ -28,7 +28,7 @@ export default function Join() {
   const [busy, setBusy] = useState(false)
   const fileId = useId()
   // A vault a passphrase protects is never replaced from here.
-  if (status.protection === 'passphrase') return <Redirect to={paths.welcome} replace />
+  if (status.protection === 'passphrase') return <Redirect to={paths.home} replace />
 
   const join = async (source: Parameters<typeof joinFromStore>[1]) => {
     await joinFromStore(vault, source)

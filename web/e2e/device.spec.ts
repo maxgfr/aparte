@@ -88,7 +88,8 @@ function storedShape(page: Page) {
 
 test('the first launch lands in a chat, with no vault to create and nothing to unlock', async ({ page }) => {
   await openApp(page)
-  expect(new URL(page.url()).hash).toBe('#/chat')
+  // The home is the new chat: the bare address stays where it is.
+  expect(['', '#', '#/']).toContain(new URL(page.url()).hash)
   await expect(lockButton(page)).toHaveCount(0)
   // Where it matters, the app says that no passphrase protects the vault.
   await expect(hint(page)).toBeVisible()

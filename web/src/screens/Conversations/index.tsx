@@ -12,7 +12,7 @@ export default function Conversations() {
   const t = useT()
   const { status } = useVault()
   const state = useSessionState()
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   return (
     <Screen title={t('chat.listTitle')}>
       {state.status === 'open' ? (

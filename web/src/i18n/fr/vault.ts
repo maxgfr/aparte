@@ -127,10 +127,6 @@ export const vault = {
   eraseFailedBody:
     'Le navigateur a refusé de supprimer une partie des données. Rechargez l’application, puis réessayez.',
 
-  homeUnlocked:
-    'Votre coffre est ouvert sur cet appareil. Il se verrouille automatiquement après quelques minutes sans activité.',
-  homeDevice:
-    'Vos conversations sont chiffrées sur cet appareil et s’ouvrent sans rien demander. Aucune phrase de passe ne les protège encore.',
   hintBody:
     'Quiconque ouvre ce navigateur peut lire ces conversations. Ajoutez une phrase de passe quand vous voulez les verrouiller.',
   hintDismiss: 'Masquer',

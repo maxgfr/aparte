@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
+import { chat } from '../src/i18n/en/chat.ts'
 import { common } from '../src/i18n/en/common.ts'
-import { shell } from '../src/i18n/en/shell.ts'
 import { vault } from '../src/i18n/en/vault.ts'
 import { openApp, openProtect } from './fixtures/chat-ui.ts'
 import { expect, test } from './gates.ts'
@@ -13,7 +13,10 @@ import { expect, test } from './gates.ts'
 
 const ARGON2_WAIT = { timeout: 60_000 }
 
-const welcomeHeading = (page: Page) => page.getByRole('heading', { level: 1, name: shell.welcomeTitle })
+/** The home, a new chat: its composer shows once the vault is open. */
+const home = (page: Page) => page.getByRole('textbox', { name: chat.composerLabel, exact: true })
+/** The Lock button: shown only while a vault a passphrase protects is open. */
+const lockButton = (page: Page) => page.getByRole('button', { name: vault.lock, exact: true })
 const lockHeading = (page: Page) => page.getByRole('heading', { level: 1, name: common.appName, exact: true })
 const kitHeading = (page: Page) => page.getByRole('heading', { level: 1, name: vault.kitTitle })
 
@@ -32,7 +35,7 @@ async function createVault(page: Page) {
 async function confirmKit(page: Page) {
   await page.getByLabel(vault.kitConfirm).check()
   await page.getByRole('button', { name: vault.kitContinue }).click()
-  await expect(page.getByText(vault.homeUnlocked)).toBeVisible()
+  await expect(lockButton(page)).toBeVisible()
 }
 
 async function unlock(page: Page, passphrase: string) {
@@ -40,10 +43,7 @@ async function unlock(page: Page, passphrase: string) {
   await page.getByRole('button', { name: vault.unlock, exact: true }).click()
 }
 
-test('a second tab still on the welcome screen cannot destroy the vault the first tab created', async ({
-  context,
-  page,
-}) => {
+test('a second tab still on the home cannot destroy the vault the first tab created', async ({ context, page }) => {
   test.setTimeout(240_000)
   const second = await context.newPage()
   // The first tab tells the others that the vault is now protected, at a moment no test controls: the second tab is a
@@ -51,7 +51,7 @@ test('a second tab still on the welcome screen cannot destroy the vault the firs
   // shows the vault unprotected when the user acts there, as a tab the notice reaches late does.
   await second.addInitScript(() => Reflect.deleteProperty(globalThis, 'BroadcastChannel'))
   await second.goto('./#/')
-  await expect(welcomeHeading(second)).toBeVisible()
+  await expect(home(second)).toBeVisible()
 
   const { passphrase } = await createVault(page)
   await confirmKit(page)
@@ -66,8 +66,8 @@ test('a second tab still on the welcome screen cannot destroy the vault the firs
   await page.reload()
   await expect(lockHeading(page)).toBeVisible()
   await unlock(page, passphrase)
-  await expect(welcomeHeading(page)).toBeVisible(ARGON2_WAIT)
-  await expect(page.getByText(vault.homeUnlocked)).toBeVisible()
+  await expect(home(page)).toBeVisible(ARGON2_WAIT)
+  await expect(lockButton(page)).toBeVisible()
 })
 
 test('locking in one tab locks the other tabs of the same vault', async ({ context, page }) => {
@@ -79,7 +79,7 @@ test('locking in one tab locks the other tabs of the same vault', async ({ conte
   await second.goto('./')
   await expect(lockHeading(second)).toBeVisible()
   await unlock(second, passphrase)
-  await expect(second.getByText(vault.homeUnlocked)).toBeVisible(ARGON2_WAIT)
+  await expect(lockButton(second)).toBeVisible(ARGON2_WAIT)
 
   // The user presses Lock in the first tab and walks away believing the app is locked.
   await page.getByRole('button', { name: vault.lock, exact: true }).click()
@@ -117,7 +117,7 @@ test('a device-wrapped Secret Key that no longer unwraps does not lock the user 
   // The user holds the passphrase and the whole Emergency Kit: one of the two ways back in must work.
   await unlock(page, passphrase)
   const secretKeyField = page.getByLabel(vault.secretKeyLabel, { exact: true })
-  const unlocked = page.getByText(vault.homeUnlocked)
+  const unlocked = lockButton(page)
   await expect(unlocked.or(secretKeyField).or(page.getByText(vault.unlockFailed))).toBeVisible(ARGON2_WAIT)
   if (await unlocked.isVisible()) return
   if (await secretKeyField.isVisible()) {
@@ -144,7 +144,7 @@ test('an Emergency Kit closed before it was confirmed is offered again', async (
   await again.goto('./')
   await expect(lockHeading(again)).toBeVisible()
   await unlock(again, passphrase)
-  await expect(welcomeHeading(again).or(kitHeading(again))).toBeVisible(ARGON2_WAIT)
+  await expect(home(again).or(kitHeading(again))).toBeVisible(ARGON2_WAIT)
   // The recovery key was never kept and no screen can show or replace it: the kit must come back.
   await expect(kitHeading(again)).toBeVisible()
 })

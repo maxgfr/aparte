@@ -1,19 +1,10 @@
-import {
-  Info,
-  LayoutGrid,
-  Lock,
-  type LucideIcon,
-  MessageSquareLock,
-  MessagesSquare,
-  RefreshCw,
-  Sparkles,
-  SquarePen,
-} from 'lucide-react'
+import { Info, LayoutGrid, Lock, type LucideIcon, MessagesSquare, RefreshCw, Sparkles, SquarePen } from 'lucide-react'
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'wouter'
 import { useSession } from '../../app/chat.tsx'
 import { sectionOf } from '../../app/hashLocation.ts'
 import { paths } from '../../app/routes.ts'
+import { useToast } from '../../app/toast.tsx'
 import { useVault } from '../../app/vault.tsx'
 import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
@@ -29,13 +20,12 @@ interface Tab {
   readonly unlocked?: boolean
   /**
    * `narrow`: only on phones and narrow windows (the sidebar has its own "New chat"); `wide-or-locked`: hidden on a
-   * narrow window while the vault is open, where "New chat" takes its place in the tab bar.
+   * narrow window while the vault is open.
    */
   readonly width?: 'narrow' | 'wide-or-locked'
 }
 
 const TABS: readonly Tab[] = [
-  { href: paths.welcome, label: 'shell.navHome', icon: MessageSquareLock, width: 'wide-or-locked' },
   { href: paths.chat, label: 'chat.navNewChat', icon: SquarePen, unlocked: true, width: 'narrow' },
   { href: paths.conversations, label: 'chat.navChats', icon: MessagesSquare, also: [paths.chat], unlocked: true },
   { href: paths.providers, label: 'chat.navProviders', icon: Sparkles, also: [paths.mcp], unlocked: true },
@@ -60,10 +50,14 @@ const TABS: readonly Tab[] = [
   { href: paths.about, label: 'shell.navAbout', icon: Info, width: 'wide-or-locked' },
 ]
 
-/** Whether `tab` is the current screen: "New chat" on an empty chat, "Chats" on the list and on an open chat. */
+/**
+ * Whether `tab` is the current screen: "New chat" on an empty chat (the home is one), "Chats" on the list and on an
+ * open chat.
+ */
 function isCurrent(tab: Tab, location: string, section: string): boolean {
-  if (tab.href === paths.chat) return location === paths.chat
-  if (tab.href === paths.conversations && location === paths.chat) return false
+  const newChat = location === paths.chat || location === paths.home
+  if (tab.href === paths.chat) return newChat
+  if (tab.href === paths.conversations && newChat) return false
   return section === tab.href || tab.also?.includes(section) === true
 }
 
@@ -156,6 +150,12 @@ export function Shell({ children }: { readonly children: ReactNode }) {
   const open = status.state === 'unlocked' || status.state === 'locking'
   // Anyone who opens this browser opens a `device` vault: there is nothing for a lock to protect.
   const canLock = open && status.protection === 'passphrase'
+  // A lock asked for while an answer streams waits for it: said once, where the lock was pressed.
+  const locking = status.state === 'locking'
+  const toast = useToast()
+  useEffect(() => {
+    if (locking) toast(t('vault.lockDeferred'))
+  }, [locking, toast, t])
   const session = useSession()
   const wide = useWide()
   useKeyboardInset()

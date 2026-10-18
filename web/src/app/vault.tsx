@@ -18,7 +18,6 @@ import { useT } from '../i18n/react.tsx'
 import { Button } from '../ui/components/Button.tsx'
 import { EmptyState } from '../ui/components/EmptyState.tsx'
 import { clearCopiedSecret } from './clipboard.ts'
-import { navigate, parseHash } from './hashLocation.ts'
 import { lazyChunk, ScreenBoundary } from './lazyChunk.tsx'
 import { clearPrefs, readPref, writePref } from './prefs.ts'
 import { paths } from './routes.ts'
@@ -165,12 +164,6 @@ function pendingKit(
 let opening: Promise<Vault> | null = null
 
 /**
- * Whether this page opened at the bare address of the app, with no screen in the hash (the installed app's start,
- * a typed address): a `device` vault then lands in a new chat rather than on the start screen. Read once, at load.
- */
-let launchPending = typeof location !== 'undefined' && (location.hash === '' || location.hash === '#')
-
-/**
  * Opens this device's vault once per page, whatever React mounts twice (StrictMode). A failure is kept so every
  * caller sees it; a reload is the retry.
  */
@@ -308,13 +301,6 @@ function OpenVault({
       },
     )
   }, [status.state, status.protection, deviceFailed, erasing, vault, store])
-
-  // A launch at the bare address of a `device` vault lands in a new chat.
-  useEffect(() => {
-    if (!launchPending || status.state !== 'unlocked') return
-    launchPending = false
-    if (status.protection === 'device' && parseHash(location.hash).path === '/') navigate(paths.chat, { replace: true })
-  }, [status.state, status.protection])
 
   useEffect(
     () =>

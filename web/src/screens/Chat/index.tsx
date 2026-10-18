@@ -156,7 +156,7 @@ export default function ChatScreen({ params }: { params?: { id?: string } }) {
   const t = useT()
   const state = useSessionState()
   const { status } = useVault()
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status === 'failed') {
     return (
       <div role="alert">

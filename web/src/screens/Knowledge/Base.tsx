@@ -227,7 +227,7 @@ export default function KnowledgeBaseScreen({ params }: { params?: { id?: string
   const inputId = useId()
   const describe = useOutcomeMessage()
 
-  if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open' || session === null) {
     return (
       <Screen title={t('knowledge.title')} back={paths.knowledge}>

@@ -108,7 +108,7 @@ describe('t()', () => {
     expect(out).toContain('{count}')
     expect(out).toContain('Šĥóŵ')
     expect(out.length).toBeGreaterThanOrEqual(Math.ceil('Show answer {count}'.length * 1.35))
-    expect(createTranslator('pseudo')('shell.navHome')).toBe(pseudoize('Home'))
+    expect(createTranslator('pseudo')('shell.navMore')).toBe(pseudoize('More'))
   })
 })
 
