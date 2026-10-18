@@ -68,7 +68,11 @@ export function isLocalEndpoint(baseUrl: string | undefined): boolean {
   }
 }
 
-/** Whether calling the provider needs a key: every hosted API does; a server on this machine may not. */
+/**
+ * Whether calling the provider needs a key: every hosted API does; a server on this machine may not, and a model that
+ * runs in this browser never does.
+ */
 export function needsKey(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): boolean {
+  if (provider.kind === 'webllm' || provider.kind === 'chrome-ai') return false
   return !(provider.kind === 'openai-compatible' && isLocalEndpoint(provider.baseUrl))
 }

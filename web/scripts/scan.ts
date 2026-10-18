@@ -343,6 +343,15 @@ export const KNOWN_SITES: readonly KnownSite[] = [
     needsJitless: true,
   },
   {
+    id: 'llm-models-zod-doc-compile',
+    library: 'llm-models',
+    reason:
+      "the copy of zod 4.4 bundled into llm-models' browser build: Doc.compile, built only when JIT is on; that copy reads the same globalThis.__zod_globalConfig as the app's zod, which src/security/init.ts sets to jitless",
+    before: /compile\(\)\{(?:let|const|var)\s+[\w$]+=$/,
+    at: /^Function,[\w$]+=this\?\.args,[\w$]+=\[\.\.\.\(this\?\.content\?\?\[(?:``|""|'')\]\)\.map\(/,
+    needsJitless: true,
+  },
+  {
     id: 'lib0-constructor-identity',
     library: 'lib0',
     reason:

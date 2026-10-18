@@ -4,7 +4,7 @@ import { Link } from 'wouter'
 import { useKeyedProviders } from '../../app/chat.tsx'
 import { type ModelChoice, needsKey, sameModel, useModelChoices } from '../../app/providers.tsx'
 import { paths } from '../../app/routes.ts'
-import type { Capabilities, Effort, ModelDescriptor } from '../../core/contracts/ai.ts'
+import type { Capabilities, Effort, ModelDescriptor, ProviderKind } from '../../core/contracts/ai.ts'
 import type { ModelRef } from '../../core/contracts/workspace.ts'
 import { formatNumber, formatUsd } from '../../i18n/format.ts'
 import type { Key } from '../../i18n/index.ts'
@@ -16,13 +16,17 @@ import { cx } from '../cx.ts'
 import styles from './Chat.module.css'
 import { matches, queryWords } from './view.ts'
 
-/** The capability badges of a model: only what it accepts, in a fixed order. */
-export function CapabilityBadges({ capabilities }: { capabilities: Capabilities }) {
+/**
+ * The capability badges of a model: only what it accepts, in a fixed order. An in-browser model without function
+ * calling says so ("No tools"): WebLLM runs tools on its Hermes builds only.
+ */
+export function CapabilityBadges({ capabilities, kind }: { capabilities: Capabilities; kind?: ProviderKind }) {
   const t = useT()
-  const badges: Extract<Key, `chat.badge${string}`>[] = []
+  const badges: Extract<Key, `chat.badge${string}` | 'local.badgeNoTools'>[] = []
   if (capabilities.vision) badges.push('chat.badgeVision')
   if (capabilities.pdf) badges.push('chat.badgePdf')
   if (capabilities.tools) badges.push('chat.badgeTools')
+  else if (kind === 'webllm') badges.push('local.badgeNoTools')
   if (capabilities.reasoning) badges.push('chat.badgeReasoning')
   if (capabilities.webSearch !== null) badges.push('chat.badgeWeb')
   if (badges.length === 0) return null
@@ -114,7 +118,7 @@ function ModelDetails({ model }: { model: ModelDescriptor }) {
   const c = model.capabilities
   return (
     <span className={styles.modelDetails}>
-      <CapabilityBadges capabilities={c} />
+      <CapabilityBadges capabilities={c} kind={model.kind} />
       <span className={styles.caption}>
         {t('chat.contextWindow', { count: formatNumber(locale, c.contextWindow, 0) })}
         {c.cost !== null &&

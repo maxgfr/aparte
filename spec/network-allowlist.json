@@ -6,7 +6,7 @@
     "mcp": "Placeholder: fixed MCP servers. User-added servers are not listed.",
     "tool": "Hosts a tool reaches once the user approved the call (the built-in fetch_url): chosen by the conversation, never fixed, so none are listed.",
     "sync": "Placeholder: fixed relays for end-to-end encrypted sync. Carries ciphertext only.",
-    "download": "Placeholder: pinned, hash-checked downloads such as in-browser model weights or runtimes.",
+    "download": "Pinned, hash-checked downloads of in-browser model files and runtimes, made by the model workers only: Hugging Face model repositories read at a fixed commit (huggingface.co, which redirects the large files to its CDN hosts below, by region), and the compiled WebLLM model libraries at a fixed commit of mlc-ai/binary-mlc-llm-libs (raw.githubusercontent.com). Every file is checked against a SHA-256 shipped with the app; ONNX Runtime is self-hosted under the app's origin.",
     "catalog": "Placeholder: the model catalog the app refreshes, if it is fetched rather than bundled."
   },
   "app": ["self"],
@@ -20,6 +20,15 @@
   "mcp": [],
   "tool": [],
   "sync": [],
-  "download": [],
+  "download": [
+    "https://huggingface.co",
+    "https://us.aws.cdn.hf.co",
+    "https://eu.aws.cdn.hf.co",
+    "https://cas-bridge.xethub.hf.co",
+    "https://cdn-lfs.hf.co",
+    "https://cdn-lfs-us-1.hf.co",
+    "https://cdn-lfs-eu-1.hf.co",
+    "https://raw.githubusercontent.com"
+  ],
   "catalog": []
 }

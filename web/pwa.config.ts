@@ -62,6 +62,10 @@ export function pwaOptions(base: string): Partial<VitePWAOptions> {
         'pyodide/**',
         'ort/**',
         'webllm/**',
+        // The model workers carry WebLLM and transformers.js with ONNX Runtime (megabytes each): fetched only when an
+        // in-browser model or embeddings are used, never at install.
+        '**/webllm.worker-*.js',
+        '**/transformers.worker-*.js',
         '**/mermaid*',
       ],
       // Files over the cap (a WebAssembly runtime, say) are left out of the precache with a build warning.

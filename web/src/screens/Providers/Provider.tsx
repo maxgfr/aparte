@@ -30,6 +30,7 @@ import { Field } from '../../ui/components/Field.tsx'
 import { IconButton } from '../../ui/components/IconButton.tsx'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
+import { ChromeAiStatus, deviceServiceName, NewDeviceProvider, ServerDiagnosis, WebllmModels } from './Local.tsx'
 
 /*
  * One provider: its name and address, its key on this device, a connection test, and the models it offers. The key is
@@ -60,21 +61,6 @@ function useBaseUrlError(value: string): string | undefined {
   return undefined
 }
 
-function LocalHelp() {
-  const t = useT()
-  const origin = location.origin
-  return (
-    <section className={styles.help} aria-labelledby="local-help">
-      <h2 id="local-help" className={styles.helpTitle}>
-        {t('chat.localHelpTitle')}
-      </h2>
-      <p>{t('chat.localHelpCors', { origin })}</p>
-      <p>{t('chat.localHelpLna', { origin })}</p>
-      <p>{t('chat.localHelpSafari')}</p>
-    </section>
-  )
-}
-
 /** Creating a provider (`/providers/new?catalog=…`, `?local=…` or `?custom`). */
 export function NewProvider() {
   const t = useT()
@@ -82,6 +68,7 @@ export function NewProvider() {
   const [, navigate] = useLocation()
   const source = providerSourceOf(useSearch())
   const catalog = session?.catalog ?? null
+  const device = source.from === 'device' ? source.id : null
   const entry = source.from === 'catalog' && catalog !== null ? findProvider(catalog, source.id) : undefined
   const local = source.from === 'local' ? LOCAL_PRESETS.find((p) => p.id === source.id) : undefined
   const fields = entry !== undefined ? providerFields(entry) : undefined
@@ -96,6 +83,7 @@ export function NewProvider() {
   }, [fields?.label, local?.name, local?.endpoint, fields])
   const baseError = useBaseUrlError(baseUrl)
   if (session === null) return null
+  if (device !== null) return <NewDeviceProvider kind={device} />
   if (source.from === 'catalog' && catalog === null) {
     return (
       <Screen title={t('chat.providerNew')} back={paths.providers}>
@@ -187,7 +175,9 @@ export function NewProvider() {
           {t('chat.providerCreate')}
         </Button>
       </form>
-      {(local !== undefined || isLocalEndpoint(baseUrl)) && <LocalHelp />}
+      {(local !== undefined || isLocalEndpoint(baseUrl)) && (
+        <ServerDiagnosis baseUrl={normalized ?? ''} preset={local?.id} />
+      )}
     </Screen>
   )
 }
@@ -252,7 +242,8 @@ export function EditProvider({ id }: { id: string }) {
   const keyPage = KEY_PAGES[provider.kind] ?? entry?.doc
   const suggestions = entry === undefined ? [] : sortedModels(entry).map((m) => m.id)
   // The service under the title, unless the provider is simply named after it.
-  const service = serviceName(catalog, provider) ?? t('chat.providerCustom')
+  const onDevice = provider.kind === 'webllm' || provider.kind === 'chrome-ai'
+  const service = deviceServiceName(t, provider.kind) ?? serviceName(catalog, provider) ?? t('chat.providerCustom')
   const hasKey = keyed?.has(provider.id) === true
   const keyNeeded = needsKey(provider)
   const keyError = key !== '' && keyProblem(key) ? t('chat.providerKeyInvalid') : undefined
@@ -317,73 +308,80 @@ export function EditProvider({ id }: { id: string }) {
         </Button>
       </form>
 
-      <form
-        className={styles.form}
-        aria-labelledby={keyId}
-        onSubmit={async (e) => {
-          e.preventDefault()
-          if (key === '' || keyError !== undefined) return
-          await session.keys.set(provider.id, key)
-          setKey('')
-          toast(t('chat.providerKeySaved'))
-        }}
-      >
-        <h2 id={keyId} className={styles.sectionTitle}>
-          {t('chat.providerKey')}
-        </h2>
-        {hasKey && <p className={styles.footnote}>{t('chat.providerKeyStored')}</p>}
-        <Field
-          label={t('chat.providerKey')}
-          hideLabel
-          hint={keyNeeded ? t('chat.providerKeyHint', { host: hostOf(provider) }) : t('chat.providerKeyOptional')}
-          error={keyError}
-          type="password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <div className={styles.sheetActions}>
-          <Button type="submit" variant="primary" disabled={key === '' || keyError !== undefined}>
-            {t('chat.providerKeySave')}
-          </Button>
-          {hasKey && (
+      {provider.kind === 'webllm' && <WebllmModels provider={provider} />}
+      {provider.kind === 'chrome-ai' && <ChromeAiStatus />}
+
+      {!onDevice && (
+        <form
+          className={styles.form}
+          aria-labelledby={keyId}
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (key === '' || keyError !== undefined) return
+            await session.keys.set(provider.id, key)
+            setKey('')
+            toast(t('chat.providerKeySaved'))
+          }}
+        >
+          <h2 id={keyId} className={styles.sectionTitle}>
+            {t('chat.providerKey')}
+          </h2>
+          {hasKey && <p className={styles.footnote}>{t('chat.providerKeyStored')}</p>}
+          <Field
+            label={t('chat.providerKey')}
+            hideLabel
+            hint={keyNeeded ? t('chat.providerKeyHint', { host: hostOf(provider) }) : t('chat.providerKeyOptional')}
+            error={keyError}
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <div className={styles.sheetActions}>
+            <Button type="submit" variant="primary" disabled={key === '' || keyError !== undefined}>
+              {t('chat.providerKeySave')}
+            </Button>
+            {hasKey && (
+              <Button
+                variant="plain"
+                onClick={async () => {
+                  await session.keys.delete(provider.id)
+                  toast(t('chat.providerKeyRemoved'))
+                }}
+              >
+                {t('chat.providerKeyRemove')}
+              </Button>
+            )}
+          </div>
+          {keyPage !== undefined && (
+            <ListGroup>
+              <ListRow title={t('chat.providerKeyGet')} external={{ href: keyPage, note: t('common.opensInNewTab') }} />
+            </ListGroup>
+          )}
+        </form>
+      )}
+
+      {!onDevice && (
+        <div className={styles.form}>
+          <div className={styles.sheetActions}>
+            <Button loading={testing === 'test'} disabled={testing !== null} onClick={() => void run('test')}>
+              {t('chat.providerTest')}
+            </Button>
             <Button
               variant="plain"
-              onClick={async () => {
-                await session.keys.delete(provider.id)
-                toast(t('chat.providerKeyRemoved'))
-              }}
+              loading={testing === 'refresh'}
+              disabled={testing !== null}
+              onClick={() => void run('refresh')}
             >
-              {t('chat.providerKeyRemove')}
+              {t('chat.providerModelsRefresh')}
             </Button>
-          )}
+          </div>
+          <p className={styles.footnote} role="status" aria-live="polite">
+            {testing !== null ? t('chat.providerTesting') : (result ?? '')}
+          </p>
         </div>
-        {keyPage !== undefined && (
-          <ListGroup>
-            <ListRow title={t('chat.providerKeyGet')} external={{ href: keyPage, note: t('common.opensInNewTab') }} />
-          </ListGroup>
-        )}
-      </form>
-
-      <div className={styles.form}>
-        <div className={styles.sheetActions}>
-          <Button loading={testing === 'test'} disabled={testing !== null} onClick={() => void run('test')}>
-            {t('chat.providerTest')}
-          </Button>
-          <Button
-            variant="plain"
-            loading={testing === 'refresh'}
-            disabled={testing !== null}
-            onClick={() => void run('refresh')}
-          >
-            {t('chat.providerModelsRefresh')}
-          </Button>
-        </div>
-        <p className={styles.footnote} role="status" aria-live="polite">
-          {testing !== null ? t('chat.providerTesting') : (result ?? '')}
-        </p>
-      </div>
+      )}
 
       <section className={styles.form} aria-labelledby={`${keyId}-models`}>
         <h2 id={`${keyId}-models`} className={styles.sectionTitle}>
@@ -417,40 +415,44 @@ export function EditProvider({ id }: { id: string }) {
             )
           })}
         </ul>
-        <form
-          className={styles.inlineForm}
-          onSubmit={(e) => {
-            e.preventDefault()
-            const id = newModel.trim()
-            if (id === '' || models.includes(id)) return
-            update({ models: [...models, id] })
-            setNewModel('')
-          }}
-        >
-          <Field
-            label={t('chat.providerModelAdd')}
-            value={newModel}
-            onChange={(e) => setNewModel(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-            list={suggestions.length > 0 ? `${keyId}-suggestions` : undefined}
-          />
-          {suggestions.length > 0 && (
-            <datalist id={`${keyId}-suggestions`}>
-              {suggestions
-                .filter((m) => !models.includes(m))
-                .map((m) => (
-                  <option key={m} value={m} />
-                ))}
-            </datalist>
-          )}
-          <Button type="submit" variant="secondary" disabled={newModel.trim() === ''}>
-            {t('chat.providerModelAddButton')}
-          </Button>
-        </form>
+        {!onDevice && (
+          <form
+            className={styles.inlineForm}
+            onSubmit={(e) => {
+              e.preventDefault()
+              const id = newModel.trim()
+              if (id === '' || models.includes(id)) return
+              update({ models: [...models, id] })
+              setNewModel('')
+            }}
+          >
+            <Field
+              label={t('chat.providerModelAdd')}
+              value={newModel}
+              onChange={(e) => setNewModel(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              list={suggestions.length > 0 ? `${keyId}-suggestions` : undefined}
+            />
+            {suggestions.length > 0 && (
+              <datalist id={`${keyId}-suggestions`}>
+                {suggestions
+                  .filter((m) => !models.includes(m))
+                  .map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+              </datalist>
+            )}
+            <Button type="submit" variant="secondary" disabled={newModel.trim() === ''}>
+              {t('chat.providerModelAddButton')}
+            </Button>
+          </form>
+        )}
       </section>
 
-      {(local !== undefined || isLocalEndpoint(provider.baseUrl)) && <LocalHelp />}
+      {(local !== undefined || isLocalEndpoint(provider.baseUrl)) && provider.baseUrl !== undefined && (
+        <ServerDiagnosis baseUrl={provider.baseUrl} preset={provider.preset} />
+      )}
 
       <Button
         variant="danger"

@@ -11,7 +11,7 @@ export const paths = {
   /** The conversation list (the sidebar holds it from 1000px). */
   conversations: '/chats',
   providers: '/providers',
-  /** A new provider: `/providers/new?catalog=<id>`, `?local=<preset id>` or `?custom`. */
+  /** A new provider: `/providers/new?catalog=<id>`, `?local=<preset id>`, `?device=<webllm|chrome-ai>` or `?custom`. */
   providerNew: '/providers/new',
   /** One provider: `/providers/<provider id>`. */
   provider: '/providers/:id',
@@ -29,10 +29,14 @@ export function providerPath(id: string): string {
   return `/providers/${encodeURIComponent(id)}`
 }
 
-/** Where a new provider comes from: a catalog provider, a local server preset, or a custom endpoint. */
+/**
+ * Where a new provider comes from: a catalog provider, a local server preset, a model that runs in this browser
+ * (`webllm` or `chrome-ai`), or a custom endpoint.
+ */
 export type ProviderSource =
   | { readonly from: 'catalog'; readonly id: string }
   | { readonly from: 'local'; readonly id: string }
+  | { readonly from: 'device'; readonly id: 'webllm' | 'chrome-ai' }
   | { readonly from: 'custom' }
 
 /** The path that creates a provider from `source`. */
@@ -48,5 +52,7 @@ export function providerSourceOf(search: string): ProviderSource {
   if (catalog) return { from: 'catalog', id: catalog }
   const local = q.get('local')
   if (local) return { from: 'local', id: local }
+  const device = q.get('device')
+  if (device === 'webllm' || device === 'chrome-ai') return { from: 'device', id: device }
   return { from: 'custom' }
 }

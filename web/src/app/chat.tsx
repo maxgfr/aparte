@@ -53,6 +53,7 @@ import { useVault } from './vault.tsx'
  *   core/workspace/lifecycle.ts), so a lock waits for the write instead of losing it.
  * - The core modules (Yjs, the AI SDK and its providers) load in chunks of their own when the vault first unlocks,
  *   never with the first paint.
+ * - The on-device engines (core/ai/local, app/local.ts) are stopped on lock: their workers terminate.
  * - Streams hold the vault lock and the PWA reload (the controller takes both, `chat-stream`), so neither an
  *   auto-lock nor an update cuts an answer.
  * - The tool registry holds the built-in tools (web/src/core/tools/builtins.ts) for the session only; approvals that
@@ -146,6 +147,7 @@ async function openSession(vault: Vault): Promise<{
     registryModule,
     builtinsModule,
     toolFetchModule,
+    local,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -162,6 +164,7 @@ async function openSession(vault: Vault): Promise<{
     import('../core/tools/registry.ts'),
     import('../core/tools/builtins.ts'),
     import('../core/tools/fetch.ts'),
+    import('./local.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
@@ -179,14 +182,19 @@ async function openSession(vault: Vault): Promise<{
   const adapter = (kind: ProviderKind): ChatAdapter => {
     let a = adapterCache.get(kind)
     if (a === undefined) {
-      a = adapters.createAdapter(kind)
+      // The on-device kinds run in this browser (core/ai/local); every other kind goes over the network.
+      a = local.localAdapter(kind) ?? adapters.createAdapter(kind)
       adapterCache.set(kind, a)
     }
     return a
   }
   // The controller resolves models through the same function: it sees the catalog as soon as it has loaded.
   let catalog: Catalog | null = null
-  const resolveModel = (ref: ModelRef) => resolveModelWith(workspace, capabilities, catalog, ref)
+  const resolveModel = (ref: ModelRef) => {
+    const model = resolveModelWith(workspace, capabilities, catalog, ref)
+    const name = model === null ? null : local.localModelName(model.kind, ref.id)
+    return model === null || name === null ? model : { ...model, name }
+  }
   const tools = registryModule.createToolRegistry()
   for (const tool of builtinsModule.builtinTools({ clock, search, download: toolFetchModule.toolFetch })) {
     await tools.register(tool)
@@ -254,6 +262,8 @@ async function openSession(vault: Vault): Promise<{
     try {
       await chat.dispose()
     } finally {
+      // The model workers hold the conversation in memory (its prompt, its cache on the GPU): they go with the lock.
+      local.releaseLocal()
       search.dispose()
       unbind()
       workspace.close()

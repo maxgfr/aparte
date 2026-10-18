@@ -11,6 +11,7 @@ import { matches, queryWords } from '../../ui/chat/view.ts'
 import { Field } from '../../ui/components/Field.tsx'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
+import { DeviceSources, deviceServiceName } from './Local.tsx'
 
 /** The providers of this vault, and where a new one comes from: the catalog, a local server, a custom endpoint. */
 export default function Providers() {
@@ -59,7 +60,7 @@ export default function Providers() {
               key={p.id}
               href={providerPath(p.id)}
               title={p.label}
-              subtitle={`${serviceName(catalog, p) ?? t('chat.providerCustom')} · ${keyState}`}
+              subtitle={`${deviceServiceName(t, p.kind) ?? serviceName(catalog, p) ?? t('chat.providerCustom')} · ${keyState}`}
             />
           )
         })}
@@ -116,6 +117,8 @@ export default function Providers() {
           subtitle={t('chat.providerCustomHint')}
         />
       </ListGroup>
+
+      <DeviceSources />
     </Screen>
   )
 }

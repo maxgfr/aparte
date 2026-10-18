@@ -51,10 +51,21 @@ export function serviceName(catalog: Catalog | null, provider: Pick<ProviderConf
   return localPresetOf(provider)?.name ?? catalogProviderOf(catalog, provider)?.name ?? null
 }
 
-/** Kinds this build can call (the on-device ones arrive with milestone M4). */
+/** Kinds this build can call: every hosted kind, and the on-device ones (WebLLM, Chrome's built-in model). */
 export function isCallable(kind: ProviderKind): boolean {
-  return kind !== 'webllm' && kind !== 'chrome-ai'
+  return KINDS.has(kind)
 }
+
+const KINDS: ReadonlySet<ProviderKind> = new Set<ProviderKind>([
+  'anthropic',
+  'openai',
+  'google',
+  'mistral',
+  'openrouter',
+  'openai-compatible',
+  'webllm',
+  'chrome-ai',
+])
 
 /** The first catalog models of a provider, newest first: what a new provider offers until the user edits its list. */
 export function initialModels(entry: CatalogProvider | undefined): string[] {

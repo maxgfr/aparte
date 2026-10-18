@@ -15,6 +15,7 @@ import type {
   WebSearchVariant,
 } from '../contracts/ai.ts'
 import { effortLevels, modelKey } from './effort.ts'
+import { isOnDevice, localCapabilities } from './local/catalog.ts'
 
 const CLAUDE_SAMPLING: readonly SamplingParam[] = ['temperature', 'topP', 'topK']
 const DYNAMIC_SEARCH: WebSearchVariant = 'anthropic:web_search_20260209'
@@ -288,8 +289,9 @@ export function resolveCapabilities(input: {
   readonly catalog?: CatalogModelInfo
   readonly override?: CapabilityOverride
 }): Capabilities {
-  const base =
-    (input.kind === 'anthropic' ? pinnedClaude(input.modelId) : null) ??
-    fromCatalog(input.kind, input.modelId, input.catalog)
+  const base = isOnDevice(input.kind)
+    ? localCapabilities(input.kind, input.modelId)
+    : ((input.kind === 'anthropic' ? pinnedClaude(input.modelId) : null) ??
+      fromCatalog(input.kind, input.modelId, input.catalog))
   return input.override ? { ...base, ...input.override } : base
 }

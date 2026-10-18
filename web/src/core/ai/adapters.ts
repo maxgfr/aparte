@@ -47,7 +47,7 @@ import {
   SDK_KEY,
 } from './providers.ts'
 
-/** The kinds this build can call; `webllm` and `chrome-ai` arrive with milestone M4. */
+/** The kinds called over the network; `webllm` and `chrome-ai` run in the browser (core/ai/local/adapters.ts). */
 const CALLABLE: ReadonlySet<ProviderKind> = new Set([
   'anthropic',
   'openai',

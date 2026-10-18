@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { cspPlugin } from './build/csp.ts'
+import { ortPlugin } from './build/ort.ts'
 import { pwaOptions } from './pwa.config.ts'
 
 /** Path the app is served under; GitHub Pages serves the repo at `/aparte/`. */
@@ -37,7 +38,7 @@ export default defineConfig({
     __APP_COMMIT__: JSON.stringify(commit),
     __DEDICATED_ORIGIN__: JSON.stringify(dedicatedOrigin),
   },
-  plugins: [react(), cspPlugin({ origin, base }), VitePWA(pwaOptions(base))],
+  plugins: [react(), cspPlugin({ origin, base }), ortPlugin(), VitePWA(pwaOptions(base))],
   worker: { format: 'es' },
   build: {
     target: 'es2022',

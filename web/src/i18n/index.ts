@@ -1,6 +1,7 @@
 import type { about } from './en/about.ts'
 import type { chat } from './en/chat.ts'
 import type { common } from './en/common.ts'
+import type { local } from './en/local.ts'
 import type { shell } from './en/shell.ts'
 import type { tools } from './en/tools.ts'
 import type { vault } from './en/vault.ts'
@@ -25,9 +26,10 @@ type Source = {
   readonly vault: typeof vault
   readonly chat: typeof chat
   readonly tools: typeof tools
+  readonly local: typeof local
 }
 export type Namespace = keyof Source
-const NAMESPACES: readonly Namespace[] = ['common', 'shell', 'about', 'vault', 'chat', 'tools']
+const NAMESPACES: readonly Namespace[] = ['common', 'shell', 'about', 'vault', 'chat', 'tools', 'local']
 export type Catalog = { readonly [N in Namespace]: Shape<Source[N]> }
 
 /**
@@ -46,13 +48,14 @@ const loaded = new Map<Locale, Catalog>()
 
 const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
   en: async () => {
-    const [common, shell, about, vault, chat, tools] = await Promise.all([
+    const [common, shell, about, vault, chat, tools, local] = await Promise.all([
       import('./en/common.ts'),
       import('./en/shell.ts'),
       import('./en/about.ts'),
       import('./en/vault.ts'),
       import('./en/chat.ts'),
       import('./en/tools.ts'),
+      import('./en/local.ts'),
     ])
     return {
       common: common.common,
@@ -61,6 +64,7 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       vault: vault.vault,
       chat: chat.chat,
       tools: tools.tools,
+      local: local.local,
     }
   },
   pseudo: async () => {

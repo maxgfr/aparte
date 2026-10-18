@@ -148,7 +148,7 @@ describe('spec/network-allowlist.json', () => {
     expect(purposes.sort()).toEqual([...NET_PURPOSES].sort())
   })
 
-  test('lets the app contact its own origin and the default provider hosts, and nothing else', () => {
+  test('lets the app contact its own origin, the default provider hosts and the pinned model hosts, and nothing else', () => {
     expect(allowlist.app).toEqual(['self'])
     expect(allowlist.provider).toEqual([
       'https://api.anthropic.com',
@@ -157,7 +157,17 @@ describe('spec/network-allowlist.json', () => {
       'https://api.mistral.ai',
       'https://openrouter.ai',
     ])
-    for (const purpose of NET_PURPOSES.filter((p) => p !== 'app' && p !== 'provider'))
+    expect(allowlist.download).toEqual([
+      'https://huggingface.co',
+      'https://us.aws.cdn.hf.co',
+      'https://eu.aws.cdn.hf.co',
+      'https://cas-bridge.xethub.hf.co',
+      'https://cdn-lfs.hf.co',
+      'https://cdn-lfs-us-1.hf.co',
+      'https://cdn-lfs-eu-1.hf.co',
+      'https://raw.githubusercontent.com',
+    ])
+    for (const purpose of NET_PURPOSES.filter((p) => p !== 'app' && p !== 'provider' && p !== 'download'))
       expect(allowlist[purpose]).toEqual([])
   })
 })

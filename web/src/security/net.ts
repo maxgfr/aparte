@@ -100,11 +100,16 @@ export function checkRequestURL(input: string | URL, purpose: NetPurpose, page: 
 /**
  * The only `fetch` in the app. Checks the URL, records the origin and purpose, then fetches without cookies or HTTP
  * auth (`credentials: 'omit'`, whatever the caller passed) and without a referrer. Rejects with a TypeError, as
- * `fetch` itself does, when the URL is refused.
+ * `fetch` itself does, when the URL is refused. `transport` is the browser's own `fetch` a confined worker kept aside
+ * before replacing the global one (web/src/security/workerNet.ts); everywhere else it is the global `fetch`.
  */
-export async function request(input: string | URL, init: RequestInit & { purpose: NetPurpose }): Promise<Response> {
+export async function request(
+  input: string | URL,
+  init: RequestInit & { purpose: NetPurpose },
+  transport: typeof globalThis.fetch = globalThis.fetch,
+): Promise<Response> {
   const { purpose, ...rest } = init
   const url = checkRequestURL(input, purpose, here())
   record(url.origin, purpose, Date.now())
-  return globalThis.fetch(url.href, { ...rest, credentials: 'omit', referrerPolicy: 'no-referrer' })
+  return transport.call(globalThis, url.href, { ...rest, credentials: 'omit', referrerPolicy: 'no-referrer' })
 }

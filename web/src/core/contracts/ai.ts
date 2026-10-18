@@ -44,7 +44,7 @@ import type { ModelRef, Part, ProviderMeta, Role } from './workspace.ts'
 /**
  * The adapter a provider uses. `openai-compatible` covers every server that speaks OpenAI's chat completions:
  * Groq, xAI, DeepSeek, Together, Fireworks, Cerebras, Perplexity, Ollama, LM Studio, Jan, vLLM and custom endpoints
- * (told apart by `ProviderConfig.preset`). `webllm` and `chrome-ai` are on-device (milestone M4).
+ * (told apart by `ProviderConfig.preset`). `webllm` and `chrome-ai` run in the browser (web/src/core/contracts/local.ts).
  */
 export type ProviderKind =
   | 'anthropic'
@@ -472,7 +472,10 @@ export type ConnectionCheck =
     }
 
 export interface AdaptersModule {
-  /** InvalidInputError for a kind this build cannot call (`webllm` and `chrome-ai` until M4). */
+  /**
+   * InvalidInputError for a kind this module does not call over the network: `webllm` and `chrome-ai` have adapters
+   * of their own (LocalAdaptersModule in web/src/core/contracts/local.ts).
+   */
   createAdapter(kind: ProviderKind, deps?: AdapterDeps): ChatAdapter
   /** Lists the provider's models; never generates. */
   testConnection(

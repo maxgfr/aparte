@@ -8,7 +8,8 @@ format, vectors, fixtures).
 
 - Web, from `web/`: `bun run dev` / `bun run build` / `bun run preview`; `bun run typecheck`, `bun run lint`,
   `bun run test` (bun test), `bun run scan` (security bans over `src` and `dist`), `bun run size` (bundle budget),
-  `bun run test:e2e` (Playwright + axe, needs `bun run build`), `bun run check` (everything but e2e).
+  `bun run test:e2e` (Playwright + axe, needs `bun run build`), `bun run check` (everything but e2e),
+  `bun run pin:models` (re-pins the in-browser models to Hugging Face commits with SHA-256 digests; review the diff).
 - Rust, from the root: `scripts/check.sh` (fmt, clippy `-D warnings`, tests, cargo deny, actionlint, shellcheck).
 
 ## Rules
