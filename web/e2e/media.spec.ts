@@ -253,3 +253,55 @@ test('the browser’s speech service stays off until the user accepts where the 
   await expect(page.getByRole('radio', { name: media.engineLocal })).toBeChecked()
   await expect(browserService).not.toBeChecked()
 })
+
+test('a dictation choice planted in localStorage does not send the voice to the browser’s service unasked', async ({
+  page,
+  context,
+  providers,
+  gates,
+}) => {
+  admitCustomEndpoint(gates)
+  // Any page of the shared origin can write localStorage: it sets the engine to the browser's service, which sends
+  // the audio to the browser maker's servers, without the user ever seeing the warning.
+  await context.addInitScript(() => {
+    localStorage.setItem('aparte:dictation', 'browser')
+    const started: number[] = []
+    ;(window as unknown as { recognitionStarts: number[] }).recognitionStarts = started
+    const w = window as unknown as Record<string, { prototype: { start(): void } } | undefined>
+    for (const name of ['SpeechRecognition', 'webkitSpeechRecognition']) {
+      const proto = w[name]?.prototype
+      if (proto) proto.start = () => started.push(Date.now())
+    }
+  })
+  await startChat(page, providers, { ...CUSTOM, key: 'sk-test-media-planted' })
+  const hasService = await page.evaluate(() => 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+  const mic = composer(page).getByRole('button', { name: media.dictate, exact: true })
+  if (!hasService) {
+    // No speech service here: the planted choice cannot reach one, and the microphone is not offered for it.
+    await expect(mic).toHaveCount(0)
+    return
+  }
+  await mic.click()
+  // The warning comes first, in this page, before anything listens.
+  const dialog = page.getByRole('dialog', { name: media.browserConfirmTitle })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByText(media.browserConfirmBody)).toBeVisible()
+  expect(await page.evaluate(() => (window as unknown as { recognitionStarts: number[] }).recognitionStarts)).toEqual(
+    [],
+  )
+  await dialog.getByRole('button', { name: chat.cancel, exact: true }).click()
+  await expect(dialog).toBeHidden()
+  expect(await page.evaluate(() => (window as unknown as { recognitionStarts: number[] }).recognitionStarts)).toEqual(
+    [],
+  )
+  // Accepted in this page, the next press listens.
+  await mic.click()
+  await page
+    .getByRole('dialog', { name: media.browserConfirmTitle })
+    .getByRole('button', { name: media.browserConfirm })
+    .click()
+  await mic.click()
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { recognitionStarts: number[] }).recognitionStarts.length))
+    .toBe(1)
+})

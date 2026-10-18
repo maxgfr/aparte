@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { Redirect } from 'wouter'
 import { type ChatSession, useProviders, useSession, useSessionState, useSetting } from '../../app/chat.tsx'
+import { browserDictationConsent } from '../../app/consent.ts'
 import { mediaProviders } from '../../app/media.ts'
 import { type NotifyPermission, notificationPermission, requestNotifications } from '../../app/notify.tsx'
 import { type Dictation, type ReadAloud, writePref } from '../../app/prefs.ts'
@@ -283,6 +284,7 @@ export default function VoiceScreen() {
             <Button
               variant="danger"
               onClick={() => {
+                browserDictationConsent.give()
                 writePref('dictation', 'browser')
                 setConfirmBrowser(false)
               }}

@@ -1,6 +1,7 @@
 import { Loader, Mic, Square } from 'lucide-react'
 import { type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useSession } from '../../app/chat.tsx'
+import { browserDictationConsent } from '../../app/consent.ts'
 import { NoProviderError, transcribeRecording } from '../../app/media.ts'
 import { usePref } from '../../app/usePref.ts'
 import {
@@ -15,13 +16,18 @@ import {
 import { hasSpeech } from '../../core/media/audio.ts'
 import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
+import chat from '../chat/Chat.module.css'
+import { Button } from '../components/Button.tsx'
+import { Sheet } from '../components/Sheet.tsx'
 import { cx } from '../cx.ts'
 import styles from './Voice.module.css'
 
 /*
  * The composer's microphone. A press starts dictation and the next press stops it; with push to talk, dictation runs
  * while the button is held (pointer, or Space and Enter on the keyboard). What was said is transcribed by the engine
- * this device chose (Whisper here by default) and handed to the field; the recording is never stored.
+ * this device chose (Whisper here by default) and handed to the field; the recording is never stored. The browser's
+ * own speech service sends the audio away, so it listens only once the user accepted its warning in this page
+ * (src/app/consent.ts): the stored choice alone, which another page of the origin could have written, is not enough.
  */
 
 type Phase =
@@ -50,6 +56,7 @@ export function MicButton({ onText, onStatus, disabled = false }: MicButtonProps
   const engine = usePref('dictation')
   const hold = usePref('pushToTalk')
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [confirming, setConfirming] = useState(false)
   const recording = useRef<Recording | null>(null)
   const browser = useRef<BrowserDictation | null>(null)
   const abort = useRef<AbortController | null>(null)
@@ -84,6 +91,10 @@ export function MicButton({ onText, onStatus, disabled = false }: MicButtonProps
 
   const start = () => {
     if (phase.kind !== 'idle' || disabled || starting.current !== null) return
+    if (engine === 'browser' && !browserDictationConsent.given()) {
+      setConfirming(true)
+      return
+    }
     setPhase({ kind: 'recording' })
     onStatus(hold ? t('media.dictateListeningHold') : t('media.dictateListening'))
     starting.current = (async () => {
@@ -184,24 +195,45 @@ export function MicButton({ onText, onStatus, disabled = false }: MicButtonProps
   const label = recordingNow ? t('media.dictateStop') : hold ? t('media.dictateHold') : t('media.dictate')
   const Icon = phase.kind === 'transcribing' ? Loader : recordingNow ? Square : Mic
   return (
-    <button
-      type="button"
-      className={cx(styles.mic, recordingNow && styles.micLive)}
-      aria-label={label}
-      title={label}
-      aria-pressed={recordingNow}
-      aria-busy={phase.kind === 'transcribing' || undefined}
-      disabled={disabled || phase.kind === 'transcribing'}
-      data-dictation={phase.kind}
-      onClick={onClick}
-      onPointerDown={onPointerDown}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onKeyDown={onKeyDown}
-      onKeyUp={onKeyUp}
-      onContextMenu={(e) => hold && e.preventDefault()}
-    >
-      <Icon size={20} strokeWidth={1.75} aria-hidden="true" fill={recordingNow ? 'currentColor' : 'none'} />
-    </button>
+    <>
+      <button
+        type="button"
+        className={cx(styles.mic, recordingNow && styles.micLive)}
+        aria-label={label}
+        title={label}
+        aria-pressed={recordingNow}
+        aria-busy={phase.kind === 'transcribing' || undefined}
+        disabled={disabled || phase.kind === 'transcribing'}
+        data-dictation={phase.kind}
+        onClick={onClick}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
+        onContextMenu={(e) => hold && e.preventDefault()}
+      >
+        <Icon size={20} strokeWidth={1.75} aria-hidden="true" fill={recordingNow ? 'currentColor' : 'none'} />
+      </button>
+      <Sheet open={confirming} title={t('media.browserConfirmTitle')} onClose={() => setConfirming(false)}>
+        <div className={chat.form}>
+          <p className={chat.footnote}>{t('media.browserConfirmBody')}</p>
+          <div className={chat.sheetActions}>
+            <Button
+              variant="danger"
+              onClick={() => {
+                browserDictationConsent.give()
+                setConfirming(false)
+              }}
+            >
+              {t('media.browserConfirm')}
+            </Button>
+            <Button variant="plain" onClick={() => setConfirming(false)}>
+              {t('chat.cancel')}
+            </Button>
+          </div>
+        </div>
+      </Sheet>
+    </>
   )
 }

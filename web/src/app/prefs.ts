@@ -45,8 +45,9 @@ interface Prefs {
   theme: Theme
   kitPending: KitPending
   /**
-   * The dictation engine. `browser` (Chrome's Web Speech API, which sends the audio to Google) is only ever set after
-   * the user confirmed a warning that says so.
+   * The dictation engine. `browser` (Chrome's Web Speech API, which sends the audio to Google) is set by the app only
+   * after the user confirmed a warning that says so; as any page of a shared origin could write it too, the microphone
+   * also asks once per page before it listens through it (src/app/consent.ts).
    */
   dictation: Dictation
   /** Dictation records while the microphone button is held, rather than between two presses. */
