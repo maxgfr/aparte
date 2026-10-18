@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fenceLanguage, type Split, splitBlocks, splitIncremental } from './markdown.ts'
+import { fenceLanguage, rawHtml, type Split, splitBlocks, splitIncremental } from './markdown.ts'
 import { safeLinkUrl } from './purify.ts'
 
 const SAMPLE = [
@@ -87,5 +87,23 @@ describe('links', () => {
     expect(safeLinkUrl('#top')).toBeNull()
     expect(safeLinkUrl('https://user:pass@example.com')).toBeNull()
     expect(safeLinkUrl(null)).toBeNull()
+  })
+})
+
+describe('raw HTML', () => {
+  test('keeps a few bare inline tags', () => {
+    expect(rawHtml('<sup>')).toBe('<sup>')
+    expect(rawHtml('</sup>')).toBe('</sup>')
+    expect(rawHtml('<SUB>')).toBe('<sub>')
+    expect(rawHtml('<br/>')).toBe('<br>')
+    expect(rawHtml('</br>')).toBe('')
+  })
+
+  test('shows anything else as text', () => {
+    expect(rawHtml('<sup onclick="x()">')).toBe('&#60;sup onclick=&#34;x()&#34;&#62;')
+    expect(rawHtml('<script>')).toBe('&#60;script&#62;')
+    expect(rawHtml('<a href="https://example.com">')).toBe('&#60;a href=&#34;https://example.com&#34;&#62;')
+    expect(rawHtml('<!-- c -->')).toBe('&#60;!-- c --&#62;')
+    expect(rawHtml('<div>\n<sup>e</sup>\n</div>')).toBe('&#60;div&#62;\n&#60;sup&#62;e&#60;/sup&#62;\n&#60;/div&#62;')
   })
 })

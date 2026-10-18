@@ -196,6 +196,17 @@ async function referenceRender(page: Page): Promise<string> {
   return reference
 }
 
+test('bare inline tags of an answer render, any other raw HTML stays the text it is', async ({ page, providers }) => {
+  await startChat(page, providers, CLAUDE)
+  providers.serve('anthropic', anthropicText(['Au XIX<sup>e</sup> siècle, H<sub>2</sub>O et <b class="x">gras</b>.']))
+  await send(page, 'Typography.')
+  const answer = content(await settled(page))
+  await expect(answer.locator('sup')).toHaveText('e')
+  await expect(answer.locator('sub')).toHaveText('2')
+  await expect(answer.locator('b')).toHaveCount(0)
+  await expect(answer).toContainText('Au XIXe siècle, H2O et <b class="x">gras</b>.')
+})
+
 test('a long Markdown answer streamed in random text pieces renders as when it arrives whole', async ({
   page,
   providers,

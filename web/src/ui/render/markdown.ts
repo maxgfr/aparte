@@ -5,7 +5,7 @@ import { sanitize } from './purify.ts'
 /*
  * Untrusted Markdown (model answers, reasoning) to blocks, ported from cursus `content/markdown.ts`: GFM through
  * marked, `$…$` and `$$…$$` maths through KaTeX in MathML output (no font, no stylesheet, nothing fetched), raw HTML
- * shown as text, and nodes only through purify.ts.
+ * shown as text but for a few bare inline tags (`rawHtml`), and nodes only through purify.ts.
  *
  * A message is cut into its top-level blocks, rendered one by one: a block whose source did not change keeps its
  * rendering, so while an answer streams only its last block is parsed and sanitised again (`splitIncremental`).
@@ -59,12 +59,26 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
+/** The inline tags kept from raw HTML, bare (no attribute): typography Markdown has no syntax for. */
+const KEPT_TAG = /^<(\/?)(sup|sub|br|kbd|mark|ins|del|s|u|small)\s*\/?>$/i
+
+/**
+ * Raw HTML from an answer as marked's output: one bare tag of KEPT_TAG is kept (models write `XIX<sup>e</sup>` or
+ * `H<sub>2</sub>O`); anything else (a block, a tag with attributes, a comment) is shown as the text it is, never
+ * parsed: an inline handler would only ever be refused by the CSP (and reported on every render).
+ */
+export function rawHtml(text: string): string {
+  const m = KEPT_TAG.exec(text)
+  if (m === null) return escapeHtml(text)
+  const name = (m[2] ?? '').toLowerCase()
+  if (name === 'br') return m[1] === '' ? '<br>' : ''
+  return `<${m[1]}${name}>`
+}
+
 const marked = new Marked({ gfm: true, breaks: false, async: false })
 marked.use({
   extensions: [mathBlock, mathInline],
-  // Raw HTML in an answer is shown as the text it is, never parsed: a model has no reason to send markup, and an
-  // inline handler would only ever be refused by the CSP (and reported on every render).
-  renderer: { html: ({ text }) => escapeHtml(text) },
+  renderer: { html: ({ text }) => rawHtml(text) },
 })
 
 /** A top-level block of a message. `raw` is its exact source: equal sources render equally. */
