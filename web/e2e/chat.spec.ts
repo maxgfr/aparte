@@ -12,6 +12,7 @@ import {
   edit,
   lock,
   messages,
+  navigate,
   newChat,
   nextVersion,
   openConversation,
@@ -145,6 +146,45 @@ test('send, stream, regenerate, edit and branch; the conversation survives a rel
   await expect(content(answers(page).last())).not.toBeEmpty()
   expect(plaintextHits(await dumpStorage(page), secrets)).toEqual([])
   expect(providers.generations('anthropic')).toHaveLength(3)
+})
+
+test('a deleted chat waits in the trash, comes back from it, and is then deleted for good', async ({
+  page,
+  providers,
+}) => {
+  const question = `Throw this away ${randomUUID().slice(0, 8)}`
+  await startChat(page, providers, { ...CLAUDE, key: 'sk-ant-api03-e2e-trash' })
+  providers.serve('anthropic', anthropicText(['Thrown.']))
+  await send(page, question)
+  await settled(page)
+
+  // The Chats screen's own list (the sidebar holds another one on wide screens).
+  await navigate(page, chat.navChats)
+  const list = page.locator('main')
+  const row = list.getByRole('button', { name: new RegExp(question) })
+  const sheet = page.getByRole('dialog')
+  const trash = async () => {
+    await row.click()
+    await sheet.getByRole('button', { name: chat.delete, exact: true }).click()
+    await expect(row).toHaveCount(0)
+    await list.getByRole('button', { name: chat.listShowTrash, exact: true }).click()
+  }
+
+  await trash()
+  await expect(row).toBeVisible()
+  await accessible(page, 'the trash')
+  await row.click()
+  await sheet.getByRole('button', { name: chat.restore, exact: true }).click()
+  await expect(list.getByText(chat.listTrashEmpty)).toBeVisible()
+  await list.getByRole('button', { name: chat.listShowActive, exact: true }).click()
+  await expect(list.getByRole('link', { name: new RegExp(question) })).toBeVisible()
+
+  await trash()
+  await row.click()
+  await sheet.getByRole('button', { name: chat.purge, exact: true }).click()
+  await expect(list.getByText(chat.listTrashEmpty)).toBeVisible()
+  await list.getByRole('button', { name: chat.listShowActive, exact: true }).click()
+  await expect(list.getByRole('link', { name: new RegExp(question) })).toHaveCount(0)
 })
 
 test('a custom OpenAI-compatible endpoint streams, and a stop keeps what had arrived', async ({

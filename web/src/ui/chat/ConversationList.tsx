@@ -1,4 +1,4 @@
-import { Archive, Download, MoreHorizontal, Pin, SquarePen } from 'lucide-react'
+import { Archive, Download, MoreHorizontal, Pin, RotateCcw, SquarePen, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'wouter'
 import { useConversations, useSession, useStreaming } from '../../app/chat.tsx'
@@ -142,6 +142,120 @@ export function ConversationActions({
   )
 }
 
+/** The actions of a conversation in the trash: restore it, or delete it for good. */
+function TrashedActions({
+  conversation,
+  open,
+  onClose,
+}: {
+  conversation: Conversation
+  open: boolean
+  onClose: () => void
+}) {
+  const t = useT()
+  const locale = useLocale()
+  const session = useSession()
+  const toast = useToast()
+  const [purging, setPurging] = useState(false)
+  if (session === null) return null
+  const ws = session.workspace
+  const id = conversation.id
+  const name = conversation.title || t('chat.untitled')
+  return (
+    <Sheet open={open} title={t('chat.actionsFor', { title: name })} onClose={onClose}>
+      <div className={styles.actionsSheet}>
+        {conversation.deletedAt !== undefined && (
+          <p className={styles.muted}>
+            {t('chat.trashedAgo', { when: formatRelative(locale, conversation.deletedAt) })}
+          </p>
+        )}
+        <div className={styles.sheetActions}>
+          <Button
+            variant="secondary"
+            icon={<RotateCcw size={18} strokeWidth={1.75} aria-hidden="true" />}
+            onClick={() => {
+              ws.conversations.restore(id)
+              onClose()
+              toast(t('chat.restored'))
+            }}
+          >
+            {t('chat.restore')}
+          </Button>
+        </div>
+        <p className={styles.muted}>{t('chat.purgeBody')}</p>
+        <div className={styles.sheetActions}>
+          <Button
+            variant="danger"
+            loading={purging}
+            onClick={() => {
+              setPurging(true)
+              ws.conversations
+                .purge(id)
+                .then(
+                  () => toast(t('chat.purged')),
+                  // Restored meanwhile (on another device, through sync): it is no longer in the trash.
+                  () => undefined,
+                )
+                .finally(() => {
+                  setPurging(false)
+                  onClose()
+                })
+            }}
+          >
+            {t('chat.purge')}
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  )
+}
+
+/** Empties the trash, once confirmed: every conversation in it is deleted for good. */
+function EmptyTrash({
+  trashed,
+  open,
+  onClose,
+}: {
+  trashed: readonly Conversation[]
+  open: boolean
+  onClose: () => void
+}) {
+  const t = useT()
+  const session = useSession()
+  const toast = useToast()
+  const [emptying, setEmptying] = useState(false)
+  if (session === null) return null
+  const ws = session.workspace
+  return (
+    <Sheet open={open} title={t('chat.emptyTrash')} onClose={onClose}>
+      <div className={styles.actionsSheet}>
+        <p className={styles.muted}>{t('chat.emptyTrashBody', { count: trashed.length })}</p>
+        <div className={styles.sheetActions}>
+          <Button
+            variant="danger"
+            loading={emptying}
+            onClick={async () => {
+              setEmptying(true)
+              for (const c of trashed) {
+                // One restored meanwhile (on another device, through sync) is no longer in the trash: it is kept.
+                await ws.conversations.purge(c.id).catch(() => undefined)
+              }
+              setEmptying(false)
+              onClose()
+              toast(t('chat.emptiedTrash'))
+            }}
+          >
+            {t('chat.emptyTrash')}
+          </Button>
+          <Button variant="plain" onClick={onClose}>
+            {t('chat.cancel')}
+          </Button>
+        </div>
+      </div>
+    </Sheet>
+  )
+}
+
 /**
  * Conversation ids whose titles or messages match the query, from the session's in-memory search index (built after
  * unlock, dropped on lock); re-run when the indexed content changes.
@@ -182,15 +296,17 @@ function useMessageSearch(list: readonly Conversation[], query: string, enabled:
   return { result: result !== null && result.query === query ? result.ids : null, running }
 }
 
-/** The conversation list: search, new chat, sections by date, and each chat's actions. */
+/** The conversation list: search, new chat, sections by date, and each chat's actions; the archive and the trash. */
 export function ConversationList({ activeId = null, compact = false }: { activeId?: Id | null; compact?: boolean }) {
   const t = useT()
   const locale = useLocale()
   const [query, setQuery] = useState('')
-  const [archived, setArchived] = useState(false)
+  const [view, setView] = useState<'active' | 'archived' | 'trash'>('active')
   const [deep, setDeep] = useState(false)
   const [menu, setMenu] = useState<Id | null>(null)
-  const list = useConversations({ archived })
+  const [emptying, setEmptying] = useState(false)
+  const trash = view === 'trash'
+  const list = useConversations(trash ? { trashed: true } : { archived: view === 'archived' })
   const streaming = useStreaming()
   const words = useMemo(() => queryWords(query), [query])
   const search = useMessageSearch(list, query, deep)
@@ -199,7 +315,18 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
     [list, words, search.result, t],
   )
   const now = Date.now()
-  const groups = groupConversations(shown, now)
+  // The trash is one section, the latest deleted first.
+  const groups = trash
+    ? shown.length === 0
+      ? []
+      : [
+          {
+            key: 'trash',
+            title: t('chat.listShowTrash'),
+            items: [...shown].sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
+          },
+        ]
+    : groupConversations(shown, now).map((g) => ({ key: g.key, title: t(GROUP_KEYS[g.key]), items: g.items }))
   const menuFor = list.find((c) => c.id === menu)
 
   return (
@@ -233,32 +360,60 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
           {t('chat.listSearching')}
         </p>
       )}
+      {trash && list.length > 0 && (
+        <>
+          <p className={styles.muted}>{t('chat.listTrashNote')}</p>
+          <Button
+            variant="plain"
+            icon={<Trash2 size={18} strokeWidth={1.75} aria-hidden="true" />}
+            onClick={() => setEmptying(true)}
+          >
+            {t('chat.emptyTrash')}
+          </Button>
+        </>
+      )}
       {groups.length === 0 && (
         <p className={styles.muted} role="status">
           {words.length > 0
             ? t('chat.listNoMatch', { query })
-            : archived
+            : view === 'archived'
               ? t('chat.listArchivedEmpty')
-              : t('chat.listEmptyBody')}
+              : trash
+                ? t('chat.listTrashEmpty')
+                : t('chat.listEmptyBody')}
         </p>
       )}
       {groups.map((group) => (
-        <section key={group.key} className={styles.listGroup} aria-label={t(GROUP_KEYS[group.key])}>
-          <h2 className={styles.listGroupTitle}>{t(GROUP_KEYS[group.key])}</h2>
+        <section key={group.key} className={styles.listGroup} aria-label={group.title}>
+          <h2 className={styles.listGroupTitle}>{group.title}</h2>
           <ul className={styles.listItems}>
             {group.items.map((conv) => {
               const title = conv.title || t('chat.untitled')
-              const active = conv.id === activeId
+              const active = conv.id === activeId && !trash
               return (
-                <li key={conv.id} className={styles.listItem}>
-                  <Link href={chatPath(conv.id)} className={styles.listLink} aria-current={active ? 'page' : undefined}>
-                    <span className={styles.listTitle}>{title}</span>
-                    <span className={styles.listMeta}>
-                      {streaming.includes(conv.id)
-                        ? t('chat.streamingNow')
-                        : formatRelative(locale, conv.updatedAt, now)}
-                    </span>
-                  </Link>
+                <li key={conv.id} className={cx(styles.listItem, active && styles.listItemActive)}>
+                  {trash ? (
+                    // A chat in the trash does not open: it is restored first.
+                    <div className={styles.listLink}>
+                      <span className={styles.listTitle}>{title}</span>
+                      <span className={styles.listMeta}>
+                        {t('chat.trashedAgo', { when: formatRelative(locale, conv.deletedAt ?? conv.updatedAt, now) })}
+                      </span>
+                    </div>
+                  ) : (
+                    <Link
+                      href={chatPath(conv.id)}
+                      className={styles.listLink}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <span className={styles.listTitle}>{title}</span>
+                      <span className={styles.listMeta}>
+                        {streaming.includes(conv.id)
+                          ? t('chat.streamingNow')
+                          : formatRelative(locale, conv.updatedAt, now)}
+                      </span>
+                    </Link>
+                  )}
                   <IconButton
                     icon={MoreHorizontal}
                     label={t('chat.actionsFor', { title })}
@@ -271,12 +426,27 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
           </ul>
         </section>
       ))}
-      <Button variant="plain" onClick={() => setArchived((v) => !v)}>
-        {archived ? t('chat.listShowActive') : t('chat.listShowArchived')}
-      </Button>
-      {menuFor !== undefined && (
-        <ConversationActions conversation={menuFor} open={menu !== null} onClose={() => setMenu(null)} />
+      {view === 'active' ? (
+        <>
+          <Button variant="plain" onClick={() => setView('archived')}>
+            {t('chat.listShowArchived')}
+          </Button>
+          <Button variant="plain" onClick={() => setView('trash')}>
+            {t('chat.listShowTrash')}
+          </Button>
+        </>
+      ) : (
+        <Button variant="plain" onClick={() => setView('active')}>
+          {t('chat.listShowActive')}
+        </Button>
       )}
+      {menuFor !== undefined &&
+        (trash ? (
+          <TrashedActions conversation={menuFor} open={menu !== null} onClose={() => setMenu(null)} />
+        ) : (
+          <ConversationActions conversation={menuFor} open={menu !== null} onClose={() => setMenu(null)} />
+        ))}
+      {trash && <EmptyTrash trashed={list} open={emptying} onClose={() => setEmptying(false)} />}
     </div>
   )
 }
