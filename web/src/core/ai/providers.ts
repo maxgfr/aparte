@@ -5,6 +5,7 @@
  * adapter's body fixes; the underlying fetch is `providerFetch` (web/src/security/net.ts) or a test's fake.
  */
 import type { LanguageModel } from 'ai'
+import { anthropicBaseUrl } from 'llm-connect'
 import type { FetchLike, ProviderConfig, ProviderKind } from '../contracts/ai.ts'
 import { InvalidInputError } from '../contracts/crypto.ts'
 
@@ -120,7 +121,8 @@ export async function createModel(
       const { createAnthropic } = await import('@ai-sdk/anthropic')
       // The header is Anthropic's own opt-in to calls from a web page; guardedFetch keeps it off other hosts.
       const headers = isAnthropicHost(baseURL) ? { [ANTHROPIC_BROWSER_HEADER]: 'true' } : undefined
-      return createAnthropic({ apiKey: key, baseURL, headers, fetch })(modelId)
+      // An Anthropic-compatible base URL works with or without its `/v1`.
+      return createAnthropic({ apiKey: key, baseURL: anthropicBaseUrl(baseURL), headers, fetch })(modelId)
     }
     case 'openai': {
       const { createOpenAI } = await import('@ai-sdk/openai')

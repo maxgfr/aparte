@@ -397,6 +397,19 @@ describe('Anthropic requests', () => {
     expect(other.calls[0]?.url).toBe('https://llm.example.org/v1/messages')
     expect('anthropic-dangerous-direct-browser-access' in (other.calls[0]?.headers ?? {})).toBe(false)
   })
+
+  test('an Anthropic-compatible base URL works with or without its /v1', async () => {
+    for (const baseUrl of ['https://llm.example.org/anthropic', 'https://llm.example.org/anthropic/v1/']) {
+      const served = await fixture('anthropic-text.sse')
+      const provider: ProviderConfig = { ...(PROVIDERS.anthropic as ProviderConfig), baseUrl }
+      await collect(
+        A.createAdapter('anthropic', { fetch: served.fetch }).stream(
+          chatRequest('anthropic', 'claude-opus-5-5', { provider }),
+        ),
+      )
+      expect(served.calls[0]?.url).toBe('https://llm.example.org/anthropic/v1/messages')
+    }
+  })
 })
 
 describe('refused before any network call', () => {
@@ -586,6 +599,30 @@ describe('connection test', () => {
     const result = await A.testConnection(PROVIDERS['openai-compatible'] as ProviderConfig, KEY, { fetch: failing })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.reason).toBe('auth-or-network')
+  })
+
+  test('a gateway error answered as HTTP 200 JSON fails with its status', async () => {
+    const masked = serve('{"code":500,"msg":"404 NOT_FOUND"}', 200, 'application/json')
+    expect(
+      await A.testConnection(PROVIDERS['openai-compatible'] as ProviderConfig, KEY, { fetch: masked.fetch }),
+    ).toEqual({ ok: false, reason: 'http', status: 500 })
+    const refused = serve('{"error":{"code":401,"message":"Invalid API Key"}}', 200, 'application/json')
+    expect(
+      await A.testConnection(PROVIDERS['openai-compatible'] as ProviderConfig, KEY, { fetch: refused.fetch }),
+    ).toEqual({ ok: false, reason: 'auth', status: 401 })
+  })
+
+  test('an Anthropic-compatible base URL without /v1 lists its models under /v1', async () => {
+    const served = serve('{"data":[{"id":"claude-opus-5-5"}]}', 200, 'application/json')
+    const provider: ProviderConfig = {
+      ...(PROVIDERS.anthropic as ProviderConfig),
+      baseUrl: 'https://llm.example.org/anthropic',
+    }
+    expect(await A.testConnection(provider, KEY, { fetch: served.fetch })).toEqual({
+      ok: true,
+      models: ['claude-opus-5-5'],
+    })
+    expect(served.calls[0]?.url).toBe('https://llm.example.org/anthropic/v1/models')
   })
 })
 

@@ -725,30 +725,15 @@ const NPM: Readonly<Partial<Record<ProviderKind, string>>> = {
   openrouter: '@openrouter/ai-sdk-provider',
 }
 
-/** Gemini lists `{models: [{name: 'models/<id>'}]}`; llm-connect reads OpenAI's `{data: [{id}]}`. */
-function geminiListing(base: FetchLike): FetchLike {
-  return async (input, init) => {
-    const res = await base(input, init)
-    if (!res.ok) return res
-    const body = (await res.json().catch(() => null)) as { models?: { name?: unknown }[] } | null
-    const data = (body?.models ?? [])
-      .map((m) => (typeof m?.name === 'string' ? { id: m.name.replace(/^models\//, '') } : null))
-      .filter((m) => m !== null)
-    return new Response(JSON.stringify({ data }), {
-      status: res.status,
-      headers: { 'content-type': 'application/json' },
-    })
-  }
-}
-
 export async function testConnection(
   provider: ProviderConfig,
   apiKey: string | null,
   options: { readonly fetch?: FetchLike; readonly signal?: AbortSignal } = {},
 ): Promise<ConnectionCheck> {
   if (!CALLABLE.has(provider.kind)) return { ok: false, reason: 'config' }
-  const guarded = guardedFetch(provider.kind, options.fetch ?? providerFetch)
-  const fetch = provider.kind === 'google' ? geminiListing(guarded) : guarded
+  // llm-connect reads OpenAI's `{data: [{id}]}` and Gemini's `{models: [{name}]}` listings, and maps a gateway's error
+  // answered as HTTP 200 JSON to its status.
+  const fetch = guardedFetch(provider.kind, options.fetch ?? providerFetch)
   const base = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.kind]
   if (base === undefined) return { ok: false, reason: 'config' }
   const problem = baseUrlProblem(base)

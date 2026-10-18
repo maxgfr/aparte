@@ -16,11 +16,11 @@ export interface LocalPreset {
   readonly model?: string
 }
 
-/** Local servers at their default port: llm-connect's presets, plus Jan's OpenAI-compatible server. */
+/** Local servers at their default port: llm-connect's presets (Ollama, LM Studio, Jan). */
 export const LOCAL_PRESETS: readonly LocalPreset[] = [
   ENDPOINT_PRESETS.ollama,
   ENDPOINT_PRESETS.lmstudio,
-  { id: 'jan', name: 'Jan', endpoint: 'http://localhost:1337/v1' },
+  ENDPOINT_PRESETS.jan,
 ]
 
 export type { EndpointProblem }
@@ -29,15 +29,14 @@ export type { EndpointProblem }
 const HTTP_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1'])
 
 /**
- * What is wrong with a base URL the user typed, or null when it can be called: llm-connect's rule, narrowed to what
- * the network wrapper allows, and no credentials in the URL.
+ * What is wrong with a base URL the user typed, or null when it can be called: llm-connect's rule (which also refuses
+ * credentials in the URL), narrowed to what the network wrapper allows.
  */
 export function baseUrlProblem(url: string): EndpointProblem | null {
   const trimmed = url.trim()
   const problem = endpointProblem(trimmed)
   if (problem !== null) return problem
   const parsed = new URL(trimmed)
-  if (parsed.username || parsed.password) return 'invalid-endpoint'
   if (parsed.protocol === 'http:' && !HTTP_HOSTS.has(parsed.hostname)) return 'insecure-endpoint'
   return null
 }
