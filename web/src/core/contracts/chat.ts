@@ -175,7 +175,9 @@ export interface ChatDeps {
 export interface ChatController {
   /**
    * Appends a user message as a child of the leaf, moves the leaf to it and streams the answer. During a stream in
-   * the same conversation, the message is queued and sent (as a child of the leaf then) once the stream commits.
+   * the same conversation, the message is queued and sent (as a child of the leaf then) once the stream commits. A run
+   * whose answer is already committed, and that only waits for the workspace to save, is waited for instead: the turn
+   * starts once it is over, so it is never queued while no stream shows.
    * Rejects, having written nothing, with InvalidStateError when the conversation has no model or the vault is
    * locking, and InvalidInputError when the model is unknown, the provider needs a key and none is stored, or
    * `parts` is empty.
@@ -183,10 +185,14 @@ export interface ChatController {
   send(conversationId: Id, parts: readonly Part[]): Promise<Turn>
   /**
    * Streams a new answer as a sibling of `messageId` (an assistant message) or as a new child of it (a user message),
-   * with the conversation's current model and effort. InvalidStateError while a stream runs in that conversation.
+   * with the conversation's current model and effort. InvalidStateError while a stream runs in that conversation; a
+   * run that only waits for the workspace to save is waited for, as by `send`.
    */
   regenerate(conversationId: Id, messageId: Id): Promise<Turn>
-  /** Creates a sibling of user message `messageId` with `parts`, moves the leaf to it and streams the answer. */
+  /**
+   * Creates a sibling of user message `messageId` with `parts`, moves the leaf to it and streams the answer. Refused
+   * while a stream runs, and waiting for a run that only saves, as `regenerate` is.
+   */
   edit(conversationId: Id, messageId: Id, parts: readonly Part[]): Promise<Turn>
   /**
    * Appends a committed `role: 'system'` message (a persona or system prompt change) as a child of the leaf and moves

@@ -334,16 +334,23 @@ export { expect }
 
 /** No serious or critical accessibility violation on the current screen. */
 export async function accessible(page: Page, screen: string): Promise<void> {
-  // Colours are measured once entrances (toasts, sheets) have finished fading in.
-  await page.evaluate(() =>
-    Promise.all(
+  await page.evaluate(async () => {
+    // The first install of the service worker can announce itself with a toast that fades in, at whatever moment the
+    // precache completes: the audit waits for that install, so the toast never starts entering while colours are
+    // measured. The page registers its worker as it starts; a page whose worker is blocked has no registration.
+    const registration = await navigator.serviceWorker?.getRegistration()
+    if (registration !== undefined && registration.active === null) await navigator.serviceWorker.ready
+    // What the install changed on screen is rendered by the next frame.
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    // Colours are measured once entrances (toasts, sheets) have finished fading in.
+    await Promise.all(
       document
         .getAnimations()
         .filter((a) => a.effect?.getTiming().iterations !== Number.POSITIVE_INFINITY)
         // A cancelled animation (a sheet closed mid-way) rejects: it is finished all the same.
         .map((a) => a.finished.catch(() => undefined)),
-    ),
-  )
+    )
+  })
   const { violations } = await new AxeBuilder({ page }).analyze()
   const bad = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
   expect(

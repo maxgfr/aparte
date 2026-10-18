@@ -16,8 +16,10 @@ const welcomeHeading = (page: Page) => page.getByRole('heading', { level: 1, nam
 const lockHeading = (page: Page) => page.getByRole('heading', { level: 1, name: common.appName, exact: true })
 const kitHeading = (page: Page) => page.getByRole('heading', { level: 1, name: vault.kitTitle })
 
-/** From the create screen of `page`: creates the vault with the generated passphrase, the kit left on screen. */
-async function createFromHere(page: Page) {
+/** Creates the vault with the generated passphrase, the kit left on screen. */
+async function createVault(page: Page) {
+  await page.goto('./')
+  await expect(welcomeHeading(page)).toBeVisible()
   await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
   await expect(page.getByRole('heading', { level: 1, name: vault.createTitle })).toBeVisible()
   const passphrase = await page.getByLabel(vault.generatedLabel, { exact: true }).inputValue()
@@ -26,12 +28,6 @@ async function createFromHere(page: Page) {
   const secretKey = (await page.locator('[data-key="secret-key"]').textContent()) ?? ''
   const recoveryKey = (await page.locator('[data-key="recovery-key"]').textContent()) ?? ''
   return { passphrase, secretKey, recoveryKey }
-}
-
-async function createVault(page: Page) {
-  await page.goto('./')
-  await expect(welcomeHeading(page)).toBeVisible()
-  return createFromHere(page)
 }
 
 async function confirmKit(page: Page) {
@@ -51,6 +47,10 @@ test('a second tab still on the welcome screen cannot destroy the vault the firs
 }) => {
   test.setTimeout(240_000)
   const second = await context.newPage()
+  // The first tab tells the others that a vault now exists, at a moment no test controls: the second tab is a page
+  // that does not hear it (a browser without BroadcastChannel, which the app does without), so that it is still on
+  // the welcome screen when the user acts there, as a tab the notice reaches late is.
+  await second.addInitScript(() => Reflect.deleteProperty(globalThis, 'BroadcastChannel'))
   await second.goto('./')
   await expect(welcomeHeading(second)).toBeVisible()
 
@@ -59,9 +59,11 @@ test('a second tab still on the welcome screen cannot destroy the vault the firs
 
   // The second tab loaded before the vault existed and still offers to create one. Whatever the user does there,
   // the vault of the first tab, with its kit already written down, must survive.
-  if ((await second.getByRole('link', { name: shell.welcomeCreateVault }).count()) > 0) {
-    await createFromHere(second)
-  }
+  await second.getByRole('link', { name: shell.welcomeCreateVault }).click()
+  await expect(second.getByRole('heading', { level: 1, name: vault.createTitle })).toBeVisible()
+  await second.getByRole('button', { name: vault.create }).click()
+  // The attempt ends with the kit of a vault it made, or with the vault on this device shown locked.
+  await expect(kitHeading(second).or(lockHeading(second))).toBeVisible(ARGON2_WAIT)
 
   await page.reload()
   await expect(lockHeading(page)).toBeVisible()

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -238,8 +239,11 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
   }, [vault, store])
 
   // The kit holds the lock while it is on screen, for KIT_HOLD_MS at most; a lock that is already pending refuses the
-  // hold, and then the kit goes with the lock. A kit that goes unconfirmed stays pending for the next unlock.
-  useEffect(() => {
+  // hold, and then the kit goes with the lock. A kit that goes unconfirmed stays pending for the next unlock. The hold
+  // and its cap are taken in the commit that shows the kit (a layout effect): a passive effect runs after the paint,
+  // later still on a busy device, so the kit could be on screen with neither, and a lock asked for meanwhile would then
+  // wait out a cap counted from later.
+  useLayoutEffect(() => {
     if (kit === null) return
     let release: (() => void) | null = null
     try {

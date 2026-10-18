@@ -154,12 +154,46 @@ class Holds {
   }
 }
 
+/** Holds the workspace's saves while `held` is set: a run then stays between its commit and its end. */
+class FlushGate {
+  private gate: PromiseWithResolvers<void> | null = null
+  hold(): void {
+    this.gate = Promise.withResolvers<void>()
+  }
+  open(): void {
+    this.gate?.resolve()
+    this.gate = null
+  }
+  wrap(ws: Workspace): Workspace {
+    return new Proxy(ws, {
+      get: (target, key, receiver) => {
+        if (key !== 'flush') return Reflect.get(target, key, receiver)
+        return async () => {
+          await this.gate?.promise
+          return target.flush()
+        }
+      },
+    })
+  }
+}
+
+/** Resolves at the next answer committed in `conv`. */
+const nextCommit = (chat: ChatController, conv: Id) =>
+  new Promise<void>((resolve) => {
+    const stop = chat.subscribe((event, id) => {
+      if (event !== 'commit' || id !== conv) return
+      stop()
+      resolve()
+    })
+  })
+
 let count = 0
-async function setup(options: { key?: string | null } = {}) {
+async function setup(options: { key?: string | null; flushes?: FlushGate } = {}) {
   const db = await S.openLocalDb({ name: `chat-${++count}-${crypto.randomUUID()}` })
   const store = S.createLocalStore({ db, subkeys, rng: R.cryptoRng() })
   const clock = new FakeClock()
-  const ws: Workspace = await W.openWorkspace({ store, subkeys, rng: R.cryptoRng(), clock })
+  const opened: Workspace = await W.openWorkspace({ store, subkeys, rng: R.cryptoRng(), clock })
+  const ws = options.flushes ? options.flushes.wrap(opened) : opened
   const adapter = new ScriptedAdapter()
   const lock = new Holds()
   const reload = new Holds()
@@ -391,6 +425,50 @@ describe('queue, regenerate and edit', () => {
     expect(thread.get(second.userMessageId as Id)?.parent).toBe(a1.id)
     expect(a2.parent).toBe(second.userMessageId as Id)
     expect((adapter.requests[1] as ChatRequest).messages.map((x) => x.role)).toEqual(['user', 'assistant', 'user'])
+  })
+
+  test('a message sent while the committed answer is saving starts once it is saved, never queued unseen', async () => {
+    const flushes = new FlushGate()
+    const { ws, chat, conv } = await setup({ flushes })
+    flushes.hold()
+    const committed = nextCommit(chat, conv)
+    const first = await chat.send(conv, [text('First')])
+    await committed
+    // The answer is in the thread and no stream shows: the conversation looks idle while the run waits for the save.
+    expect(chat.stream(conv)).toBeNull()
+    const sending = chat.send(conv, [text('Second')])
+    flushes.open()
+    const second = await sending
+    const thread = await ws.thread(conv)
+    // When `send` resolves, the message is on the thread and its answer streams: nothing waits out of sight.
+    expect(thread.get(second.userMessageId as Id)?.parent).toBe(((await first.done) as Message).id)
+    expect(chat.stream(conv)).toMatchObject({ parentId: second.userMessageId as Id, queued: 0 })
+    await second.done
+  })
+
+  test('regenerate and edit while the committed answer is saving wait for it instead of refusing', async () => {
+    const flushes = new FlushGate()
+    const { chat, conv } = await setup({ flushes })
+    flushes.hold()
+    let committed = nextCommit(chat, conv)
+    const first = await chat.send(conv, [text('Q')])
+    await committed
+    const regenerating = chat.regenerate(conv, first.userMessageId as Id)
+    flushes.open()
+    const a1 = (await first.done) as Message
+    const again = await regenerating
+    const a2 = (await again.done) as Message
+    expect(a2.parent).toBe(a1.parent as Id)
+
+    flushes.hold()
+    committed = nextCommit(chat, conv)
+    const retry = await chat.regenerate(conv, a2.id)
+    await committed
+    const editing = chat.edit(conv, first.userMessageId as Id, [text('Q, edited')])
+    flushes.open()
+    await retry.done
+    const edited = await editing
+    expect(((await edited.done) as Message).parent).toBe(edited.userMessageId as Id)
   })
 
   test('stop cancels the queued turns', async () => {

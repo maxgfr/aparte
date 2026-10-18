@@ -9,6 +9,8 @@
  *   (a turn that cannot take them is refused with nothing written) and released only after its answer is committed
  *   and the workspace has flushed, or once the turn is cancelled. A queued turn takes its holds when it is queued, so a
  *   lock waits for the whole queue instead of cutting it.
+ * - A turn is queued only behind a stream that shows: a send, regenerate or edit asked for once the answer is committed
+ *   and the run only waits for the flush waits for the run to end, then starts as on an idle conversation.
  * - A turn that cannot start (no model, an unknown model or provider, no key where one is needed, empty parts, a
  *   locking vault) rejects before anything is written.
  * - Committing an answer moves the leaf to it only when the leaf is still what it was when the stream started: a
@@ -840,6 +842,16 @@ export function createChatController(deps: ChatDeps): ChatController {
     if (runs.has(conversationId)) throw new InvalidStateError('A response is streaming in this conversation')
   }
 
+  /**
+   * Waits for the run of `conversationId` to end while its answer is committed and it only finishes (the workspace
+   * flush, then its queue). The conversation shows no stream by then, so a turn asked for meanwhile follows that run
+   * instead of being queued out of sight or refused as busy.
+   */
+  async function finishing(conversationId: Id): Promise<void> {
+    for (let run = runs.get(conversationId); run?.snapshot === null; run = runs.get(conversationId))
+      await run.finished.catch(() => undefined)
+  }
+
   return {
     async send(conversationId, parts) {
       validParts(parts)
@@ -847,6 +859,7 @@ export function createChatController(deps: ChatDeps): ChatController {
       const thread = await ws.thread(conversationId)
       const stored = await storable(parts)
       const tools = await freshSnapshot(conversationOf(conversationId))
+      await finishing(conversationId)
       if (disposed) throw locking()
       const release = takeHolds()
       const id = newId()
@@ -868,6 +881,7 @@ export function createChatController(deps: ChatDeps): ChatController {
     },
 
     async regenerate(conversationId, messageId) {
+      await finishing(conversationId)
       busy(conversationId)
       const prepared = await prepare(conversationOf(conversationId))
       const thread = await ws.thread(conversationId)
@@ -882,6 +896,7 @@ export function createChatController(deps: ChatDeps): ChatController {
         kind: prepared.descriptor.kind,
         capabilities: prepared.descriptor.capabilities,
       })
+      await finishing(conversationId)
       busy(conversationId)
       const release = takeHolds()
       const { promise, settle } = settled<Message | null>()
@@ -891,6 +906,7 @@ export function createChatController(deps: ChatDeps): ChatController {
 
     async edit(conversationId, messageId, parts) {
       validParts(parts)
+      await finishing(conversationId)
       busy(conversationId)
       const prepared = await prepare(conversationOf(conversationId))
       const thread = await ws.thread(conversationId)
@@ -898,6 +914,7 @@ export function createChatController(deps: ChatDeps): ChatController {
       if (original === undefined || original.role !== 'user')
         throw new InvalidInputError('Only a user message is edited')
       const stored = await storable(parts)
+      await finishing(conversationId)
       busy(conversationId)
       if (disposed) throw locking()
       const release = takeHolds()
