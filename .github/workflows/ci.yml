@@ -37,9 +37,19 @@ jobs:
       - run: bun run check
 
   web-e2e:
-    name: Web end-to-end (Chromium, Firefox, WebKit, axe)
+    name: Web end-to-end (${{ matrix.project }}, axe)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # One job per Playwright project, so the suite's length grows across runners instead of past one job's limit.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: chromium-desktop, browser: chromium }
+          - { project: chromium-phone, browser: chromium }
+          - { project: webkit-desktop, browser: webkit }
+          - { project: webkit-iphone, browser: webkit }
+          - { project: firefox-desktop, browser: firefox }
     defaults:
       run:
         working-directory: web
@@ -51,11 +61,14 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium firefox webkit
+      - run: bunx playwright install --with-deps "$BROWSER"
+        env:
+          BROWSER: ${{ matrix.browser }}
       # Firefox runs Web Audio only through a sound server, and the runner has none: a PulseAudio null sink on a
       # private socket stands in, so dictation records the specs' stand-in microphone as on a real machine. The
       # Playwright config hands E2E_PULSE_SERVER to Firefox only (Chromium's headless audio stalls on PulseAudio).
       - name: Start a sound server
+        if: matrix.browser == 'firefox'
         env:
           E2E_PULSE_SERVER: unix:/tmp/aparte-e2e-pulse/native
         run: |
@@ -69,13 +82,14 @@ jobs:
           PULSE_SERVER="$E2E_PULSE_SERVER" pactl info
       # The suite runs against the production build, CSP and service worker included.
       - run: bun run build
-      - run: bun run test:e2e
+      - run: bun run test:e2e --project "$PROJECT"
         env:
+          PROJECT: ${{ matrix.project }}
           E2E_PULSE_SERVER: unix:/tmp/aparte-e2e-pulse/native
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: |
             web/playwright-report/
             web/test-results/
