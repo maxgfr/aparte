@@ -3,6 +3,7 @@ import { memo, useEffect, useId, useMemo, useState } from 'react'
 import { useResolvedParts, useSession } from '../../app/chat.tsx'
 import type { ModelDescriptor } from '../../core/contracts/ai.ts'
 import type { StreamState, ToolCallState } from '../../core/contracts/chat.ts'
+import type { ImageTurnState } from '../../core/contracts/media.ts'
 import type { ApprovalDecision } from '../../core/contracts/tools.ts'
 import type { Id, Message, Part, Thread } from '../../core/contracts/workspace.ts'
 import { citeText } from '../../core/knowledge/citations.ts'
@@ -17,6 +18,7 @@ import { splitBlocks } from '../render/markdown.ts'
 import { CopyButton, Markdown } from '../render/Sanitized.tsx'
 import { useDisplayText } from '../roleplay/hooks.ts'
 import roleplayStyles from '../roleplay/Roleplay.module.css'
+import { SpeakButton } from '../voice/SpeakButton.tsx'
 import { ArtifactCard } from './Artifact.tsx'
 import styles from './Chat.module.css'
 import { useEffortLabel } from './ModelPicker.tsx'
@@ -101,7 +103,7 @@ function ToolWork({
 }
 
 /** A stored photo, decrypted into an object URL for as long as the vault stays unlocked. */
-function AttachedImage({ part }: { part: ImagePart }) {
+function AttachedImage({ part, alt: given }: { part: ImagePart; alt?: string }) {
   const t = useT()
   const session = useSession()
   const [url, setUrl] = useState<string | null | undefined>(undefined)
@@ -116,7 +118,7 @@ function AttachedImage({ part }: { part: ImagePart }) {
       live = false
     }
   }, [session, part.blob, part.mediaType])
-  const alt = part.name ?? t('chat.photo')
+  const alt = given ?? part.name ?? t('chat.photo')
   if (url === null) return <span className={styles.imageMissing}>{t('chat.photoMissing')}</span>
   return (
     <img
@@ -283,6 +285,7 @@ const ERROR_KEYS: Readonly<Record<string, Extract<Key, `chat.error${string}`>>> 
   'rate-limit': 'chat.errorRateLimit',
   overloaded: 'chat.errorOverloaded',
   'context-length': 'chat.errorContext',
+  'image-unreadable': 'chat.errorUnknown',
   'invalid-request': 'chat.errorInvalid',
   'not-found': 'chat.errorNotFound',
   server: 'chat.errorServer',
@@ -305,7 +308,7 @@ function AnswerNote({ message }: { message: Message }) {
     const key = ERROR_KEYS[message.error?.code ?? ''] ?? 'chat.errorUnknown'
     return (
       <div className={styles.errorNote} role="note">
-        <p>{t(key)}</p>
+        <p>{message.error?.code === 'image-unreadable' ? t('media.imageUnreadable') : t(key)}</p>
         {message.error?.message && (
           <p className={styles.footnote}>{t('chat.errorDetail', { message: message.error.message })}</p>
         )}
@@ -419,15 +422,24 @@ function AssistantMessage({
   const shown = display(text)
   const reasoning = reasoningOf(parts)
   const hadReasoning = parts.some((p) => p.type === 'reasoning')
+  const images = imagesOf(parts)
+  const modelName = model?.name ?? message.model?.id ?? t('chat.modelUnknown')
   return (
     <article
       className={styles.answerRow}
-      aria-label={model?.name ?? message.model?.id ?? t('chat.modelUnknown')}
+      aria-label={modelName}
       data-message=""
       data-role="assistant"
       data-status={message.status}
     >
       <Reasoning text={reasoning} live={false} hidden={hadReasoning && reasoning === ''} />
+      {images.length > 0 && (
+        <div className={styles.images} data-generated="">
+          {images.map((part) => (
+            <AttachedImage key={part.blob} part={part} alt={t('media.imageAlt', { model: modelName })} />
+          ))}
+        </div>
+      )}
       {shown !== '' && <Markdown source={shown} className={styles.answerContent} data={CONTENT} />}
       {shown !== '' && <AnswerArtifacts text={shown} />}
       <ToolWork parts={parts} results={results} live={live} streaming={false} onApprove={actions.onApprove} />
@@ -438,7 +450,8 @@ function AssistantMessage({
         <div className={styles.actions}>
           <BranchNav thread={thread} message={message} onBranch={actions.onBranch} />
           {text !== '' && <CopyButton text={text} label={t('chat.copy')} />}
-          {actions.onRegenerate !== undefined && (
+          {text !== '' && <SpeakButton text={text} />}
+          {actions.onRegenerate !== undefined && images.length === 0 && (
             <IconButton
               icon={RefreshCw}
               label={t('chat.regenerate')}
@@ -513,6 +526,27 @@ export function StreamingAnswer({ stream }: { stream: StreamState }) {
       <ToolWork parts={stream.parts} results={NO_PARTS} streaming />
       <p className={styles.caption} role="status" aria-live="polite">
         {thinking ? t('chat.thinking') : t('chat.writing')}
+      </p>
+    </article>
+  )
+}
+
+/** An image being created: a status line where the answer will be. */
+export function ImageTurnRow({ turn }: { turn: ImageTurnState }) {
+  const t = useT()
+  const session = useSession()
+  const model = session?.resolveModel(turn.model) ?? null
+  return (
+    <article
+      className={styles.answerRow}
+      aria-busy="true"
+      aria-label={model?.name ?? turn.model.id}
+      data-message=""
+      data-role="assistant"
+      data-status="streaming"
+    >
+      <p className={styles.caption} role="status" aria-live="polite">
+        {t('media.imageCreating')}
       </p>
     </article>
   )

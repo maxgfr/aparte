@@ -249,6 +249,14 @@ export interface Settings {
   readonly defaultEffort: Effort | null
   /** The system prompt new conversations start with. */
   readonly defaultSystem: string
+  /** The provider model dictation transcribes with, when dictation goes through a provider (contracts/media.ts). */
+  readonly transcriptionModel: ModelRef | null
+  /** The provider model answers are read aloud with, when reading aloud goes through a provider. */
+  readonly speechModel: ModelRef | null
+  /** The voice of `speechModel` (`alloy`, `coral`...); empty for the model's default. */
+  readonly speechVoice: string
+  /** The image model new image turns use, the last one picked. */
+  readonly imageModel: ModelRef | null
 }
 
 export interface SettingsRepo {

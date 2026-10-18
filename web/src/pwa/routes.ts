@@ -51,3 +51,24 @@ export function fromOwnWindow(source: { type?: string; url?: string } | null, or
     return false
   }
 }
+
+/** The share target's action (`<base>share`, web manifest `share_target`), which only a POST reaches. */
+export const SHARE_PATH = 'share'
+
+/** True for the share target's POST: another app sharing to Aparté (pwa.config.ts `share_target`). */
+export function isShareTarget(method: string, url: URL, origin: string, base: string): boolean {
+  return method === 'POST' && scopePath(url, origin, base) === SHARE_PATH
+}
+
+/** A conversation id as notifications carry it: 26 base32 characters. */
+const CONVERSATION_ID = /^[a-z2-7]{25}[aeimquy4]$/
+
+/**
+ * The conversation a notification opens, from its `data`; null for anything else. The data comes from this app's
+ * own `showNotification`, but it is checked as untrusted all the same: it decides where a click navigates.
+ */
+export function notificationConversation(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null) return null
+  const id = (data as { conversation?: unknown }).conversation
+  return typeof id === 'string' && CONVERSATION_ID.test(id) ? id : null
+}

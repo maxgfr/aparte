@@ -1,3 +1,4 @@
+import type { GeneratedImage, PreparedImage } from '../../core/contracts/media.ts'
 import type { BlobPort, Part } from '../../core/contracts/workspace.ts'
 import { ImageError, type ImageErrorCode } from '../../core/media/image.ts'
 import { preparePhoto, type SurfaceFactory } from '../../core/media/photo.ts'
@@ -74,4 +75,19 @@ export async function attachPhoto(file: File, key: string, blobs: BlobPort): Pro
 export function imageFiles(list: FileList | readonly File[] | null | undefined): File[] {
   if (!list) return []
   return [...list].filter((f) => f.type.startsWith('image/') || /\.(?:heic|heif)$/i.test(f.name))
+}
+
+/**
+ * A provider's generated image, prepared as a photo is (downscaled, re-encoded, metadata such as provenance
+ * manifests removed) before it is stored. Throws ImageError for bytes that are not an image this device decodes.
+ */
+export async function prepareGenerated(image: GeneratedImage): Promise<PreparedImage> {
+  const file = new File([image.bytes], 'image', { type: image.mediaType })
+  const prepared = await preparePhoto(file, { fallback: domSurface })
+  return { bytes: prepared.bytes, mediaType: prepared.mediaType, width: prepared.width, height: prepared.height }
+}
+
+/** A shared photo, as a File the composer attaches (src/app/inbox.tsx hands them over). */
+export function sharedFile(bytes: Uint8Array, name: string, type: string): File {
+  return new File([new Uint8Array(bytes)], name, { type })
 }

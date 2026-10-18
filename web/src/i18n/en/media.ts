@@ -1,0 +1,102 @@
+/** Voice, images, sharing and notifications: dictation, reading aloud, image turns and the share inbox. */
+export const media = {
+  // Dictation (the composer's microphone)
+  dictate: 'Dictate',
+  dictateStop: 'Stop dictation',
+  dictateHold: 'Hold to dictate',
+  dictateListening: 'Listening… press again to stop.',
+  dictateListeningHold: 'Listening… release to stop.',
+  dictateTranscribing: 'Transcribing…',
+  dictateDownloading: 'Downloading the speech model: {percent}%',
+  dictateDenied: 'Microphone access was refused. Allow it in the browser’s site settings to dictate.',
+  dictateNoMicrophone: 'No microphone was found on this device.',
+  dictateNothing: 'Nothing was heard.',
+  dictateFailed: 'Dictation failed.',
+  dictateNoProvider: 'Dictation through a provider needs one: choose it in Voice and media.',
+  dictateUnsupported: 'This browser cannot record audio.',
+
+  // Reading aloud
+  readAloud: 'Read aloud',
+  readStop: 'Stop reading',
+  readNoVoice: 'No voice of this device reads this language.',
+  readFailed: 'This answer could not be read aloud.',
+  readNoProvider: 'Reading aloud through a provider needs one: choose it in Voice and media.',
+
+  // Image turns
+  imageMode: 'Create an image',
+  imageSend: 'Create the image',
+  imagePlaceholder: 'Describe the image to create',
+  imageModel: 'Image model',
+  imageModelChip: 'Image model: {model}',
+  imageCreating: 'Creating the image…',
+  imageAlt: 'Image created by {model}',
+  imageFailed: 'The image could not be created.',
+  imageUnreadable: 'The provider sent an image this device cannot read.',
+
+  // The Voice and media screen
+  settingsTitle: 'Voice and media',
+  settingsLead:
+    'Dictation, reading answers aloud, and notifications. Everything runs on this device unless you choose a provider.',
+  settingsLink: 'Voice and media',
+  settingsLinkHint: 'Dictation, reading aloud, notifications',
+  dictationTitle: 'Dictation',
+  engineLocal: 'On this device',
+  engineApi: 'Provider',
+  engineBrowser: 'Browser service',
+  engineLocalHint:
+    'Whisper runs in this browser. Its model (about 77 MB) downloads once, on first use, and is checked against a digest pinned in this app. Your voice never leaves the device.',
+  engineApiHint: 'Your recording is sent to the provider you choose, which returns the text.',
+  engineBrowserHint: 'The browser’s own speech service sends your voice to its maker’s servers (Google, in Chrome).',
+  browserConfirmTitle: 'Send your voice to the browser’s servers?',
+  browserConfirmBody:
+    'The speech service built into this browser does not run on this device: in Chrome, every word you dictate is sent to Google. Aparté cannot see or limit what happens to it there.',
+  browserConfirm: 'Use the browser service',
+  transcriptionProvider: 'Transcription provider',
+  transcriptionModel: 'Transcription model',
+  speechProvider: 'Speech provider',
+  speechModel: 'Speech model',
+  speechVoice: 'Voice',
+  speechVoiceHint:
+    'OpenAI voices: alloy, ash, coral, echo, nova, sage, shimmer and others. Empty uses the model’s default.',
+  providerNone: 'None of your providers offers this. OpenAI, Groq and OpenAI-compatible servers do.',
+  pushToTalk: 'Push to talk',
+  pushToTalkHint: 'Hold the microphone button while you speak, and release it to stop.',
+  readTitle: 'Reading aloud',
+  readDevice: 'This device’s voices',
+  readApi: 'Provider',
+  readDeviceHint:
+    'Only voices that run on this device are used: {count} available here. A voice of the browser’s servers is never used.',
+  readDeviceNone: 'This device has no voice that runs on it, so answers cannot be read aloud without a provider.',
+  readApiHint: 'The answer’s text is sent to the provider you choose, which returns the audio.',
+  notifyTitle: 'Notifications',
+  notifyAnswers: 'Notify me when an answer is ready',
+  notifyAnswersHint:
+    'Only while Aparté is in the background. The notification never shows the answer or the chat’s title.',
+  notifyDenied: 'Notifications are blocked for this site: allow them in the browser’s site settings.',
+  notifyUnsupported: 'This browser cannot show notifications from Aparté.',
+  notificationTitle: 'Aparté',
+  notificationBody: 'Your answer is ready.',
+
+  // The share inbox
+  shareTitle: 'Shared with Aparté',
+  shareLead:
+    'What other apps share with Aparté is encrypted on this device as it arrives, even while the vault is locked, and waits here until you use it.',
+  shareEmpty: 'Nothing is waiting.',
+  shareItem: 'Shared {time}',
+  sharePhotos: 'Photos: {count}',
+  shareOtherFiles: 'Files that are not photos are left out: {count}',
+  shareStart: 'Start a chat',
+  shareDiscard: 'Discard',
+  shareDiscarded: 'Discarded.',
+  shareArrived: 'Something was shared with Aparté.',
+  shareReview: 'Review',
+  shareLost: 'Shared items that could not be opened were removed: {count}',
+  shareLoading: 'Opening what was shared…',
+  shareFailed: 'What was shared could not be opened.',
+  receivedStored: 'Received and encrypted on this device.',
+  receivedNoKey: 'Sharing needs a vault unlocked once on this device. Unlock it, then share again.',
+  receivedFull: 'The inbox is full. Use or discard what waits, then share again.',
+  receivedTooLarge: 'That share is too large: 16 files and 64 MB at most.',
+  receivedEmpty: 'Nothing was shared.',
+  receivedInvalid: 'The share could not be read.',
+} as const

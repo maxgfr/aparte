@@ -100,7 +100,23 @@ const PROVIDER_KINDS: ReadonlySet<string> = new Set<ProviderKind>([
   'chrome-ai',
 ])
 const USAGE_KEYS = ['input', 'output', 'cacheRead', 'cacheWrite', 'reasoning'] as const
-const SETTINGS_DEFAULTS: Settings = { defaultModel: null, defaultEffort: null, defaultSystem: '' }
+const SETTINGS_DEFAULTS: Settings = {
+  defaultModel: null,
+  defaultEffort: null,
+  defaultSystem: '',
+  transcriptionModel: null,
+  speechModel: null,
+  speechVoice: '',
+  imageModel: null,
+}
+
+/** Settings that hold a model reference. */
+const MODEL_SETTINGS: ReadonlySet<keyof Settings> = new Set([
+  'defaultModel',
+  'transcriptionModel',
+  'speechModel',
+  'imageModel',
+])
 
 const PROVIDER_FIELDS: ReadonlySet<string> = new Set([
   'kind',
@@ -1424,18 +1440,18 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       if (settingsCache.has(key)) return settingsCache.get(key) as Settings[typeof key]
       const raw = settingsMap.get(key)
       let value: unknown = SETTINGS_DEFAULTS[key]
-      if (key === 'defaultModel' && isModelRef(raw)) value = frozenCopy(raw)
+      if (MODEL_SETTINGS.has(key) && isModelRef(raw)) value = frozenCopy(raw)
       else if (key === 'defaultEffort' && typeof raw === 'string' && EFFORTS.has(raw)) value = raw
-      else if (key === 'defaultSystem' && typeof raw === 'string') value = raw
+      else if ((key === 'defaultSystem' || key === 'speechVoice') && typeof raw === 'string') value = raw
       settingsCache.set(key, value)
       return value as Settings[typeof key]
     },
     set(key, value) {
       live()
       let clean: unknown
-      if (key === 'defaultModel') clean = checkModel(value, 'defaultModel')
+      if (MODEL_SETTINGS.has(key)) clean = checkModel(value, key)
       else if (key === 'defaultEffort') clean = checkEffort(value)
-      else if (key === 'defaultSystem') clean = checkText(value, 'defaultSystem')
+      else if (key === 'defaultSystem' || key === 'speechVoice') clean = checkText(value, key)
       else throw new InvalidInputError('Unknown setting')
       local(indexDoc(), () => settingsMap.set(key, clean))
     },

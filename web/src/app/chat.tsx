@@ -24,6 +24,7 @@ import type {
 import type { ChatController, RequestModule, StreamState } from '../core/contracts/chat.ts'
 import type { CollectionName, CollectionTypes } from '../core/contracts/extras.ts'
 import type { KnowledgeService } from '../core/contracts/knowledge.ts'
+import type { ImageTurnState, ImageTurns } from '../core/contracts/media.ts'
 import type { RuntimeFetcher } from '../core/contracts/sandbox.ts'
 import type { RegisteredTool, ToolApproval, ToolRegistry } from '../core/contracts/tools.ts'
 import type { Vault } from '../core/contracts/vault.ts'
@@ -72,6 +73,9 @@ import { useVault } from './vault.tsx'
  *   is removed on lock, with every run in flight.
  * - The knowledge service (app/knowledge.ts) holds decrypted document indexes for the session only; on lock it drops
  *   them and its document workers terminate.
+ * - Image turns (core/media/imageTurn.ts) hold the vault lock and the PWA reload as streams do, and are stopped and
+ *   committed on lock like them. Voice (app/voice.ts) is released on lock: a recording is dropped, speech stops and
+ *   the speech worker terminates.
  */
 
 /** The core modules a session uses, loaded together after unlock. */
@@ -104,6 +108,8 @@ export interface ChatSession {
   readonly knowledge: KnowledgeService
   /** The pinned runtimes of the sandboxes (Mermaid for artifacts), fetched and checked on demand. */
   readonly runtimes: RuntimeFetcher
+  /** Images a provider generates into a conversation (contracts/media.ts). */
+  readonly images: ImageTurns
   readonly modules: ChatModules
   /** The bundled model catalog, null until its chunk has loaded (the session opens without waiting for it). */
   readonly catalog: Catalog | null
@@ -226,6 +232,8 @@ async function openSession(vault: Vault): Promise<{
     sandboxToolsModule,
     sandboxHost,
     sandboxRuntime,
+    imageTurnModule,
+    voice,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -250,6 +258,8 @@ async function openSession(vault: Vault): Promise<{
     import('../core/sandbox/tools.ts'),
     import('../sandbox/host.ts'),
     import('../sandbox/runtime.ts'),
+    import('../core/media/imageTurn.ts'),
+    import('./voice.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
@@ -328,6 +338,22 @@ async function openSession(vault: Vault): Promise<{
     tools: { registry: tools },
   })
 
+  const images = imageTurnModule.createImageTurns({
+    workspace,
+    blobs,
+    holdLock: (reason: string) => vault.holdLock(reason),
+    holdReload,
+    generate: async (ref, prompt, signal) => {
+      const provider = workspace.providers.get(ref.provider)
+      if (provider === undefined) throw new Error('Unknown provider')
+      const [media, apiKey] = await Promise.all([import('../core/ai/media.ts'), keys.get(provider.id)])
+      return media.generateImage({ provider, apiKey, modelId: ref.id, signal }, prompt)
+    },
+    prepare: async (image) => (await import('../ui/chat/attach.ts')).prepareGenerated(image),
+    rng,
+    clock,
+  })
+
   const urls = new Map<string, Promise<string | null>>()
   const blobUrl = (blob: string, mediaType: string): Promise<string | null> => {
     const key = `${blob}|${mediaType}`
@@ -376,7 +402,7 @@ async function openSession(vault: Vault): Promise<{
     if (closed) return
     closed = true
     try {
-      await Promise.all([chat.dispose(), beam.dispose()])
+      await Promise.all([chat.dispose(), beam.dispose(), images.dispose()])
       await mcp.dispose().catch(() => undefined)
     } finally {
       // The model workers hold the conversation in memory (its prompt, its cache on the GPU): they go with the lock.
@@ -384,6 +410,7 @@ async function openSession(vault: Vault): Promise<{
       knowledge.dispose()
       knowledgeModule.releaseKnowledge()
       runner.reset()
+      voice.releaseVoice()
       search.dispose()
       unbind()
       workspace.close()
@@ -408,6 +435,7 @@ async function openSession(vault: Vault): Promise<{
     mcp,
     knowledge,
     runtimes,
+    images,
     modules,
     catalog,
     resolveModel,
@@ -756,5 +784,23 @@ export function useEntity<N extends CollectionName>(name: N, id: Id | null): Ent
   const ws = session?.workspace ?? null
   const subscribe = useMemo(() => (ws === null ? null : (fn: () => void) => ws.subscribe(name, fn)), [ws, name])
   const read = useCallback(() => (ws === null || id === null ? undefined : ws.collection(name).get(id)), [ws, name, id])
+  return useExternal(subscribe, read)
+}
+
+/** The image turn running in a conversation, or null; re-renders when it starts and ends. */
+export function useImageTurn(id: Id | null): ImageTurnState | null {
+  const session = useSession()
+  const images = session?.images ?? null
+  const subscribe = useMemo(
+    () =>
+      images === null || id === null
+        ? null
+        : (fn: () => void) =>
+            images.subscribe((conv) => {
+              if (conv === id) fn()
+            }),
+    [images, id],
+  )
+  const read = useCallback(() => (images === null || id === null ? null : images.state(id)), [images, id])
   return useExternal(subscribe, read)
 }

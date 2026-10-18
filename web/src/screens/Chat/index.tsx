@@ -4,7 +4,9 @@ import { Link, Redirect, useLocation } from 'wouter'
 import {
   useBeam,
   useConversation,
+  useImageTurn,
   useKeyedProviders,
+  useProviders,
   useRegisteredTools,
   useSession,
   useSessionState,
@@ -16,6 +18,7 @@ import { needsKey, useModelChoices } from '../../app/providers.tsx'
 import { chatPath, paths } from '../../app/routes.ts'
 import { useToast } from '../../app/toast.tsx'
 import { useVault } from '../../app/vault.tsx'
+import { mediaOffer } from '../../core/ai/mediaOffer.ts'
 import type { Effort } from '../../core/contracts/ai.ts'
 import type { StreamState } from '../../core/contracts/chat.ts'
 import { InvalidInputError, InvalidStateError } from '../../core/contracts/crypto.ts'
@@ -23,9 +26,9 @@ import { type ApprovalDecision, WEB_SEARCH } from '../../core/contracts/tools.ts
 import type { Id, ModelRef, Part } from '../../core/contracts/workspace.ts'
 import { useT } from '../../i18n/react.tsx'
 import styles from '../../ui/chat/Chat.module.css'
-import { Composer } from '../../ui/chat/Composer.tsx'
+import { Composer, type ImageControls } from '../../ui/chat/Composer.tsx'
 import { ConversationActions } from '../../ui/chat/ConversationList.tsx'
-import { type MessageActions, MessageRow, StreamingAnswer } from '../../ui/chat/Messages.tsx'
+import { ImageTurnRow, type MessageActions, MessageRow, StreamingAnswer } from '../../ui/chat/Messages.tsx'
 import { ToolsButton } from '../../ui/chat/Tools.tsx'
 import { visibleMessages, windowOf } from '../../ui/chat/view.ts'
 import { BeamButton, BeamPanel, useBeamSelection } from '../../ui/compare/Beam.tsx'
@@ -145,6 +148,9 @@ function ChatView({ id }: { id: Id | null }) {
   const stream = useFrameThrottled(rawStream)
   const keyed = useKeyedProviders()
   const choices = useModelChoices()
+  const providers = useProviders()
+  const imageTurn = useImageTurn(id)
+  const imageSetting = useSetting('imageModel')
   const defaultModel = useSetting('defaultModel')
   const defaultEffort = useSetting('defaultEffort')
   const defaultSystem = useSetting('defaultSystem')
@@ -221,8 +227,10 @@ function ChatView({ id }: { id: Id | null }) {
   let beamed = 0
   for (const c of beam?.candidates ?? [])
     for (const part of c.parts) if (part.type === 'text') beamed += part.text.length
-  const follow = useFollow(`${visible.length}|${stream?.parts.length ?? 0}|${streamed}|${calls}|${beamed}`)
-  const busy = rawStream !== null || beam?.running === true
+  const follow = useFollow(
+    `${visible.length}|${stream?.parts.length ?? 0}|${streamed}|${calls}|${beamed}|${imageTurn?.messageId ?? ''}`,
+  )
+  const busy = rawStream !== null || beam?.running === true || imageTurn !== null
 
   // Esc stops the answer from anywhere on the screen, unless a dialog is open (Esc closes it instead).
   useEffect(() => {
@@ -244,6 +252,72 @@ function ChatView({ id }: { id: Id | null }) {
     },
     [toast, t],
   )
+
+  /** The conversation a turn goes to: this one, or a new one created with the choices of the new chat. */
+  const conversationFor = async (): Promise<{ target: Id; created: boolean } | null> => {
+    if (session === null) return null
+    if (id !== null) return { target: id, created: false }
+    const tools = await session.tools.snapshot([...toolNames], { webSearch })
+    const system = roleplay.draftSystem() ?? draft.system
+    const target = session.workspace.conversations.create({
+      model: modelRef,
+      effort: draft.effort,
+      tools,
+      ...(system === null ? {} : { system }),
+      ...(draft.knowledge.length === 0 ? {} : { knowledge: draft.knowledge }),
+    })
+    roleplay.commitDraft(target)
+    return { target, created: true }
+  }
+
+  // Image models of the providers that have their key here (or need none), in the providers' order.
+  const imageModels = useMemo(() => {
+    const out: { ref: ModelRef; label: string }[] = []
+    for (const p of providers) {
+      if (needsKey(p) && keyed !== null && !keyed.has(p.id)) continue
+      for (const modelId of mediaOffer(p).imageModels)
+        out.push({ ref: { provider: p.id, id: modelId }, label: `${modelId} · ${p.label}` })
+    }
+    return out
+  }, [providers, keyed])
+  const imageModel =
+    imageModels.find(
+      (m) => imageSetting !== null && m.ref.provider === imageSetting.provider && m.ref.id === imageSetting.id,
+    )?.ref ??
+    imageModels[0]?.ref ??
+    null
+
+  const onCreateImage = async (prompt: string): Promise<boolean> => {
+    if (session === null || imageModel === null) return false
+    const at = await conversationFor()
+    if (at === null) return false
+    const run = session.images.run(at.target, prompt, imageModel)
+    // The turn has committed the prompt by the time it shows as running: the new chat can open.
+    run.then(
+      () => undefined,
+      (error: unknown) => {
+        if (at.created && session.workspace.conversations.get(at.target)?.startedAt === undefined)
+          session.workspace.conversations.trash(at.target)
+        if (error instanceof InvalidStateError && /lock/i.test(error.message)) toast(t('chat.sendFailedLocking'))
+        else toast(t('media.imageFailed'))
+      },
+    )
+    if (at.created) navigate(chatPath(at.target), { replace: true })
+    follow()
+    return true
+  }
+
+  const imageControls: ImageControls | undefined =
+    imageModels.length === 0
+      ? undefined
+      : {
+          models: imageModels,
+          model: imageModel,
+          onModel: (ref) => session?.workspace.settings.set('imageModel', ref),
+          busy: imageTurn !== null,
+          onCreate: onCreateImage,
+          onStop: () => id !== null && session?.images.stop(id),
+        }
 
   /**
    * The parts of a user message with the best passages of the chat's knowledge bases before its text (a `knowledge`
@@ -499,6 +573,7 @@ function ChatView({ id }: { id: Id | null }) {
             {t('knowledge.retrieving')}
           </p>
         )}
+        {imageTurn !== null && <ImageTurnRow turn={imageTurn} />}
         {stream !== null && stream.phase === 'tools' && (
           <p className={styles.caption} role="status" aria-live="polite">
             {stream.tools.some((c) => c.status === 'approval') ? t('tools.approvalPending') : t('tools.runningTools')}
@@ -554,7 +629,7 @@ function ChatView({ id }: { id: Id | null }) {
               />
             </>
           }
-          streaming={busy}
+          streaming={rawStream !== null}
           queued={rawStream?.queued ?? 0}
           onSend={onSend}
           onStop={() => {
@@ -562,6 +637,8 @@ function ChatView({ id }: { id: Id | null }) {
             session?.chat.stop(id)
             session?.beam.stop(id)
           }}
+          image={imageControls}
+          takesSharedDraft={id === null}
         />
       </div>
 

@@ -23,13 +23,36 @@ export type KitPending = '' | `${'create' | 'recover'}:${string}`
 
 const KIT_PENDING = /^(?:create|recover):[a-z2-7]{26}$/
 
+/** Where dictation runs on this device (core/contracts/media.ts `DictationEngine`). */
+export type Dictation = 'local' | 'api' | 'browser'
+/** Where answers are read aloud on this device (core/contracts/media.ts `ReadAloudEngine`). */
+export type ReadAloud = 'device' | 'api'
+
+const DICTATIONS: readonly Dictation[] = ['local', 'api', 'browser']
+const READ_ALOUDS: readonly ReadAloud[] = ['device', 'api']
+
+const flag = (raw: string): boolean | undefined => (raw === '1' ? true : raw === '0' ? false : undefined)
+
 /** Every preference this device may keep, with its type. */
 interface Prefs {
   theme: Theme
   kitPending: KitPending
+  /**
+   * The dictation engine. `browser` (Chrome's Web Speech API, which sends the audio to Google) is only ever set after
+   * the user confirmed a warning that says so.
+   */
+  dictation: Dictation
+  /** Dictation records while the microphone button is held, rather than between two presses. */
+  pushToTalk: boolean
+  readAloud: ReadAloud
+  /** A notification says an answer is ready when the app is in the background. */
+  notifyAnswers: boolean
 }
 
 export type PrefName = keyof Prefs
+
+/** The type of one preference. */
+export type PrefValue<N extends PrefName> = Prefs[N]
 
 const PREFS: { readonly [N in PrefName]: PrefSpec<Prefs[N]> } = {
   theme: { key: 'aparte:theme', fallback: 'system', parse: (raw) => THEMES.find((t) => t === raw) },
@@ -38,6 +61,10 @@ const PREFS: { readonly [N in PrefName]: PrefSpec<Prefs[N]> } = {
     fallback: '',
     parse: (raw) => (KIT_PENDING.test(raw) ? (raw as KitPending) : undefined),
   },
+  dictation: { key: 'aparte:dictation', fallback: 'local', parse: (raw) => DICTATIONS.find((d) => d === raw) },
+  pushToTalk: { key: 'aparte:push-to-talk', fallback: false, parse: flag },
+  readAloud: { key: 'aparte:read-aloud', fallback: 'device', parse: (raw) => READ_ALOUDS.find((r) => r === raw) },
+  notifyAnswers: { key: 'aparte:notify-answers', fallback: false, parse: flag },
 }
 
 /** The subset of Storage used here, so tests pass an in-memory one. */
@@ -82,7 +109,7 @@ export function writePref<N extends PrefName>(
   const spec = PREFS[name]
   try {
     if (value === spec.fallback) storage?.removeItem(spec.key)
-    else storage?.setItem(spec.key, String(value))
+    else storage?.setItem(spec.key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value))
   } catch {
     // Kept in memory by the caller's state; nothing else to do.
   }

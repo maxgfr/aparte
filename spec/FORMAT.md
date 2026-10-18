@@ -30,6 +30,7 @@ not allow rejects the input with the error named in [section 12](#12-errors); it
 13. [What leaks](#13-what-leaks)
 14. [Known limits](#14-known-limits)
 15. [Vectors and worked examples](#15-vectors-and-worked-examples)
+16. [Share inbox](#16-share-inbox)
 
 ## 1. Conventions
 
@@ -813,3 +814,138 @@ devices of one vault, a folder, a conversation with a reasoning part and a photo
 whose `seen` name each other. `fixture.json` gives the passphrase, the Secret Key and the recovery key that open it,
 and what every object decodes to. Both implementations read it back in their tests (`web/src/core/sync/fixtures.test.ts`,
 `crates/aparte-format/tests/fixtures.rs`); it is never regenerated or edited.
+
+## 16. Share inbox
+
+This section is an addition: it changes no byte of sections 1 to 15. It defines how the web app keeps what another
+app shares to it (the Web Share Target of its manifest) while the vault is locked, when nothing may be decrypted and no
+key is in memory. The inbox is local to one device: it is never uploaded, and a reader of a store never meets it.
+
+### 16.1 Model
+
+Each device has one inbox key pair per vault: an X25519 key (RFC 7748). The public key is stored in plaintext, so the
+service worker can seal a share to it as the share arrives; the private key is stored wrapped by a key derived from
+the master key, so only an unlocked vault can open what was sealed. A share is sealed with a fresh ephemeral key, so
+the worker holds no secret and cannot open what it stored. The unlocked app opens each item, offers its content to the
+user (who starts a chat with it or discards it) and deletes the item.
+
+### 16.2 Key file
+
+The bytes are the writer serialization ([3.4](#34-writer-serialization)) of the object below, followed by one line
+feed (`0a`). Members, in writer order:
+
+| Member | Type | Rule |
+|---|---|---|
+| `format` | string | exactly `aparte/1` |
+| `type` | string | exactly `inbox-key` |
+| `vault` | string | base32 of `vaultId` (26 chars, strict) |
+| `key` | string | base64url of the 32-byte X25519 public key `P` |
+| `wrap` | object | `{"iv": base64url of 12 bytes, "ct": base64url of 48 bytes}`, members in that order |
+
+No other member is allowed at any level. A reader parses it as JSON ([3.5](#35-reading-json)); `type` other than
+`inbox-key`, a missing, extra or mistyped member, a field that does not decode strictly or has the wrong length, or
+bytes that differ from the serialization of the parsed value, is `corrupt`; `format` other than `aparte/1` is
+`unsupported-format`.
+
+```
+d       = 32 random bytes (the X25519 scalar; RFC 7748 clamps it when used)
+P       = X25519(d, 9)
+K_inbox = K_local("inbox-key")                                      ; section 5.3
+aad     = "aparte/1|inbox-key|" || vault || "|" || key              ; vault and key as in the file
+wrap.ct = AES-GCM(K_inbox, wrap.iv, d, aad)
+```
+
+`inbox-key` is a name no local record can have (local record names are 26 base32 characters,
+[11.3](#113-local-record-names)), so `K_inbox` is used for this wrap only. Creating a key draws from the RNG, in this
+order: `d` (32 bytes), `wrap.iv` (12 bytes).
+
+Opening the key: the file's `vault` must be the vault being opened (`corrupt`); decrypting `wrap.ct` must succeed
+(`tampered`); and `X25519(d, 9)` must equal `P` (`tampered`). The public key is plaintext that any page of the origin
+can rewrite: the last check, together with `aad`, means a planted public key is detected at the next unlock. A device
+whose file does not open (another vault, a damaged or planted file, none yet) creates a new key and writes it in place
+of the old one; items sealed to the old key can no longer be opened and are deleted.
+
+### 16.3 Item
+
+```
+header  = "APX1" || 01 || 00 00 00 || epk (32) || iv (12)          ; 52 bytes
+e       = 32 random bytes,  epk = X25519(e, 9)
+Z       = X25519(e, P)                                              ; = X25519(d, epk)
+K       = HKDF(ikm = Z, salt = vaultId || epk || P, info = "aparte/1/inbox")
+aad     = header || vaultId || P
+item    = header || AES-GCM(K, iv, plaintext, aad)
+```
+
+`plaintext` is laid out and padded exactly as an envelope's ([7.4](#74-plaintext-layout-and-padding)), uncompressed:
+`u32be(n) || payload || zeros`, `P_len = max(64, padme(4 + n))`, with `n <= 2^26`. The item's length is therefore
+`52 + P_len + 16`, at least 132. Sealing draws from the RNG, in this order: `e` (32 bytes), `iv` (12 bytes). A `Z`
+of 32 zero bytes (a low-order `epk` or `P`) is refused.
+
+### 16.4 Payload
+
+```
+payload = u32be(hlen) || header || body
+```
+
+`header` is `hlen` bytes of JSON, `1 <= hlen <= 1048576`, in writer serialization. Members, in writer order:
+
+| Member | Type | Rule |
+|---|---|---|
+| `v` | integer | `1` |
+| `time` | integer | when the device received the share, Unix milliseconds, in `[0, 2^53)` |
+| `title` | string, optional | non-empty |
+| `text` | string, optional | non-empty |
+| `url` | string, optional | non-empty |
+| `files` | array | at most 16 entries `{"name": string, "type": string, "size": integer}`, members in that order |
+
+A file `name` is 1 to 255 UTF-16 code units; `type` is a lowercase media type of at most 127 characters
+(`[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*`); `size` is a non-negative integer. `body` is the files'
+bytes, concatenated in `files` order: the sizes add up to its length. Every string is well-formed
+([section 1](#1-conventions)). A reader rejects any other member, a missing or mistyped one, a header that is not its
+own writer serialization, or sizes that do not add up (`corrupt`).
+
+### 16.5 Opening an item
+
+A reader MUST check, in this order:
+
+| Step | Check | Error |
+|---|---|---|
+| 1 | length at least 132 | `corrupt` |
+| 2 | magic is `APX1` | `corrupt` |
+| 3 | version is `01` | `unsupported-format` |
+| 4 | the 3 reserved bytes are `00` | `corrupt` |
+| 5 | `epk` is a usable X25519 public key and `Z` is not all zero | `corrupt` |
+| 6 | AES-GCM decryption with `K` and `aad` succeeds | `tampered` |
+| 7 | `n <= P_len - 4`, `P_len == max(64, padme(4 + n))`, every padding byte is `00` | `corrupt` |
+| 8 | the payload follows [16.4](#164-payload) | `corrupt` |
+
+### 16.6 Storage
+
+IndexedDB database `aparte-inbox-v1`, schema version 1, beside `aparte-v1` (whose schema,
+[11.1](#111-database), is unchanged), two object stores with out-of-line string keys:
+
+| Store | Key | Value | Plaintext? |
+|---|---|---|---|
+| `key` | `inbox-key` | string, the key file ([16.2](#162-key-file)) | public key and ciphertext only |
+| `items` | base32 of 16 random bytes | bytes, one item ([16.3](#163-item)) | ciphertext |
+
+At most 32 items wait at a time; the service worker refuses a share past that, and one whose payload would exceed
+`2^26` bytes. The service worker never creates the database: without a key file there is nothing to seal to, and the
+share is refused. What leaks to someone who reads the device: that shares are waiting, how many, their padded sizes
+and when they were stored (from the browser's own metadata), never their content, type or origin.
+
+### 16.7 Worked example
+
+With `vaultId` and `mk` of `inputs.json`, `d` = Alice's scalar of RFC 7748 section 6.1
+(`77076d0a…1db92c2a`) and `wrap.iv` = 12 bytes of `44`: `P` is Alice's public key of the RFC (`8520f009…aa9b4e6a`),
+so the key file's public key member is its base64url `hSDwCYkw…qqbTmo`, `wrap.ct` (48 bytes) begins `47b4f7`, and the
+235-byte file, its final line feed included, has the SHA-256
+`3e8de08e8f80e338c10fa9dcd3fb5d9ee163c4bf6324288fb722e5f005643cb8`.
+
+Sealing to it, with `e` = Bob's scalar (`5dab087e…ff88e0eb`, so `epk` is Bob's public key and `Z` is the RFC's
+shared secret `4a5d9d5b…1e161742`) and `iv` = 12 bytes of `55`, the 257-byte payload of the share
+`{"v":1,"time":1760000000000,"title":"A title","text":"canary-share-91c2-the-shared-text-never-rests-in-clear","url":"https://example.org/page","files":[{"name":"one.jpg","type":"image/jpeg","size":3},{"name":"two.png","type":"image/png","size":2}]}`
+with body `01 02 03 04 05` gives a 340-byte item (`P_len = padme(261) = 272`) whose SHA-256 is
+`6c02d2952f6a560031a1708b68b7bbb36a3eda81d507363404cd78e54d9202fd`. The CLI never reads an inbox, so these values are
+checked by the web implementation's tests (`web/src/core/inbox/inbox.test.ts`) rather than by the cross-implementation
+vector files of [section 15](#15-vectors-and-worked-examples).

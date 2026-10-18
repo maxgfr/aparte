@@ -8,11 +8,19 @@
  * to every navigation it answers, and a worker policy to worker scripts. It caches nothing at runtime: API traffic
  * (providers, MCP, sync) is never seen by the cache. The limits of what a worker can enforce (first visit,
  * Shift+Reload, sandboxed frames) are listed in src/pwa/routes.ts.
+ *
+ * It is also the share target (web manifest `share_target`): a share another app POSTs to `<base>share` is sealed at
+ * once to this device's inbox public key (src/core/inbox, spec/FORMAT.md section 16) and stored only as ciphertext,
+ * whether or not the vault is unlocked; the page opens it after unlock. And it opens the conversation a "your answer
+ * is ready" notification names when the user clicks it.
  */
 
 import { setCacheNameDetails } from 'workbox-core'
 import type { WorkboxPlugin } from 'workbox-core/types.js'
 import { cleanupOutdatedCaches, PrecacheController } from 'workbox-precaching'
+import { cryptoRng } from './core/crypto/rng.ts'
+import { type ReceiveOutcome, receiveShare } from './core/inbox/receive.ts'
+import { openInboxStore } from './core/inbox/store.ts'
 import {
   type PrecacheEntry,
   precachedResponse,
@@ -22,7 +30,14 @@ import {
   verifiableEntries,
   verifyCached,
 } from './pwa/precache.ts'
-import { fromOwnWindow, isSkipWaiting, isWorkerDestination, servesAppShell } from './pwa/routes.ts'
+import {
+  fromOwnWindow,
+  isShareTarget,
+  isSkipWaiting,
+  isWorkerDestination,
+  notificationConversation,
+  servesAppShell,
+} from './pwa/routes.ts'
 import { securityHeaders, workerHeaders } from './security/policy.ts'
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<string | PrecacheEntry> }
@@ -78,10 +93,42 @@ async function networkWorker(request: Request): Promise<Response> {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
+/** The channel on which open pages hear that a share arrived (src/app/inbox.tsx). */
+const INBOX_CHANNEL = 'aparte-inbox'
+
+/**
+ * Seals a share into the inbox and sends the page to the screen that offers it. The form data stays in this worker's
+ * memory only; whatever the outcome, nothing of it is written in clear.
+ */
+async function acceptShare(request: Request): Promise<Response> {
+  let outcome: ReceiveOutcome = 'invalid'
+  let store: Awaited<ReturnType<typeof openInboxStore>> = null
+  try {
+    const form = await request.formData()
+    store = await openInboxStore({ create: false })
+    outcome = await receiveShare({ store, form, rng: cryptoRng(), now: Date.now() })
+  } catch {
+    outcome = 'invalid'
+  } finally {
+    store?.close()
+  }
+  if (typeof BroadcastChannel !== 'undefined') {
+    const channel = new BroadcastChannel(INBOX_CHANNEL)
+    channel.postMessage({ type: 'share', outcome })
+    channel.close()
+  }
+  // 303: the browser follows with a GET of the app shell, which then shows the share screen.
+  return Response.redirect(new URL(`./#/share?received=${outcome}`, scope).href, 303)
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
-  if (request.method !== 'GET') return
   const url = new URL(request.url)
+  if (isShareTarget(request.method, url, origin, base)) {
+    event.respondWith(acceptShare(request))
+    return
+  }
+  if (request.method !== 'GET') return
   if (url.origin !== origin || !url.pathname.startsWith(base)) return
 
   if (request.mode === 'navigate') {
@@ -118,4 +165,26 @@ self.addEventListener('message', (event) => {
   const source = event.source as { type?: string; url?: string } | null
   if (!fromOwnWindow(source, origin, base)) return
   event.waitUntil(self.skipWaiting())
+})
+
+/**
+ * A click on an "answer ready" notification (src/app/notify.ts) brings the app back on that conversation: an open
+ * window of the app is focused and told which one, otherwise a new window opens on it.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const conversation = notificationConversation(event.notification.data)
+  const target = new URL(conversation === null ? './' : `./#/chat/${conversation}`, scope).href
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const own = windows.find((client) => fromOwnWindow(client, origin, base))
+      if (own === undefined) {
+        await self.clients.openWindow(target)
+        return
+      }
+      await own.focus()
+      if (conversation !== null) own.postMessage({ type: 'open-conversation', conversation })
+    })(),
+  )
 })

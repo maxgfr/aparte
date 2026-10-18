@@ -1,4 +1,4 @@
-import { ArrowUp, Camera, ImagePlus, Square, X } from 'lucide-react'
+import { ArrowUp, Camera, ChevronDown, ImagePlus, Palette, Square, X } from 'lucide-react'
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -10,11 +10,14 @@ import {
   useState,
 } from 'react'
 import { useSession } from '../../app/chat.tsx'
+import { takeSharedDraft } from '../../app/inbox.tsx'
 import type { Effort, ModelDescriptor } from '../../core/contracts/ai.ts'
 import type { ModelRef, Part } from '../../core/contracts/workspace.ts'
 import { useT } from '../../i18n/react.tsx'
 import { IconButton } from '../components/IconButton.tsx'
+import { Sheet } from '../components/Sheet.tsx'
 import { cx } from '../cx.ts'
+import { MicButton } from '../voice/MicButton.tsx'
 import { type Attachment, attachPhoto, imageFiles } from './attach.ts'
 import styles from './Chat.module.css'
 import { EffortSelect, ModelPicker } from './ModelPicker.tsx'
@@ -36,7 +39,25 @@ export interface ComposerProps {
   /** Resolves true when the message was taken (the draft is then cleared). */
   readonly onSend: (parts: readonly Part[]) => Promise<boolean>
   readonly onStop: () => void
+  /** Image turns, when one of the providers creates images (contracts/media.ts). */
+  readonly image?: ImageControls
+  /** A new chat: it starts with what the user took from the share inbox, if anything (app/inbox.tsx). */
+  readonly takesSharedDraft?: boolean
 }
+
+/** What the composer needs to create images instead of sending a message. */
+export interface ImageControls {
+  readonly models: readonly { readonly ref: ModelRef; readonly label: string }[]
+  readonly model: ModelRef | null
+  readonly onModel: (ref: ModelRef) => void
+  /** An image is being created in this chat. */
+  readonly busy: boolean
+  /** Resolves true when the prompt was taken (the field is then cleared). */
+  readonly onCreate: (prompt: string) => Promise<boolean>
+  readonly onStop: () => void
+}
+
+const refKey = (ref: ModelRef) => `${ref.provider} ${ref.id}`
 
 /** Pointer devices with a precise pointer and hover: Enter sends there, and the shortcut hint shows. */
 function finePointer(): boolean {
@@ -65,9 +86,12 @@ function useAutoGrow(value: string) {
 
 let attachmentSeq = 0
 
-/** The message field with its toolbar: photos, model, effort, system prompt, and Send or Stop. */
+/**
+ * The message field with its toolbar: photos, model, effort, system prompt, dictation, and Send or Stop; or, in image
+ * mode, the prompt of an image and its image model.
+ */
 export function Composer(props: ComposerProps) {
-  const { model, streaming, queued, onSend, onStop } = props
+  const { model, queued, onSend, image } = props
   const t = useT()
   const session = useSession()
   const id = useId()
@@ -75,7 +99,12 @@ export function Composer(props: ComposerProps) {
   const [attachments, setAttachments] = useState<readonly Attachment[]>([])
   const [dragging, setDragging] = useState(false)
   const [sending, setSending] = useState(false)
+  const [imageMode, setImageMode] = useState(false)
+  const [voiceStatus, setVoiceStatus] = useState<string | null>(null)
   const field = useAutoGrow(text)
+  const creating = imageMode && image !== undefined
+  const streaming = props.streaming || (image?.busy ?? false)
+  const onStop = image?.busy ? image.onStop : props.onStop
   const picker = useRef<HTMLInputElement>(null)
   const camera = useRef<HTMLInputElement>(null)
   const previews = useRef(new Set<string>())
@@ -119,12 +148,40 @@ export function Composer(props: ComposerProps) {
     })
   }
 
+  // What the user took from the share inbox fills a new chat once: its text, and its photos as attachments.
+  const draftTaken = useRef(false)
+  useEffect(() => {
+    if (!props.takesSharedDraft || session === null || draftTaken.current) return
+    draftTaken.current = true
+    const draft = takeSharedDraft()
+    if (draft === null) return
+    if (draft.text !== '') setText(draft.text)
+    add(draft.files)
+  })
+
   const ready = attachments.filter((a): a is Extract<Attachment, { status: 'ready' }> => a.status === 'ready')
   const preparing = attachments.some((a) => a.status === 'preparing')
-  const hasContent = text.trim() !== '' || ready.length > 0
-  const canSend = hasContent && !preparing && !sending && model !== null
+  const hasContent = text.trim() !== '' || (!creating && ready.length > 0)
+  const canSend = creating
+    ? text.trim() !== '' && !sending && !image.busy && image.model !== null
+    : hasContent && !preparing && !sending && model !== null
+
+  const create = async () => {
+    if (!creating || !canSend) return
+    setSending(true)
+    try {
+      if (await image.onCreate(text.trim())) setText('')
+    } finally {
+      setSending(false)
+      field.current?.focus()
+    }
+  }
 
   const send = async () => {
+    if (creating) {
+      await create()
+      return
+    }
     if (!canSend) return
     // Photos sit above the text in the bubble, and come first in the message.
     const parts: Part[] = ready.map((a) => a.part)
@@ -177,6 +234,9 @@ export function Composer(props: ComposerProps) {
     add(imageFiles(e.dataTransfer.files))
   }
 
+  const dictated = (said: string) =>
+    setText((current) => (current.trim() === '' ? said : `${current.replace(/\s+$/, '')} ${said}`))
+
   const failureText = (reason: Extract<Attachment, { status: 'failed' }>['reason']) =>
     reason === 'too-large'
       ? t('chat.attachFailedTooLarge')
@@ -199,7 +259,12 @@ export function Composer(props: ComposerProps) {
           {t('chat.queued', { count: queued })}
         </p>
       )}
-      {attachments.length > 0 && (
+      {voiceStatus !== null && (
+        <p className={styles.caption} role="status" aria-live="polite">
+          {voiceStatus}
+        </p>
+      )}
+      {!creating && attachments.length > 0 && (
         <ul className={styles.attachments}>
           {attachments.map((a) => (
             <li key={a.key} className={styles.attachment}>
@@ -222,7 +287,7 @@ export function Composer(props: ComposerProps) {
           ))}
         </ul>
       )}
-      {ready.length > 0 && model !== null && !model.capabilities.vision && (
+      {!creating && ready.length > 0 && model !== null && !model.capabilities.vision && (
         <p className={styles.warningText}>{t('chat.attachNoVision')}</p>
       )}
       {dragging && <p className={styles.caption}>{t('chat.attachDrop')}</p>}
@@ -236,7 +301,13 @@ export function Composer(props: ComposerProps) {
           className={styles.input}
           rows={1}
           value={text}
-          placeholder={model === null ? t('chat.composerPlaceholderNoModel') : t('chat.composerPlaceholder')}
+          placeholder={
+            creating
+              ? t('media.imagePlaceholder')
+              : model === null
+                ? t('chat.composerPlaceholderNoModel')
+                : t('chat.composerPlaceholder')
+          }
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -245,13 +316,17 @@ export function Composer(props: ComposerProps) {
         />
         <div className={styles.toolbar}>
           <div className={styles.toolbarStart}>
-            <IconButton icon={ImagePlus} label={t('chat.attach')} onClick={() => picker.current?.click()} />
-            <IconButton
-              icon={Camera}
-              label={t('chat.camera')}
-              className={styles.cameraButton}
-              onClick={() => camera.current?.click()}
-            />
+            {!creating && (
+              <>
+                <IconButton icon={ImagePlus} label={t('chat.attach')} onClick={() => picker.current?.click()} />
+                <IconButton
+                  icon={Camera}
+                  label={t('chat.camera')}
+                  className={styles.cameraButton}
+                  onClick={() => camera.current?.click()}
+                />
+              </>
+            )}
             <input
               ref={picker}
               type="file"
@@ -276,12 +351,27 @@ export function Composer(props: ComposerProps) {
                 e.target.value = ''
               }}
             />
-            <ModelPicker value={props.modelRef} onChange={props.onModel} />
-            <EffortSelect model={model} value={props.effort} onChange={props.onEffort} />
-            <SystemPromptButton value={props.system} frozen={props.systemFrozen} onSave={props.onSystem} />
-            {props.tools}
+            {creating ? (
+              <ImageModelSelect image={image} />
+            ) : (
+              <>
+                <ModelPicker value={props.modelRef} onChange={props.onModel} />
+                <EffortSelect model={model} value={props.effort} onChange={props.onEffort} />
+                <SystemPromptButton value={props.system} frozen={props.systemFrozen} onSave={props.onSystem} />
+                {props.tools}
+              </>
+            )}
+            {image !== undefined && image.models.length > 0 && (
+              <IconButton
+                icon={Palette}
+                label={t('media.imageMode')}
+                aria-pressed={imageMode}
+                onClick={() => setImageMode((on) => !on)}
+              />
+            )}
           </div>
           <div className={styles.toolbarEnd}>
+            <MicButton onText={dictated} onStatus={setVoiceStatus} />
             {streaming && (
               <button type="button" className={styles.stop} onClick={onStop} aria-label={t('chat.stop')}>
                 <Square size={16} strokeWidth={2.25} fill="currentColor" aria-hidden="true" />
@@ -293,7 +383,7 @@ export function Composer(props: ComposerProps) {
                 className={styles.send}
                 onClick={() => void send()}
                 disabled={!canSend}
-                aria-label={t('chat.send')}
+                aria-label={creating ? t('media.imageSend') : t('chat.send')}
                 aria-busy={sending || undefined}
               >
                 <ArrowUp size={20} strokeWidth={2.25} aria-hidden="true" />
@@ -308,5 +398,53 @@ export function Composer(props: ComposerProps) {
           : t('chat.attachPrivacy')}
       </p>
     </section>
+  )
+}
+
+/**
+ * The image model of image mode, among those the providers offer: a chip that opens a sheet of radio buttons (no
+ * native <select>, whose WebKit menu breaks the strict style policy).
+ */
+function ImageModelSelect({ image }: { image: ImageControls }) {
+  const t = useT()
+  const name = useId()
+  const [open, setOpen] = useState(false)
+  const current = image.models.find((m) => image.model !== null && refKey(m.ref) === refKey(image.model))
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.modelChip}
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-label={t('media.imageModelChip', { model: current?.label ?? '' })}
+      >
+        <span className={styles.modelChipName}>{current?.label ?? t('media.imageModel')}</span>
+        <ChevronDown size={16} strokeWidth={2} aria-hidden="true" />
+      </button>
+      <Sheet open={open} title={t('media.imageModel')} onClose={() => setOpen(false)}>
+        <fieldset className={styles.effortChoices}>
+          <legend className="sr-only">{t('media.imageModel')}</legend>
+          {image.models.map((m) => {
+            const selected = image.model !== null && refKey(m.ref) === refKey(image.model)
+            return (
+              <label key={refKey(m.ref)} className={cx(styles.pickerRow, selected && styles.pickerRowSelected)}>
+                <span className={styles.modelId}>{m.label}</span>
+                <input
+                  type="radio"
+                  name={name}
+                  value={refKey(m.ref)}
+                  checked={selected}
+                  onChange={() => {
+                    image.onModel(m.ref)
+                    setOpen(false)
+                  }}
+                />
+              </label>
+            )
+          })}
+        </fieldset>
+      </Sheet>
+    </>
   )
 }

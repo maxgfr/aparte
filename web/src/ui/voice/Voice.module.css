@@ -1,0 +1,46 @@
+/* The composer's microphone: an icon button that turns into a live, filled stop button while it listens. */
+.mic {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--accent-ink);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.mic:hover:not(:disabled) {
+  background: var(--surface-pressed);
+}
+
+.mic:disabled {
+  opacity: 0.4;
+  cursor: progress;
+}
+
+.micLive,
+.micLive:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--on-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .micLive {
+    animation: listening 1.4s var(--ease-out) infinite;
+  }
+}
+
+@keyframes listening {
+  50% {
+    opacity: 0.8;
+  }
+}

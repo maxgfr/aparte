@@ -1,5 +1,13 @@
 import { expect, test } from 'bun:test'
-import { fromOwnWindow, isSkipWaiting, isWorkerDestination, scopePath, servesAppShell } from './routes.ts'
+import {
+  fromOwnWindow,
+  isShareTarget,
+  isSkipWaiting,
+  isWorkerDestination,
+  notificationConversation,
+  scopePath,
+  servesAppShell,
+} from './routes.ts'
 
 const origin = 'https://maxgfr.github.io'
 const base = '/aparte/'
@@ -52,4 +60,22 @@ test('messages are accepted from the app’s own windows only, never from siblin
   expect(fromOwnWindow({ type: 'window' }, origin, base)).toBe(false)
   expect(fromOwnWindow({ type: 'window', url: 'not a url' }, origin, base)).toBe(false)
   expect(fromOwnWindow(null, origin, base)).toBe(false)
+})
+
+test('only a POST to <base>share is the share target', () => {
+  expect(isShareTarget('POST', u('/aparte/share'), origin, base)).toBe(true)
+  expect(isShareTarget('POST', u('/aparte/share?x=1'), origin, base)).toBe(true)
+  expect(isShareTarget('GET', u('/aparte/share'), origin, base)).toBe(false)
+  expect(isShareTarget('POST', u('/aparte/share/x'), origin, base)).toBe(false)
+  expect(isShareTarget('POST', u('/cursus/share'), origin, base)).toBe(false)
+  expect(isShareTarget('POST', new URL('https://evil.example/aparte/share'), origin, base)).toBe(false)
+})
+
+test('a notification opens a well-formed conversation id only', () => {
+  expect(notificationConversation({ conversation: 'abcdefghijklmnopqrstuvwxya' })).toBe('abcdefghijklmnopqrstuvwxya')
+  expect(notificationConversation({ conversation: 'abcdefghijklmnopqrstuvwxyb' })).toBeNull()
+  expect(notificationConversation({ conversation: '../../evil' })).toBeNull()
+  expect(notificationConversation({ conversation: 42 })).toBeNull()
+  expect(notificationConversation(null)).toBeNull()
+  expect(notificationConversation('abcdefghijklmnopqrstuvwxya')).toBeNull()
 })

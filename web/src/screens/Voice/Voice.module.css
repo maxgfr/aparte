@@ -1,0 +1,19 @@
+/* The Voice and media screen: sections of settings, each a column of controls and the hints that explain them. */
+.section {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-end: var(--space-6);
+}
+
+.pair {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.label {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}

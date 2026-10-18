@@ -110,6 +110,23 @@ describe('conversations', () => {
     expect(ws.settings.get('defaultEffort')).toBe('xhigh')
   })
 
+  test('voice and image settings: model references and a voice, validated', async () => {
+    const { ws } = await setup()
+    for (const key of ['transcriptionModel', 'speechModel', 'imageModel'] as const) {
+      expect(ws.settings.get(key)).toBeNull()
+      ws.settings.set(key, { provider: 'p1', id: 'whisper-1' })
+      expect(ws.settings.get(key)).toEqual({ provider: 'p1', id: 'whisper-1' })
+      expect(Object.isFrozen(ws.settings.get(key))).toBe(true)
+      expect(() => ws.settings.set(key, { provider: '', id: 'x' } as never)).toThrow(InvalidInputError)
+      ws.settings.set(key, null)
+      expect(ws.settings.get(key)).toBeNull()
+    }
+    expect(ws.settings.get('speechVoice')).toBe('')
+    ws.settings.set('speechVoice', 'coral')
+    expect(ws.settings.get('speechVoice')).toBe('coral')
+    expect(() => ws.settings.set('speechVoice', 42 as never)).toThrow(InvalidInputError)
+  })
+
   test('update bumps updatedAt and keeps the object identity until a change', async () => {
     const { ws, clock } = await setup()
     const id = ws.conversations.create({ title: 'First' })

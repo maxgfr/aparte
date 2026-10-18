@@ -72,4 +72,33 @@ describe('confineFetch', () => {
     expect((await confined(PINNED)).status).toBe(404)
     expect(reached).toEqual([])
   })
+
+  test('`via` fetches the pinned copy in place of the name asked for, under the same digest', async () => {
+    const { s, reached } = scope()
+    const digest = await sha('body')
+    const moving = 'https://huggingface.co/org/model/resolve/main/config.json'
+    const confined = confineFetch(
+      (url) => (url.href === moving ? { purpose: 'download', sha256: digest, via: PINNED } : null),
+      s,
+    )
+    expect(await (await confined(moving)).text()).toBe('body')
+    expect(reached.map((r) => r.url)).toEqual([PINNED])
+    const wrong = scope()
+    const confinedWrong = confineFetch(() => ({ purpose: 'download', sha256: '0'.repeat(64), via: PINNED }), wrong.s)
+    await expect(confinedWrong(moving)).rejects.toThrow('pinned digest')
+  })
+
+  test('the route sees the request options (a range probe can be answered locally)', async () => {
+    const { s, reached } = scope()
+    const confined = confineFetch(
+      (_url, init) =>
+        new Headers(init?.headers).get('range') === 'bytes=0-0'
+          ? { respond: () => new Response(null, { status: 200 }) }
+          : null,
+      s,
+    )
+    expect((await confined(PINNED, { headers: { Range: 'bytes=0-0' } })).status).toBe(200)
+    await expect(confined(PINNED)).rejects.toBeInstanceOf(TypeError)
+    expect(reached).toEqual([])
+  })
 })

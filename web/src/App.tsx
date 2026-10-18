@@ -1,6 +1,8 @@
 import './ui/global.css'
 import type { JSX } from 'react'
 import { ChatProvider } from './app/chat.tsx'
+import { InboxProvider } from './app/inbox.tsx'
+import { AnswerNotifier } from './app/notify.tsx'
 import { readPref } from './app/prefs.ts'
 import { HashRouter, Routes } from './app/router.tsx'
 import { SyncProvider } from './app/sync.tsx'
@@ -27,11 +29,14 @@ export function App(): JSX.Element {
           <ChatProvider>
             <SyncProvider>
               <HashRouter>
-                <VaultGate>
-                  <Shell>
-                    <Routes />
-                  </Shell>
-                </VaultGate>
+                <InboxProvider>
+                  <AnswerNotifier />
+                  <VaultGate>
+                    <Shell>
+                      <Routes />
+                    </Shell>
+                  </VaultGate>
+                </InboxProvider>
               </HashRouter>
             </SyncProvider>
           </ChatProvider>

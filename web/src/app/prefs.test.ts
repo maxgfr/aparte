@@ -37,6 +37,31 @@ describe('prefs', () => {
     expect(readPref('theme', s)).toBe('system')
   })
 
+  test('voice and notification preferences: engines and flags, validated', () => {
+    const s = memory()
+    expect(readPref('dictation', s)).toBe('local')
+    expect(readPref('pushToTalk', s)).toBe(false)
+    expect(readPref('readAloud', s)).toBe('device')
+    expect(readPref('notifyAnswers', s)).toBe(false)
+    writePref('dictation', 'browser', s)
+    writePref('pushToTalk', true, s)
+    writePref('readAloud', 'api', s)
+    writePref('notifyAnswers', true, s)
+    expect([...s.data]).toEqual([
+      ['aparte:dictation', 'browser'],
+      ['aparte:push-to-talk', '1'],
+      ['aparte:read-aloud', 'api'],
+      ['aparte:notify-answers', '1'],
+    ])
+    expect(readPref('pushToTalk', s)).toBe(true)
+    writePref('pushToTalk', false, s)
+    expect(s.data.has('aparte:push-to-talk')).toBe(false)
+    s.data.set('aparte:dictation', 'cloud')
+    s.data.set('aparte:notify-answers', 'yes')
+    expect(readPref('dictation', s)).toBe('local')
+    expect(readPref('notifyAnswers', s)).toBe(false)
+  })
+
   test('a storage that throws never breaks a read or a write', () => {
     const broken: PrefStorage = {
       getItem: () => {

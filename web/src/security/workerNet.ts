@@ -10,8 +10,13 @@ import { type NetPurpose, request } from './net.ts'
  * library cannot go around it (a module worker has no usable `importScripts`).
  */
 export type Route =
-  /** Fetched through `request()`; with `sha256`, the body must hash to it (hex) or the fetch rejects. */
-  { readonly purpose: NetPurpose; readonly sha256?: string } | { readonly respond: () => Response } | null
+  /**
+   * Fetched through `request()`; with `sha256`, the body must hash to it (hex) or the fetch rejects. `via` fetches
+   * another URL in its place (a pinned copy of a file a library asks for under a moving name); the digest still holds.
+   */
+  | { readonly purpose: NetPurpose; readonly sha256?: string; readonly via?: string }
+  | { readonly respond: () => Response }
+  | null
 
 async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes)
@@ -21,7 +26,10 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
 /** The confined `fetch`, also returned so the worker's own code can call it by name. */
 export type ConfinedFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
-export function confineFetch(route: (url: URL) => Route, scope: Record<string, unknown> = globalThis): ConfinedFetch {
+export function confineFetch(
+  route: (url: URL, init?: RequestInit) => Route,
+  scope: Record<string, unknown> = globalThis,
+): ConfinedFetch {
   const native = scope.fetch as typeof globalThis.fetch
   const confined = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const raw = input instanceof Request ? input.url : String(input)
@@ -31,12 +39,12 @@ export function confineFetch(route: (url: URL) => Route, scope: Record<string, u
     } catch {
       throw new TypeError(`Blocked request (unparsable URL) from a worker: ${raw.slice(0, 64)}`)
     }
-    const decision = route(url)
+    const decision = route(url, init)
     if (decision === null) throw new TypeError(`Blocked request from a worker to ${url.origin}`)
     if ('respond' in decision) return decision.respond()
     const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined)
     const response = await request(
-      url,
+      decision.via ?? url,
       {
         method: init?.method ?? 'GET',
         ...(init?.headers === undefined ? {} : { headers: init.headers }),

@@ -42,6 +42,10 @@ export const paths = {
   knowledge: '/knowledge',
   /** One knowledge base: `/knowledge/<knowledge base id>`. */
   knowledgeBase: '/knowledge/:id',
+  /** Dictation, reading aloud and notifications. */
+  voice: '/voice',
+  /** What other apps shared (the share target): `/share?received=<outcome>` after a share. */
+  share: '/share',
 } as const
 
 export type RouteName = keyof typeof paths

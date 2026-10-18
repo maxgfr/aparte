@@ -45,6 +45,14 @@ export function pwaOptions(base: string): Partial<VitePWAOptions> {
       // An `.aparte` backup opened with the installed app lands on the Transfer screen, which reads it from the launch
       // queue and offers to merge it (nothing is read before the vault is open).
       file_handlers: [{ action: './#/transfer?launch', accept: { 'application/x-aparte-backup': ['.aparte'] } }],
+      // Photos and text shared from another app are POSTed to the service worker, which seals them to the inbox key
+      // at once (src/sw.ts, spec/FORMAT.md section 16): nothing shared is stored in clear, even while locked.
+      share_target: {
+        action: './share',
+        method: 'POST',
+        enctype: 'multipart/form-data',
+        params: { title: 'title', text: 'text', url: 'url', files: [{ name: 'files', accept: ['image/*'] }] },
+      },
     },
     injectManifest: {
       // A classic script with everything inlined: no `import` at runtime, so nothing the worker runs escapes the

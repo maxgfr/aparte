@@ -5,6 +5,7 @@ import type { compare } from './en/compare.ts'
 import type { knowledge } from './en/knowledge.ts'
 import type { local } from './en/local.ts'
 import type { mcp } from './en/mcp.ts'
+import type { media } from './en/media.ts'
 import type { roleplay } from './en/roleplay.ts'
 import type { sandbox } from './en/sandbox.ts'
 import type { shell } from './en/shell.ts'
@@ -43,6 +44,7 @@ type Source = {
   readonly stats: typeof stats
   readonly knowledge: typeof knowledge
   readonly sandbox: typeof sandbox
+  readonly media: typeof media
 }
 export type Namespace = keyof Source
 const NAMESPACES: readonly Namespace[] = [
@@ -61,6 +63,7 @@ const NAMESPACES: readonly Namespace[] = [
   'stats',
   'knowledge',
   'sandbox',
+  'media',
 ]
 export type Catalog = { readonly [N in Namespace]: Shape<Source[N]> }
 
@@ -96,6 +99,7 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       stats,
       knowledge,
       sandbox,
+      media,
     ] = await Promise.all([
       import('./en/common.ts'),
       import('./en/shell.ts'),
@@ -112,6 +116,7 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       import('./en/stats.ts'),
       import('./en/knowledge.ts'),
       import('./en/sandbox.ts'),
+      import('./en/media.ts'),
     ])
     return {
       common: common.common,
@@ -129,6 +134,7 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       stats: stats.stats,
       knowledge: knowledge.knowledge,
       sandbox: sandbox.sandbox,
+      media: media.media,
     }
   },
   pseudo: async () => {

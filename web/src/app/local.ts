@@ -46,6 +46,14 @@ export function localEmbedder(): Embedder {
   return embedder
 }
 
+/**
+ * A transformers.js worker (embeddings, or speech for app/voice.ts). Its URL is imported here only, so the build
+ * keeps it in this module's chunk rather than in a chunk of its own shared by both callers.
+ */
+export function startTransformersWorker(name: string): Worker {
+  return createWorker(transformersWorkerUrl, { name })
+}
+
 /** Chrome's Prompt API, when this browser has it. */
 export function promptApi(): LanguageModelLike | undefined {
   return typeof g.LanguageModel?.availability === 'function' ? g.LanguageModel : undefined

@@ -66,6 +66,10 @@ export default function Providers() {
         })}
       </ListGroup>
 
+      <ListGroup title={t('media.settingsTitle')} hideTitle>
+        <ListRow href={paths.voice} title={t('media.settingsLink')} subtitle={t('media.settingsLinkHint')} />
+      </ListGroup>
+
       <section className={styles.form} aria-labelledby="providers-hosted">
         <h2 id="providers-hosted" className={styles.sectionTitle}>
           {t('chat.providerHosted')}
