@@ -167,16 +167,19 @@ impl std::fmt::Debug for Connection {
 }
 
 /// Kills a process group; quiet when it is already gone.
+///
+/// The signal goes through killpg(2), not the `kill` program: the procps-ng 4.0.4 `kill` of Ubuntu 24.04 keeps only
+/// the first digit of a negative pid, so `kill -KILL -24` signals group 2 and `kill -KILL -166` signals -1, every
+/// process of the user.
 pub fn kill_group(pgid: u32) {
-    if cfg!(unix) && pgid > 1 {
-        let _ = std::process::Command::new("kill")
-            .arg("-KILL")
-            .arg(format!("-{pgid}"))
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+    #[cfg(unix)]
+    if let Ok(pgid) = i32::try_from(pgid)
+        && pgid > 1
+    {
+        let _ = nix::sys::signal::killpg(nix::unistd::Pid::from_raw(pgid), nix::sys::signal::Signal::SIGKILL);
     }
+    #[cfg(not(unix))]
+    let _ = pgid;
 }
 
 impl Connection {

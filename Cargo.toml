@@ -75,6 +75,9 @@ rmcp = { version = "=3.5.1", default-features = false, features = [
 ] }
 async-trait = { version = "0.1.92", default-features = false }
 process-wrap = { version = "10.0.1", default-features = false, features = ["tokio1", "process-group", "kill-on-drop"] }
+# Process groups are killed with killpg(2) (the `kill` program of procps-ng 4.0.4 misreads negative pids); the nix
+# process-wrap already uses.
+nix = { version = "0.31.3", default-features = false, features = ["signal"] }
 
 # Sync: the Yjs documents of a vault, byte-compatible with the web app's Yjs (OffsetKind::Utf16), pinned.
 yrs = { version = "=0.28.0", default-features = false }

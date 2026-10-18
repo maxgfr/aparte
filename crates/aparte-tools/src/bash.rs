@@ -58,12 +58,16 @@ impl Bash {
 
 fn kill_group(pid: u32) {
     // The command runs in its own process group (its id is the shell's pid); killing the group ends its children.
-    let _ = std::process::Command::new("kill")
-        .arg("-KILL")
-        .arg(format!("-{pid}"))
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    // killpg(2), not the `kill` program: the procps-ng 4.0.4 `kill` of Ubuntu 24.04 keeps only the first digit of a
+    // negative pid, so it would signal another group, or every process of the user.
+    #[cfg(unix)]
+    if let Ok(pid) = i32::try_from(pid)
+        && pid > 1
+    {
+        let _ = nix::sys::signal::killpg(nix::unistd::Pid::from_raw(pid), nix::sys::signal::Signal::SIGKILL);
+    }
+    #[cfg(not(unix))]
+    let _ = pid;
 }
 
 impl TypedTool for Bash {
