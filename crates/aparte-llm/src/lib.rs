@@ -1,10 +1,10 @@
-//! `aparte-llm`: one streaming event model over three provider protocols, Anthropic Messages, OpenAI chat
-//! completions (and every server that speaks it) and Gemini.
+//! `aparte-llm`: one streaming event model over four provider protocols, Anthropic Messages, OpenAI Responses,
+//! OpenAI chat completions (and every server that speaks it) and Gemini.
 //!
 //! - [`types`]: the conversation sent ([`Request`], [`Message`], [`Part`]) and the events streamed back
 //!   ([`ChatEvent`]), in the JSON shapes of the web app's contract.
 //! - [`sse`]: an incremental `text/event-stream` parser.
-//! - [`anthropic`], [`openai`], [`gemini`]: request bodies and stream decoders.
+//! - [`anthropic`], [`responses`], [`openai`], [`gemini`]: request bodies and stream decoders.
 //! - [`caps`]: what each model accepts (effort levels, sampling, prefill).
 //! - [`client`]: the HTTP client and the [`ChatModel`] trait an agent calls.
 //! - [`providers`]: built-in provider presets.
@@ -19,6 +19,7 @@ pub mod errors;
 pub mod gemini;
 pub mod openai;
 pub mod providers;
+pub mod responses;
 pub mod sse;
 pub mod types;
 

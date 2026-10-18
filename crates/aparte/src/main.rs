@@ -9,9 +9,11 @@ mod cmd {
     pub mod completions;
     pub mod doctor;
     pub mod key;
+    pub mod mcp;
     pub mod models;
     pub mod rpc;
     pub mod selftest;
+    pub mod skills;
     pub mod trust;
 }
 mod keychain;
@@ -121,6 +123,10 @@ enum Command {
     Models(cmd::models::Args),
     /// Trust a project directory, revoke it, or list decisions
     Trust(cmd::trust::Args),
+    /// List and show skills (SKILL.md), and where they are looked for
+    Skills(cmd::skills::Args),
+    /// Add, list, remove MCP servers, list their tools, sign in
+    Mcp(cmd::mcp::Args),
     /// Store, remove or locate provider API keys
     Key(cmd::key::Args),
     /// Offline self-check (no key, no network, no files)
@@ -176,6 +182,8 @@ fn dispatch(cli: Cli, ctx: &Ctx) -> anyhow::Result<ExitCode> {
         Command::Rpc(args) => cmd::rpc::run(args, ctx),
         Command::Models(args) => cmd::models::run(args, ctx),
         Command::Trust(args) => cmd::trust::run(args, ctx),
+        Command::Skills(args) => cmd::skills::run(args, ctx),
+        Command::Mcp(args) => cmd::mcp::run(args, ctx),
         Command::Key(args) => cmd::key::run(args, ctx),
         Command::Selftest(args) => cmd::selftest::run(args, ctx),
         Command::Doctor(args) => cmd::doctor::run(args, ctx),

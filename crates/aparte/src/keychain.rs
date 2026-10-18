@@ -37,6 +37,11 @@ fn quiet(cmd: &mut Command) -> &mut Command {
 
 /// Reads a key from the keychain; `None` when there is none or no keychain.
 pub fn get(account: &str) -> Option<ApiKey> {
+    ApiKey::new(get_secret(account)?)
+}
+
+/// Reads any secret from the keychain; `None` when there is none or no keychain.
+pub fn get_secret(account: &str) -> Option<String> {
     if disabled() {
         return None;
     }
@@ -53,7 +58,7 @@ pub fn get(account: &str) -> Option<ApiKey> {
         return None;
     }
     let text = String::from_utf8(out.stdout).ok()?;
-    ApiKey::new(text.trim_end_matches(['\n', '\r']))
+    Some(text.trim_end_matches(['\n', '\r']).to_owned())
 }
 
 fn feed(mut cmd: Command, input: &str) -> anyhow::Result<()> {
@@ -74,10 +79,17 @@ fn feed(mut cmd: Command, input: &str) -> anyhow::Result<()> {
 
 /// Stores a key in the keychain.
 pub fn set(account: &str, key: &ApiKey) -> anyhow::Result<()> {
+    set_secret(account, key.expose())
+}
+
+/// Stores a secret of one line, without quotes or backslashes, in the keychain.
+pub fn set_secret(account: &str, secret: &str) -> anyhow::Result<()> {
     if disabled() {
         anyhow::bail!("the keychain is turned off (APARTE_NO_KEYCHAIN)");
     }
-    let secret = key.expose();
+    if secret.chars().any(char::is_control) || account.contains(['"', '\\', '\n']) {
+        anyhow::bail!("this secret or account has characters the keychain commands cannot take");
+    }
     if cfg!(target_os = "macos") {
         if secret.contains(['"', '\\', '\'']) {
             anyhow::bail!("this key has quote characters the macOS keychain command cannot take");
@@ -130,4 +142,27 @@ pub fn resolve(preset: &Preset) -> Option<(ApiKey, Source)> {
         return None;
     }
     get(preset.id).map(|k| (k, Source::Keychain))
+}
+
+/// The OS keychain as the vault of MCP OAuth token keys.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct KeychainVault;
+
+impl KeychainVault {
+    /// The keychain, unless it is turned off.
+    pub fn available() -> Option<KeychainVault> {
+        (!disabled()).then_some(KeychainVault)
+    }
+}
+
+impl aparte_mcp::auth::SecretVault for KeychainVault {
+    fn get(&self, account: &str) -> Option<String> {
+        get_secret(account)
+    }
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        set_secret(account, secret).map_err(|e| format!("{e:#}"))
+    }
+    fn delete(&self, account: &str) -> Result<bool, String> {
+        delete(account).map_err(|e| format!("{e:#}"))
+    }
 }

@@ -71,6 +71,10 @@ pub fn summarize_input(tool: &str, input: &Value) -> String {
             .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")),
         "web_fetch" => s("url"),
+        "skill" => s("name").map(|n| match s("path") {
+            Some(p) => format!("{n} {p}"),
+            None => n,
+        }),
         _ => None,
     };
     let text = main.unwrap_or_else(|| input.to_string());
@@ -242,7 +246,10 @@ impl App {
                     colored(self.palette, Color::Red),
                 ));
             }
-            AgentEvent::Usage { .. } | AgentEvent::ToolCallStart { .. } | AgentEvent::TurnEnd { .. } => {}
+            AgentEvent::Usage { .. }
+            | AgentEvent::ToolCallStart { .. }
+            | AgentEvent::TurnEnd { .. }
+            | AgentEvent::Source { .. } => {}
             AgentEvent::AgentEnd { reason, usage } => {
                 self.flush_streaming();
                 self.running = false;

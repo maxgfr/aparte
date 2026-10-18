@@ -6,18 +6,22 @@
 //!
 //! | `type` | Fields | Does |
 //! |---|---|---|
-//! | `prompt` | `message` | starts a run (refused while one runs: use `steer` or `follow_up`) |
+//! | `prompt` | `message` | starts a run (refused while one runs: use `steer` or `follow_up`); `/skill:<name> ...` runs a skill |
 //! | `steer` | `message` | delivers a message after the current tool batch |
 //! | `follow_up` | `message` | delivers a message when the run would stop |
 //! | `abort` | | stops the run |
 //! | `approve` | `callId`, `decision` (`allow`, `allow-always`, `deny`), `reason` | answers an `approval-request` |
 //! | `get_messages` | | responds with the conversation |
+//! | `get_tools` | | responds with the tools offered (`name`, `description`, `inputSchema`) |
+//! | `get_skills` | | responds with the skills found and whether each is offered to the model |
+//! | `get_mcp` | | responds with the MCP servers and their state |
 //! | `set_model` | `model` | changes the model between runs |
 //! | `set_effort` | `effort` (or null) | changes the effort between runs |
 //! | `export` | `path` | writes the conversation as JSONL |
 //! | `quit` | | ends after the current run |
 //!
-//! End of input aborts a running prompt and exits.
+//! The `ready` event carries the provider, the model, the skills offered and the state of each MCP server. End of
+//! input aborts a running prompt and exits.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -72,6 +76,9 @@ enum Command {
         reason: Option<String>,
     },
     GetMessages,
+    GetTools,
+    GetSkills,
+    GetMcp,
     SetModel {
         model: String,
     },
@@ -146,8 +153,30 @@ async fn serve(
             pending: pending.clone(),
         })),
     };
-    let built = setup::build(ctx, &args.agent, model, preset, &cwd, wiring)?;
-    let setup::Built { agent, preset, blobs } = built;
+    let built = setup::build(ctx, &args.agent, model, preset, &cwd, wiring).await?;
+    let setup::Built {
+        agent,
+        preset,
+        blobs,
+        skills,
+        mcp,
+    } = built;
+    let trusted = agent.config().trusted;
+    let skills_json: Vec<Value> = skills
+        .skills
+        .iter()
+        .map(|s| {
+            json!({
+                "name": s.name,
+                "description": s.description,
+                "scope": s.scope,
+                "path": s.file.display().to_string(),
+                "offered": skills.is_offered(s, trusted),
+                "disableModelInvocation": s.disable_model_invocation,
+            })
+        })
+        .collect();
+    let mcp_json = serde_json::to_value(mcp.statuses()).unwrap_or(Value::Null);
     let handle = agent.handle();
     let mut agent: Option<Agent> = Some(agent);
     let mut task: Option<JoinHandle<(Agent, RunOutcome)>> = None;
@@ -162,7 +191,14 @@ async fn serve(
         }
         let _ = tx.send(None);
     });
-    send(&json!({"event": "ready", "provider": preset.id, "model": agent.as_ref().map(|a| a.config().model.clone())}));
+    let offered: Vec<&str> = skills.offered(trusted).map(|s| s.name.as_str()).collect();
+    send(&json!({
+        "event": "ready",
+        "provider": preset.id,
+        "model": agent.as_ref().map(|a| a.config().model.clone()),
+        "skills": offered,
+        "mcpServers": mcp_json,
+    }));
 
     let mut quitting = false;
     loop {
@@ -201,16 +237,33 @@ async fn serve(
                     }
                 };
                 match cmd {
-                    Command::Prompt { message } => match agent.take() {
-                        Some(mut a) => {
+                    Command::Prompt { message } => match (agent.take(), setup::expand_prompt(&skills, &message)) {
+                        (Some(a), Err(e)) => {
+                            agent = Some(a);
+                            respond(id.as_ref(), &name, false, json!({"error": format!("{e:#}")}));
+                        }
+                        (Some(mut a), Ok(message)) => {
                             respond(id.as_ref(), &name, true, json!({}));
                             task = Some(tokio::spawn(async move {
                                 let out = a.prompt(message).await;
                                 (a, out)
                             }));
                         }
-                        None => respond(id.as_ref(), &name, false, json!({"error": "a run is in progress: use steer or follow_up"})),
+                        (None, _) => respond(id.as_ref(), &name, false, json!({"error": "a run is in progress: use steer or follow_up"})),
                     },
+                    Command::GetTools => match &agent {
+                        Some(a) => {
+                            let tools: Vec<Value> = a
+                                .tool_specs()
+                                .into_iter()
+                                .map(|t| json!({"name": t.name, "description": t.description, "inputSchema": t.input_schema}))
+                                .collect();
+                            respond(id.as_ref(), &name, true, json!({"tools": tools}));
+                        }
+                        None => respond(id.as_ref(), &name, false, json!({"error": "a run is in progress"})),
+                    },
+                    Command::GetSkills => respond(id.as_ref(), &name, true, json!({"skills": skills_json})),
+                    Command::GetMcp => respond(id.as_ref(), &name, true, json!({"servers": mcp_json})),
                     Command::Steer { message } => {
                         handle.steer(message);
                         respond(id.as_ref(), &name, true, json!({}));
@@ -302,11 +355,17 @@ async fn serve(
             }
         }
     }
+    let Some(agent) = agent else {
+        mcp.shutdown().await;
+        anyhow::bail!("the agent task failed");
+    };
     let built = setup::Built {
-        agent: agent.ok_or_else(|| anyhow::anyhow!("the agent task failed"))?,
+        agent,
         preset,
         blobs,
+        skills,
+        mcp,
     };
-    setup::export(&args.agent, &built)?;
+    setup::finish(&args.agent, built).await?;
     Ok(ExitCode::from(exit::OK))
 }

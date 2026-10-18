@@ -61,6 +61,9 @@ fn content_of(part: &Part) -> Option<Value> {
             "content": content,
             "is_error": is_error,
         })),
+        // Anthropic's own blocks (a server-side web search and its results) go back byte for byte.
+        Part::Provider { provider, block } if provider == "anthropic" && block.is_object() => Some(block.clone()),
+        Part::Provider { .. } => None,
     }
 }
 
@@ -173,6 +176,13 @@ enum Block {
         name: String,
         json: String,
     },
+    /// A tool the provider runs itself (`server_tool_use`): kept as a provider block, its input streamed.
+    Server {
+        start: Value,
+        json: String,
+    },
+    /// A block that arrives whole and is kept verbatim (`web_search_tool_result`).
+    Verbatim(Value),
     Other,
 }
 
@@ -276,6 +286,11 @@ impl Decoder for AnthropicDecoder {
                             json: String::new(),
                         }
                     }
+                    Some("server_tool_use") => Block::Server {
+                        start: cb.clone(),
+                        json: String::new(),
+                    },
+                    Some("web_search_tool_result") => Block::Verbatim(cb.clone()),
                     _ => Block::Other,
                 };
                 self.blocks.push((index, block));
@@ -299,6 +314,9 @@ impl Decoder for AnthropicDecoder {
                         let call_id = call_id.clone();
                         out.push(ChatEvent::ToolCallDelta { call_id, delta: piece });
                     }
+                    (Some("input_json_delta"), Some(Block::Server { json, .. })) => {
+                        json.push_str(&text("partial_json"));
+                    }
                     _ => {}
                 }
             }
@@ -312,6 +330,31 @@ impl Decoder for AnthropicDecoder {
                     id: index.to_string(),
                     provider_meta: Some(json!({"anthropic": {"type": "redacted_thinking", "data": data}})),
                 }),
+                Some(Block::Server { mut start, json }) => {
+                    if !json.trim().is_empty()
+                        && let Ok(input) = serde_json::from_str::<Value>(&json)
+                    {
+                        start["input"] = input;
+                    }
+                    out.push(ChatEvent::ProviderBlock {
+                        provider: "anthropic".into(),
+                        block: start,
+                    });
+                }
+                Some(Block::Verbatim(block)) => {
+                    for r in block.get("content").and_then(Value::as_array).into_iter().flatten() {
+                        if let Some(url) = r.get("url").and_then(Value::as_str) {
+                            out.push(ChatEvent::Source {
+                                url: url.to_owned(),
+                                title: r.get("title").and_then(Value::as_str).map(str::to_owned),
+                            });
+                        }
+                    }
+                    out.push(ChatEvent::ProviderBlock {
+                        provider: "anthropic".into(),
+                        block,
+                    });
+                }
                 Some(Block::Tool { call_id, name, json }) => {
                     let input = if json.trim().is_empty() {
                         json!({})
@@ -477,5 +520,31 @@ mod tests {
         );
         assert_eq!(b["messages"][2]["content"][0]["tool_use_id"], "toolu_1");
         assert_eq!(b["tools"][0]["eager_input_streaming"], true);
+    }
+
+    #[test]
+    fn web_search_blocks_are_replayed_verbatim_to_anthropic_only() {
+        let search =
+            json!({"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "q"}});
+        let mut r = req("claude-opus-5-5");
+        r.messages.push(Message {
+            role: Role::Assistant,
+            content: vec![
+                Part::Provider {
+                    provider: "anthropic".into(),
+                    block: search.clone(),
+                },
+                Part::Provider {
+                    provider: "openai".into(),
+                    block: json!({"type": "web_search_call"}),
+                },
+                Part::Text { text: "Answer.".into() },
+            ],
+        });
+        r.messages.push(Message::user("more"));
+        let b = body(&r).expect("valid");
+        let assistant = b["messages"][1]["content"].as_array().expect("content");
+        assert_eq!(assistant.len(), 2);
+        assert_eq!(assistant[0], search);
     }
 }

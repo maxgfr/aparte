@@ -53,7 +53,7 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         id: "openai",
         label: "OpenAI",
-        protocol: Protocol::OpenaiChat,
+        protocol: Protocol::OpenaiResponses,
         maker: Maker::OpenAi,
         base_url: "https://api.openai.com/v1",
         env: &["OPENAI_API_KEY"],

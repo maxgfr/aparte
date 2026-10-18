@@ -1,9 +1,9 @@
-//! The common shape of the three stream decoders, and a helper that decodes a whole body (used by the tests and by
+//! The common shape of the stream decoders, and a helper that decodes a whole body (used by the tests and by
 //! any caller holding a recorded response).
 
 use crate::sse::{SseEvent, SseParser};
 use crate::types::{ChatEvent, Protocol};
-use crate::{anthropic, gemini, openai};
+use crate::{anthropic, gemini, openai, responses};
 
 /// Turns server-sent events of one protocol into [`ChatEvent`]s.
 pub trait Decoder: Send {
@@ -18,6 +18,7 @@ pub fn decoder(protocol: Protocol, key: Option<String>) -> Box<dyn Decoder> {
     match protocol {
         Protocol::Anthropic => Box::new(anthropic::AnthropicDecoder::new(key)),
         Protocol::OpenaiChat => Box::new(openai::OpenAiDecoder::new(key)),
+        Protocol::OpenaiResponses => Box::new(responses::ResponsesDecoder::new(key)),
         Protocol::Gemini => Box::new(gemini::GeminiDecoder::new(key)),
     }
 }

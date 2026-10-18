@@ -22,6 +22,8 @@ aparte-llm = { path = "crates/aparte-llm" }
 aparte-agent = { path = "crates/aparte-agent" }
 aparte-tools = { path = "crates/aparte-tools" }
 aparte-tui = { path = "crates/aparte-tui" }
+aparte-skills = { path = "crates/aparte-skills" }
+aparte-mcp = { path = "crates/aparte-mcp" }
 
 # Every external crate opts out of default features; each crate turns on what it uses.
 anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
@@ -59,6 +61,18 @@ futures-util = { version = "0.3.34", default-features = false, features = ["std"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "http2", "stream"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 schemars = { version = "1.2.3", default-features = false, features = ["std", "derive"] }
+
+# MCP client: rmcp on the workspace's reqwest (rustls, no TLS provider of its own), child processes in their own
+# process group.
+rmcp = { version = "=3.5.1", default-features = false, features = [
+    "client",
+    "auth",
+    "reqwest-tls-no-provider",
+    "transport-child-process",
+    "transport-streamable-http-client-reqwest",
+] }
+async-trait = { version = "0.1.92", default-features = false }
+process-wrap = { version = "10.0.1", default-features = false, features = ["tokio1", "process-group", "kill-on-drop"] }
 
 # Developer tools: ripgrep's walker and searcher, diffs.
 ignore = { version = "0.4.33", default-features = false }

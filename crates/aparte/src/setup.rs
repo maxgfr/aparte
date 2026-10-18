@@ -1,5 +1,6 @@
 //! What the agent modes (interface, print, JSON, RPC) share: the flags that pick a provider, a model and tools, and
-//! the construction of the agent from them.
+//! the construction of the agent from them, with the skills found from the working directory and the configured MCP
+//! servers.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -10,6 +11,8 @@ use aparte_agent::trust::TrustStore;
 use aparte_agent::{Agent, AgentConfig, ApprovalMode, Approver, EventSink};
 use aparte_llm::providers::{self, Preset};
 use aparte_llm::{ChatModel, Client, Effort, Message, ProviderConfig};
+use aparte_mcp::{ConnectOptions, McpManager, PinStore};
+use aparte_skills::Catalog;
 use aparte_tools::{BlobStore, SandboxPolicy, ToolsConfig};
 
 use crate::{Ctx, keychain, paths};
@@ -41,12 +44,18 @@ pub struct AgentArgs {
     /// Add to the system prompt
     #[arg(long, value_name = "TEXT")]
     pub append_system: Option<String>,
-    /// Only these tools, comma-separated (read,write,edit,bash,grep,find,ls,git,web_fetch)
+    /// Only these built-in tools, comma-separated (read,write,edit,bash,grep,find,ls,git,web_fetch,skill)
     #[arg(long, value_delimiter = ',', value_name = "LIST", conflicts_with = "no_tools")]
     pub tools: Option<Vec<String>>,
-    /// No tools at all
+    /// No tools at all (no skills, no MCP servers)
     #[arg(long)]
     pub no_tools: bool,
+    /// Do not offer skills
+    #[arg(long)]
+    pub no_skills: bool,
+    /// Do not start MCP servers
+    #[arg(long)]
+    pub no_mcp: bool,
     /// Approve every tool call without asking
     #[arg(short = 'y', long)]
     pub yes: bool,
@@ -74,6 +83,66 @@ pub struct Built {
     pub preset: &'static Preset,
     /// Kept alive for the tools; its directory is removed on drop.
     pub blobs: Arc<BlobStore>,
+    /// The skills found (offered or not).
+    pub skills: Arc<Catalog>,
+    /// The MCP servers started; shut down by [`finish`].
+    pub mcp: McpManager,
+}
+
+/// Every tool name `--tools` takes.
+pub fn tool_names() -> Vec<&'static str> {
+    let mut v = aparte_tools::NAMES.to_vec();
+    v.push("skill");
+    v
+}
+
+/// The skills that apply to `cwd`.
+pub fn skills(cwd: &Path) -> Catalog {
+    aparte_skills::discover(cwd, aparte_skills::home_dir().as_deref())
+}
+
+/// Whether `cwd` is trusted.
+pub fn trusted(ctx: &Ctx, cwd: &Path) -> anyhow::Result<bool> {
+    Ok(match paths::config_dir(ctx.global.config_dir.as_ref()) {
+        Some(dir) => TrustStore::load(&dir)?.is_trusted(cwd),
+        None => false,
+    })
+}
+
+/// How MCP servers are reached from this machine.
+pub fn mcp_options(ctx: &Ctx, cwd: &Path) -> ConnectOptions {
+    let mut o = ConnectOptions::new(cwd);
+    o.config_dir = paths::config_dir(ctx.global.config_dir.as_ref());
+    o.vault = keychain::KeychainVault::available().map(|v| Arc::new(v) as Arc<dyn aparte_mcp::auth::SecretVault>);
+    o
+}
+
+/// Starts the configured MCP servers; configuration errors are logged, not fatal.
+pub async fn start_mcp(ctx: &Ctx, cwd: &Path, trusted: bool) -> anyhow::Result<McpManager> {
+    let config_dir = paths::config_dir(ctx.global.config_dir.as_ref());
+    let (servers, errors) = aparte_mcp::config::load(config_dir.as_deref(), cwd, trusted);
+    for e in &errors {
+        tracing::warn!("MCP configuration: {e}");
+        if !ctx.global.quiet {
+            eprintln!("aparte: MCP configuration: {e}");
+        }
+    }
+    if servers.is_empty() {
+        return Ok(McpManager::default());
+    }
+    let mut pins = match &config_dir {
+        Some(dir) => PinStore::load(dir)?,
+        None => PinStore::in_memory(),
+    };
+    Ok(McpManager::start(&servers, &mcp_options(ctx, cwd), &mut pins).await)
+}
+
+/// Expands a `/skill:<name> ...` prompt; other prompts pass through.
+pub fn expand_prompt(skills: &Catalog, text: &str) -> anyhow::Result<String> {
+    match aparte_skills::expand_invocation(skills, text) {
+        Some(r) => Ok(r?),
+        None => Ok(text.to_owned()),
+    }
 }
 
 /// Finds the preset of `--provider`.
@@ -128,7 +197,7 @@ pub struct Wiring {
 }
 
 /// Builds the agent of the flags in `cwd`.
-pub fn build(
+pub async fn build(
     ctx: &Ctx,
     args: &AgentArgs,
     model: Arc<dyn ChatModel>,
@@ -141,18 +210,19 @@ pub fn build(
         sink,
         approver,
     } = wiring;
-    let trusted = match paths::config_dir(ctx.global.config_dir.as_ref()) {
-        Some(dir) => TrustStore::load(&dir)?.is_trusted(cwd),
-        None => false,
-    };
+    let trusted = trusted(ctx, cwd)?;
     let blobs = Arc::new(BlobStore::new().context("cannot create the output directory")?);
-    let tools = if args.no_tools {
+    let skills = Arc::new(skills(cwd));
+    let wants_skill =
+        !args.no_tools && !args.no_skills && args.tools.as_ref().is_none_or(|o| o.iter().any(|n| n == "skill"));
+    let mut tools = if args.no_tools {
         Vec::new()
     } else {
         if let Some(only) = &args.tools {
+            let known = tool_names();
             for name in only {
-                if !aparte_tools::NAMES.contains(&name.as_str()) {
-                    bail!("unknown tool {name:?}; one of: {}", aparte_tools::NAMES.join(", "));
+                if !known.contains(&name.as_str()) {
+                    bail!("unknown tool {name:?}; one of: {}", known.join(", "));
                 }
             }
         }
@@ -166,6 +236,16 @@ pub fn build(
         };
         aparte_tools::builtin(&cfg, blobs.clone()).context("cannot set up the tools")?
     };
+    let offer_skills = wants_skill && skills.offered(trusted).next().is_some();
+    if offer_skills {
+        tools.push(aparte_skills::skill_tool(skills.clone(), trusted));
+    }
+    let mcp = if args.no_tools || args.no_mcp {
+        McpManager::default()
+    } else {
+        start_mcp(ctx, cwd, trusted).await?
+    };
+    tools.extend(mcp.tools());
     let described: Vec<(String, String)> = tools
         .iter()
         .map(|t| (t.name().to_owned(), t.description().to_owned()))
@@ -180,6 +260,9 @@ pub fn build(
         Some(s) => s.clone(),
         None => aparte_agent::context::system_prompt(cwd, &described, &context, &today),
     };
+    if offer_skills {
+        system.push_str(&aparte_skills::prompt_block(&skills, trusted));
+    }
     if let Some(extra) = &args.append_system {
         system.push('\n');
         system.push_str(extra);
@@ -203,7 +286,20 @@ pub fn build(
         let (_, messages): (_, Vec<Message>) = session::import(&text)?;
         agent.set_messages(messages);
     }
-    Ok(Built { agent, preset, blobs })
+    Ok(Built {
+        agent,
+        preset,
+        blobs,
+        skills,
+        mcp,
+    })
+}
+
+/// Ends a session: writes `--export` when asked, then stops the MCP servers.
+pub async fn finish(args: &AgentArgs, built: Built) -> anyhow::Result<()> {
+    let exported = export(args, &built);
+    built.mcp.shutdown().await;
+    exported
 }
 
 /// Writes `--export` when asked.

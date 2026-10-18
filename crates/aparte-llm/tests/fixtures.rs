@@ -30,7 +30,8 @@ fn index() -> Vec<(String, Value)> {
 fn protocol(provider: &str) -> Protocol {
     match provider {
         "anthropic" => Protocol::Anthropic,
-        "openai-compatible" | "openai" => Protocol::OpenaiChat,
+        "openai" => Protocol::OpenaiResponses,
+        "openai-compatible" => Protocol::OpenaiChat,
         "google" => Protocol::Gemini,
         other => panic!("unknown provider {other}"),
     }
@@ -47,6 +48,10 @@ struct Outcome {
     usage: Option<Value>,
     error: Option<Value>,
     ends: usize,
+    /// `(name, input, callId, providerMeta)` of each complete call.
+    tool_calls: Vec<(String, Value, String, Option<Value>)>,
+    sources: Vec<Value>,
+    blocks: Vec<String>,
 }
 
 fn outcome(events: &[ChatEvent]) -> Outcome {
@@ -72,6 +77,24 @@ fn outcome(events: &[ChatEvent]) -> Outcome {
                 o.reasoning.push(block);
             }
             ChatEvent::Usage { usage } => o.usage = Some(serde_json::to_value(usage).expect("usage")),
+            ChatEvent::ToolCall {
+                call_id,
+                name,
+                input,
+                provider_meta,
+            } => o
+                .tool_calls
+                .push((name.clone(), input.clone(), call_id.clone(), provider_meta.clone())),
+            ChatEvent::Source { url, title } => {
+                let mut s = json!({ "url": url });
+                if let Some(t) = title {
+                    s["title"] = json!(t);
+                }
+                o.sources.push(s);
+            }
+            ChatEvent::ProviderBlock { block, .. } => {
+                o.blocks.push(block["type"].as_str().unwrap_or_default().to_owned());
+            }
             ChatEvent::Finish { stop, raw, refusal, .. } => {
                 o.stop = Some(serde_json::to_value(stop).expect("stop"));
                 o.raw.clone_from(raw);
@@ -97,6 +120,27 @@ fn check(name: &str, expect: &Value, o: &Outcome) {
         &expect["reasoning"],
         "{name}: reasoning"
     );
+    let calls: Vec<Value> = expect["toolCalls"].as_array().cloned().unwrap_or_default();
+    assert_eq!(o.tool_calls.len(), calls.len(), "{name}: tool calls");
+    for (got, want) in o.tool_calls.iter().zip(&calls) {
+        assert_eq!(got.0, want["name"].as_str().expect("name"), "{name}: tool name");
+        assert_eq!(got.1, want["input"], "{name}: tool input");
+        match want["callId"].as_str() {
+            Some(id) => assert_eq!(got.2, id, "{name}: callId"),
+            None => assert!(!got.2.trim().is_empty(), "{name}: a call gets an id"),
+        }
+    }
+    if let Some(meta) = expect.get("toolCallMeta") {
+        assert_eq!(
+            o.tool_calls.first().and_then(|c| c.3.as_ref()),
+            Some(meta),
+            "{name}: toolCallMeta"
+        );
+    }
+    let sources = expect.get("sources").cloned().unwrap_or(json!([]));
+    assert_eq!(Value::Array(o.sources.clone()), sources, "{name}: sources");
+    let blocks = expect.get("providerBlocks").cloned().unwrap_or(json!([]));
+    assert_eq!(json!(o.blocks), blocks, "{name}: providerBlocks");
     if let Some(stop) = expect.get("stop") {
         assert_eq!(o.stop.as_ref(), Some(stop), "{name}: stop");
         assert_eq!(o.raw.as_deref(), expect["raw"].as_str(), "{name}: raw");
@@ -231,6 +275,10 @@ async fn the_client_streams_every_fixture_over_http() {
                 assert!(lower.contains("anthropic-version: 2023-06-01"));
             }
             Some("google") => assert!(lower.contains(":streamgeneratecontent?alt=sse"), "{req}"),
+            Some("openai") => {
+                assert!(lower.starts_with("post /responses "), "{req}");
+                assert!(lower.contains("authorization: bearer sk-test-not-a-real-key"));
+            }
             _ => {
                 assert!(lower.starts_with("post /chat/completions "), "{req}");
                 assert!(lower.contains("authorization: bearer sk-test-not-a-real-key"));

@@ -21,6 +21,8 @@ aparte-llm = { workspace = true }
 aparte-agent = { workspace = true }
 aparte-tools = { workspace = true }
 aparte-tui = { workspace = true }
+aparte-skills = { workspace = true }
+aparte-mcp = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true }

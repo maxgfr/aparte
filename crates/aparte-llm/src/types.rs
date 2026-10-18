@@ -13,8 +13,10 @@ use serde_json::Value;
 pub enum Protocol {
     /// Anthropic Messages (`POST /v1/messages`).
     Anthropic,
-    /// OpenAI chat completions (`POST /chat/completions`), spoken by OpenAI and most other servers.
+    /// OpenAI chat completions (`POST /chat/completions`), spoken by most servers other than OpenAI's own.
     OpenaiChat,
+    /// OpenAI Responses (`POST /responses`), OpenAI's own models.
+    OpenaiResponses,
     /// Gemini `streamGenerateContent`.
     Gemini,
 }
@@ -24,6 +26,7 @@ impl fmt::Display for Protocol {
         f.write_str(match self {
             Protocol::Anthropic => "anthropic",
             Protocol::OpenaiChat => "openai-chat",
+            Protocol::OpenaiResponses => "openai-responses",
             Protocol::Gemini => "gemini",
         })
     }
@@ -114,6 +117,12 @@ pub enum Part {
         content: String,
         #[serde(default)]
         is_error: bool,
+    },
+    /// A block of a provider's own (Anthropic's server-side web search call and results), sent back verbatim to that
+    /// provider only.
+    Provider {
+        provider: String,
+        block: Value,
     },
 }
 
@@ -344,6 +353,17 @@ pub enum ChatEvent {
         input: Value,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_meta: Option<Value>,
+    },
+    /// A page the answer drew on (a web search result, a citation).
+    Source {
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+    },
+    /// A block of the provider's own, kept verbatim for replay (see [`Part::Provider`]).
+    ProviderBlock {
+        provider: String,
+        block: Value,
     },
     /// Latest totals; the last one wins.
     Usage {

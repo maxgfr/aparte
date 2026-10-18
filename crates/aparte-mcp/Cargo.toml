@@ -1,0 +1,36 @@
+[package]
+name = "aparte-mcp"
+description = "MCP client of the aparte agent: stdio and Streamable HTTP servers, OAuth, tools with pinned definitions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+aparte-agent = { workspace = true }
+aparte-crypto = { workspace = true }
+async-trait = { workspace = true }
+futures-util = { workspace = true }
+getrandom = { workspace = true, features = ["std"] }
+process-wrap = { workspace = true }
+reqwest = { workspace = true }
+rmcp = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["process", "io-util", "io-std", "net", "time", "rt", "macros", "sync"] }
+tracing = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "io-util", "net", "time", "signal"] }
+
+[lints]
+workspace = true

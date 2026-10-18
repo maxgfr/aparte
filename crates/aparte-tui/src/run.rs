@@ -67,14 +67,43 @@ pub fn channels() -> (EventSink, Arc<ChannelApprover>, Channels) {
     (sink, Arc::new(ChannelApprover { tx: atx }), Channels { events, asks })
 }
 
+/// What a command of the embedding program did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandOutcome {
+    /// Show this text.
+    Say(String),
+    /// Send this prompt to the model (the line typed is what the scrollback shows).
+    Prompt(String),
+}
+
+/// Slash commands the embedding program adds (skills, MCP servers): called with the typed line before the built-in
+/// commands; `None` leaves the line to them.
+pub type CommandHook = Arc<dyn Fn(&str) -> Option<CommandOutcome> + Send + Sync>;
+
 /// How the interface is set up.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Options {
     /// The provider id, for the status line and session exports.
     pub provider: String,
     pub palette: Palette,
     /// Rows of the inline viewport.
     pub height: u16,
+    /// Extra slash commands.
+    pub commands: Option<CommandHook>,
+    /// Lines added to `/help` for them.
+    pub commands_help: String,
+    /// Lines shown at start, after the greeting (servers that failed, for example).
+    pub notices: Vec<String>,
+}
+
+impl std::fmt::Debug for Options {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Options")
+            .field("provider", &self.provider)
+            .field("height", &self.height)
+            .field("commands", &self.commands.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 const HELP: &str = "\
@@ -94,6 +123,8 @@ struct State {
     reply: Option<oneshot::Sender<Approval>>,
     handle: aparte_agent::AgentHandle,
     provider: String,
+    commands: Option<CommandHook>,
+    commands_help: String,
 }
 
 impl State {
@@ -107,10 +138,15 @@ impl State {
     }
 
     fn start(&mut self, text: String) {
+        self.start_as(&text.clone(), text);
+    }
+
+    /// Sends `text`, showing `shown` in the scrollback.
+    fn start_as(&mut self, shown: &str, text: String) {
         let Some(mut agent) = self.agent.take() else {
             return;
         };
-        self.app.user_prompt(&text);
+        self.app.user_prompt(shown);
         self.app.running = true;
         self.task = Some(tokio::spawn(async move {
             let out = agent.prompt(text).await;
@@ -126,7 +162,13 @@ impl State {
             return;
         };
         match cmd {
-            "/help" => self.app.say(HELP),
+            "/help" => {
+                self.app.say(HELP);
+                if !self.commands_help.is_empty() {
+                    let extra = self.commands_help.clone();
+                    self.app.say(&extra);
+                }
+            }
             "/quit" | "/exit" => self.app.quit = true,
             "/clear" => {
                 agent.set_messages(Vec::new());
@@ -224,7 +266,11 @@ impl State {
                 } else if running {
                     self.handle.steer(text);
                 } else if text.starts_with('/') {
-                    self.command(&text);
+                    match self.commands.as_ref().and_then(|h| h(&text)) {
+                        Some(CommandOutcome::Say(s)) => self.app.say(&s),
+                        Some(CommandOutcome::Prompt(p)) => self.start_as(&text, p),
+                        None => self.command(&text),
+                    }
                 } else {
                     self.start(text);
                 }
@@ -262,9 +308,14 @@ pub async fn run(agent: Agent, mut channels: Channels, opts: Options) -> std::io
         task: None,
         reply: None,
         provider: opts.provider,
+        commands: opts.commands,
+        commands_help: opts.commands_help,
     };
     st.app.model_label = st.label();
     st.app.say("aparte: Enter sends, /help lists commands, Ctrl+D quits.");
+    for line in &opts.notices {
+        st.app.say(line);
+    }
     let mut keys = EventStream::new();
     let result = loop {
         if let Err(e) = flush(&mut term, &mut st.app) {

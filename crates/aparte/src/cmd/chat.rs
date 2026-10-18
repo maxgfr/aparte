@@ -84,6 +84,61 @@ fn print_sink(json: bool, quiet: bool) -> EventSink {
     })
 }
 
+/// Reports the MCP servers that did not start cleanly: an `mcp-server` event per server with `--json`, a line on
+/// stderr otherwise.
+fn report_mcp(ctx: &Ctx, built: &setup::Built) {
+    for (status, line) in built.mcp.statuses().iter().zip(built.mcp.summary()) {
+        if ctx.ui.is_json() {
+            ctx.ui
+                .emit("mcp-server", serde_json::to_value(status).unwrap_or(Value::Null));
+            continue;
+        }
+        let clean = matches!(&status.state, aparte_mcp::ServerState::Connected { blocked, .. } if blocked.is_empty());
+        if !clean && !ctx.global.quiet {
+            eprintln!("aparte: MCP {line}");
+        }
+    }
+}
+
+/// The `/skills`, `/skill:<name>` and `/mcp` commands of the terminal interface.
+fn tui_commands(skills: Arc<aparte_skills::Catalog>, trusted: bool, mcp: Vec<String>) -> aparte_tui::CommandHook {
+    use aparte_tui::CommandOutcome;
+    Arc::new(move |line: &str| {
+        let cmd = line.split_whitespace().next().unwrap_or_default();
+        if cmd == "/skills" {
+            if skills.skills.is_empty() {
+                return Some(CommandOutcome::Say(
+                    "no skills found (`aparte skills path` shows where they are looked for)".into(),
+                ));
+            }
+            let mut out = Vec::new();
+            for s in &skills.skills {
+                let offered = if skills.is_offered(s, trusted) {
+                    ""
+                } else if s.disable_model_invocation {
+                    " (by hand only)"
+                } else {
+                    " (untrusted project)"
+                };
+                out.push(format!("/skill:{}{offered}  {}", s.name, s.description));
+            }
+            return Some(CommandOutcome::Say(aparte_tui::markdown::sanitize(&out.join("\n"))));
+        }
+        if cmd == "/mcp" {
+            let text = if mcp.is_empty() {
+                "no MCP servers (add one with `aparte mcp add`)".to_owned()
+            } else {
+                mcp.join("\n")
+            };
+            return Some(CommandOutcome::Say(aparte_tui::markdown::sanitize(&text)));
+        }
+        match aparte_skills::expand_invocation(&skills, line)? {
+            Ok(prompt) => Some(CommandOutcome::Prompt(prompt)),
+            Err(e) => Some(CommandOutcome::Say(e.to_string())),
+        }
+    })
+}
+
 /// `aparte -p "prompt"`: one prompt, answered on stdout.
 pub fn print(args: &AgentArgs, prompt: &str, ctx: &Ctx) -> anyhow::Result<ExitCode> {
     let prompt = if prompt == "-" {
@@ -120,7 +175,15 @@ pub fn print_with(
             sink,
             approver: None,
         };
-        let mut built = setup::build(ctx, args, model, preset, &cwd, wiring)?;
+        let mut built = setup::build(ctx, args, model, preset, &cwd, wiring).await?;
+        report_mcp(ctx, &built);
+        let prompt = match setup::expand_prompt(&built.skills, prompt) {
+            Ok(p) => p,
+            Err(e) => {
+                setup::finish(args, built).await?;
+                return Err(e);
+            }
+        };
         let handle = built.agent.handle();
         tokio::spawn(async move {
             if tokio::signal::ctrl_c().await.is_ok() {
@@ -128,7 +191,7 @@ pub fn print_with(
             }
         });
         let out = built.agent.prompt(prompt).await;
-        setup::export(args, &built)?;
+        setup::finish(args, built).await?;
         Ok(ExitCode::from(exit_for(&out)))
     })
 }
@@ -149,18 +212,54 @@ pub fn interactive(args: &AgentArgs, ctx: &Ctx) -> anyhow::Result<ExitCode> {
             sink,
             approver: Some(approver),
         };
-        let built = setup::build(ctx, args, model, preset, &cwd, wiring)?;
+        let built = setup::build(ctx, args, model, preset, &cwd, wiring).await?;
+        let trusted = built.agent.config().trusted;
+        let summary = built.mcp.summary();
+        let notices: Vec<String> = built
+            .mcp
+            .statuses()
+            .iter()
+            .zip(&summary)
+            .filter(
+                |(s, _)| !matches!(&s.state, aparte_mcp::ServerState::Connected { blocked, .. } if blocked.is_empty()),
+            )
+            .map(|(_, l)| format!("MCP {}", aparte_tui::markdown::sanitize(l)))
+            .collect();
         let opts = aparte_tui::Options {
             provider: preset.id.to_owned(),
             palette: aparte_tui::Palette {
                 color: std::env::var_os("NO_COLOR").is_none(),
             },
             height: 12,
+            commands: Some(tui_commands(built.skills.clone(), trusted, summary)),
+            commands_help: "  /skills            list skills\n  /skill:<name> ...  run a skill with what follows\n  \
+                            /mcp               MCP servers and their state"
+                .into(),
+            notices,
         };
-        let setup::Built { agent, preset, blobs } = built;
-        let agent = aparte_tui::run(agent, channels, opts).await?;
-        let built = setup::Built { agent, preset, blobs };
-        setup::export(args, &built)?;
+        let setup::Built {
+            agent,
+            preset,
+            blobs,
+            skills,
+            mcp,
+        } = built;
+        let result = aparte_tui::run(agent, channels, opts).await;
+        let agent = match result {
+            Ok(a) => a,
+            Err(e) => {
+                mcp.shutdown().await;
+                return Err(e.into());
+            }
+        };
+        let built = setup::Built {
+            agent,
+            preset,
+            blobs,
+            skills,
+            mcp,
+        };
+        setup::finish(args, built).await?;
         Ok(ExitCode::from(exit::OK))
     })
 }

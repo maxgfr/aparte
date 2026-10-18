@@ -42,6 +42,8 @@ pub fn run(args: Args, ctx: &Ctx) -> anyhow::Result<ExitCode> {
             append_system: None,
             tools: None,
             no_tools: true,
+            no_skills: true,
+            no_mcp: true,
             yes: false,
             no_sandbox: false,
             allow_net: false,

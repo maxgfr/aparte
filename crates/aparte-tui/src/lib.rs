@@ -10,4 +10,4 @@ pub mod markdown;
 pub mod run;
 
 pub use markdown::Palette;
-pub use run::{ChannelApprover, Channels, Options, channels, run};
+pub use run::{ChannelApprover, Channels, CommandHook, CommandOutcome, Options, channels, run};

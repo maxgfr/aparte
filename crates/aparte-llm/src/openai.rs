@@ -48,7 +48,7 @@ pub fn body(req: &Request, maker: Maker) -> Result<Value, LlmError> {
                     "tool_call_id": call_id,
                     "content": content,
                 })),
-                Part::Reasoning { .. } => {}
+                Part::Reasoning { .. } | Part::Provider { .. } => {}
             }
         }
         match m.role {

@@ -88,6 +88,12 @@ pub enum AgentEvent {
         call_id: String,
         name: String,
     },
+    /// A page the answer drew on.
+    Source {
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+    },
     /// The assistant message of a turn, as added to the conversation.
     MessageEnd {
         message: Message,
@@ -506,6 +512,9 @@ impl Agent {
                     self.emit(AgentEvent::ToolCallStart { call_id, name });
                 }
                 ChatEvent::ToolCallDelta { .. } => {}
+                ChatEvent::Source { url, title } => self.emit(AgentEvent::Source { url, title }),
+                // Kept in place in the message, so the provider gets it back verbatim on the next turn.
+                ChatEvent::ProviderBlock { provider, block } => parts.push(Part::Provider { provider, block }),
                 ChatEvent::ToolCall {
                     call_id,
                     name,

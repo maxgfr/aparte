@@ -16,7 +16,7 @@ use crate::errors;
 use crate::providers::{Preset, check_base_url};
 use crate::sse::SseParser;
 use crate::types::{ApiKey, ChatError, ChatEvent, ErrorCode, Protocol, Request};
-use crate::{LlmError, anthropic, gemini, openai};
+use crate::{LlmError, anthropic, gemini, openai, responses};
 
 /// A stream of events; it always ends with one `Finish` or one `Error`.
 pub type EventStream = Pin<Box<dyn Stream<Item = ChatEvent> + Send>>;
@@ -102,7 +102,9 @@ impl Client {
         if let Some(key) = &self.cfg.api_key {
             match self.cfg.protocol {
                 Protocol::Anthropic => secret("x-api-key", key.expose().to_owned())?,
-                Protocol::OpenaiChat => secret("authorization", format!("Bearer {}", key.expose()))?,
+                Protocol::OpenaiChat | Protocol::OpenaiResponses => {
+                    secret("authorization", format!("Bearer {}", key.expose()))?;
+                }
                 Protocol::Gemini => secret("x-goog-api-key", key.expose().to_owned())?,
             }
         }
@@ -117,6 +119,7 @@ impl Client {
         match self.cfg.protocol {
             Protocol::Anthropic => format!("{base}/messages"),
             Protocol::OpenaiChat => format!("{base}/chat/completions"),
+            Protocol::OpenaiResponses => format!("{base}/responses"),
             Protocol::Gemini => format!("{base}/models/{model}:streamGenerateContent?alt=sse"),
         }
     }
@@ -126,6 +129,7 @@ impl Client {
         match self.cfg.protocol {
             Protocol::Anthropic => anthropic::body(req),
             Protocol::OpenaiChat => openai::body(req, self.cfg.maker),
+            Protocol::OpenaiResponses => responses::body(req, self.cfg.maker),
             Protocol::Gemini => gemini::body(req),
         }
     }
@@ -135,7 +139,7 @@ impl Client {
         let key = self.cfg.api_key.as_ref().map(|k| k.expose().to_owned());
         let url = match self.cfg.protocol {
             Protocol::Anthropic => format!("{}/models?limit=1000", self.cfg.base_url),
-            Protocol::OpenaiChat => format!("{}/models", self.cfg.base_url),
+            Protocol::OpenaiChat | Protocol::OpenaiResponses => format!("{}/models", self.cfg.base_url),
             Protocol::Gemini => format!("{}/models?pageSize=1000", self.cfg.base_url),
         };
         let headers = self
