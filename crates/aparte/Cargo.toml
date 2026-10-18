@@ -17,10 +17,18 @@ path = "src/main.rs"
 [dependencies]
 aparte-format = { workspace = true }
 aparte-crypto = { workspace = true }
+aparte-llm = { workspace = true }
+aparte-agent = { workspace = true }
+aparte-tools = { workspace = true }
+aparte-tui = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true }
+futures-util = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "io-std", "io-util", "sync", "time"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "ansi", "std"] }
 
@@ -28,6 +36,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "ansi"
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

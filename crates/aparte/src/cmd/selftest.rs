@@ -31,12 +31,43 @@ fn checks() -> Vec<Check> {
             ok: aparte_crypto::FORMAT == format,
             detail: format!("primitives of {}", aparte_crypto::FORMAT),
         },
+        llm_check(),
         Check {
             name: "json",
             ok: round_trip.as_ref() == Some(&json),
             detail: "encodes and decodes events".into(),
         },
     ]
+}
+
+/// A recorded Anthropic stream of `spec/sse`, built into the binary.
+const SAMPLE: &[u8] = include_bytes!("../../../../spec/sse/anthropic-text.sse");
+
+/// Decodes the built-in stream: the SSE parser and the Anthropic decoder work in this build.
+fn llm_check() -> Check {
+    use aparte_llm::{ChatEvent, Protocol, StopReason};
+    let events = aparte_llm::decode::decode_body(Protocol::Anthropic, SAMPLE, &[7]);
+    let text: String = events
+        .iter()
+        .filter_map(|e| match e {
+            ChatEvent::TextDelta { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    let finished = events.iter().any(|e| {
+        matches!(
+            e,
+            ChatEvent::Finish {
+                stop: StopReason::End,
+                ..
+            }
+        )
+    });
+    Check {
+        name: "llm",
+        ok: finished && text == "The capital of France is **Paris**.",
+        detail: "decodes a recorded Anthropic stream".into(),
+    }
 }
 
 /// Runs every check and exits 0 only when all of them pass.

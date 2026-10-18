@@ -1,0 +1,30 @@
+[package]
+name = "aparte-tui"
+description = "Terminal interface of the aparte agent: inline viewport, input, Markdown and code highlighting"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+aparte-agent = { workspace = true }
+aparte-llm = { workspace = true }
+crossterm = { workspace = true }
+futures-util = { workspace = true }
+pulldown-cmark = { workspace = true }
+ratatui = { workspace = true }
+ratatui-textarea = { workspace = true }
+serde_json = { workspace = true }
+syntect = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+unicode-width = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

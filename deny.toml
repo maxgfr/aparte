@@ -16,6 +16,8 @@ allow = [
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    # The Mozilla root certificates as data (webpki-root-certs, under rustls-platform-verifier).
+    "CDLA-Permissive-2.0",
     "ISC",
     "Unicode-3.0",
     "Unlicense",

@@ -25,6 +25,12 @@ pub fn run(_args: Args, ctx: &Ctx) -> anyhow::Result<ExitCode> {
     let (config_text, config_exists) = describe(config.as_deref());
     let (data_text, data_exists) = describe(data.as_deref());
     let log = std::env::var("APARTE_LOG").ok();
+    let sandbox = aparte_tools::sandbox::detect().name();
+    let keys: Vec<&str> = aparte_llm::providers::PRESETS
+        .iter()
+        .filter(|p| p.env.iter().any(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())))
+        .map(|p| p.id)
+        .collect();
 
     ctx.ui.emit(
         "doctor",
@@ -38,6 +44,8 @@ pub fn run(_args: Args, ctx: &Ctx) -> anyhow::Result<ExitCode> {
             "data_dir": data.as_ref().map(|p| p.display().to_string()),
             "data_dir_exists": data_exists,
             "log_filter": log,
+            "sandbox": sandbox,
+            "keys_in_env": keys,
         }),
     );
     if !ctx.ui.is_json() {
@@ -52,6 +60,13 @@ pub fn run(_args: Args, ctx: &Ctx) -> anyhow::Result<ExitCode> {
         ctx.ui.say(&format!("  data dir    {data_text}"));
         ctx.ui
             .say(&format!("  APARTE_LOG  {}", log.as_deref().unwrap_or("unset")));
+        ctx.ui.say(&format!("  sandbox     {sandbox}"));
+        let keys = if keys.is_empty() {
+            "none".to_owned()
+        } else {
+            keys.join(", ")
+        };
+        ctx.ui.say(&format!("  keys (env)  {keys}"));
     }
     Ok(ExitCode::from(exit::OK))
 }

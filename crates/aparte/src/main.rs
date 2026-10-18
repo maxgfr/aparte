@@ -1,14 +1,22 @@
-//! `aparte`: the command-line companion of the Aparté web app.
+//! `aparte`: the command-line companion of the Aparté web app, and a coding agent in the terminal.
 //!
-//! It reads and writes the same `aparte/1` format as the browser. Every verb is offline unless it says otherwise,
-//! and with `--json` it prints one JSON object per line on stdout while human text goes to stderr.
+//! It reads and writes the same `aparte/1` format as the browser. Without a verb it opens the terminal interface;
+//! `-p` answers one prompt, `rpc` serves the agent over JSON lines. Every other verb is offline unless it says
+//! otherwise, and with `--json` it prints one JSON object per line on stdout while human text goes to stderr.
 
 mod cmd {
+    pub mod chat;
     pub mod completions;
     pub mod doctor;
+    pub mod key;
+    pub mod models;
+    pub mod rpc;
     pub mod selftest;
+    pub mod trust;
 }
+mod keychain;
 mod paths;
+mod setup;
 mod ui;
 
 use std::io::IsTerminal;
@@ -37,6 +45,10 @@ pub mod exit {
     pub const FORMAT: u8 = 6;
     /// Cancelled or interrupted.
     pub const CANCELLED: u8 = 7;
+    /// No API key, or the provider refused it.
+    pub const AUTH: u8 = 8;
+    /// The model declined to answer (a refusal).
+    pub const REFUSED: u8 = 9;
 }
 
 const AFTER_HELP: &str = "\
@@ -49,11 +61,17 @@ Exit codes:
   5  locked (wrong passphrase or key)
   6  unsupported format version
   7  cancelled or interrupted
+  8  no API key, or the key was refused
+  9  the model declined to answer
 
 Environment:
   APARTE_CONFIG_DIR  configuration directory (default $XDG_CONFIG_HOME/aparte or ~/.config/aparte)
   APARTE_DATA_DIR    data directory (default $XDG_DATA_HOME/aparte or ~/.local/share/aparte)
   APARTE_LOG         log filter, in tracing's EnvFilter syntax (overrides -v)
+  APARTE_PROVIDER    default provider (anthropic)
+  APARTE_MODEL       default model
+  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY ...  provider keys (else the OS keychain)
+  APARTE_NO_KEYCHAIN set to 1 to never read the OS keychain
   NO_COLOR           disable colors";
 
 #[derive(Debug, Parser)]
@@ -66,8 +84,13 @@ Environment:
 struct Cli {
     #[command(flatten)]
     global: Global,
+    /// Answer one prompt on stdout and exit ("-" reads it from stdin)
+    #[arg(short, long, value_name = "PROMPT")]
+    print: Option<String>,
+    #[command(flatten)]
+    agent: setup::AgentArgs,
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 /// Flags shared by every verb.
@@ -92,6 +115,14 @@ pub struct Global {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Serve the agent over stdin and stdout, one JSON object per line
+    Rpc(cmd::rpc::Args),
+    /// List providers and models
+    Models(cmd::models::Args),
+    /// Trust a project directory, revoke it, or list decisions
+    Trust(cmd::trust::Args),
+    /// Store, remove or locate provider API keys
+    Key(cmd::key::Args),
     /// Offline self-check (no key, no network, no files)
     Selftest(cmd::selftest::Args),
     /// Print facts about this machine and the directories in use
@@ -134,8 +165,18 @@ fn init_logs(verbose: u8) {
     }
 }
 
-fn dispatch(command: Command, ctx: &Ctx) -> anyhow::Result<ExitCode> {
+fn dispatch(cli: Cli, ctx: &Ctx) -> anyhow::Result<ExitCode> {
+    let Some(command) = cli.command else {
+        return match &cli.print {
+            Some(prompt) => cmd::chat::print(&cli.agent, prompt, ctx),
+            None => cmd::chat::interactive(&cli.agent, ctx),
+        };
+    };
     match command {
+        Command::Rpc(args) => cmd::rpc::run(args, ctx),
+        Command::Models(args) => cmd::models::run(args, ctx),
+        Command::Trust(args) => cmd::trust::run(args, ctx),
+        Command::Key(args) => cmd::key::run(args, ctx),
         Command::Selftest(args) => cmd::selftest::run(args, ctx),
         Command::Doctor(args) => cmd::doctor::run(args, ctx),
         Command::Completions(args) => cmd::completions::run(args, ctx),
@@ -149,12 +190,22 @@ fn main() -> ExitCode {
     };
     init_logs(cli.global.verbose);
     let ui = Ui::new(cli.global.json, cli.global.quiet);
-    let ctx = Ctx { global: cli.global, ui };
-    match dispatch(cli.command, &ctx) {
+    let ctx = Ctx {
+        global: cli.global.clone(),
+        ui,
+    };
+    match dispatch(cli, &ctx) {
         Ok(code) => code,
         Err(e) => {
-            ctx.ui.error(exit::ERROR, &format!("{e:#}"));
-            ExitCode::from(exit::ERROR)
+            let code = if e.downcast_ref::<setup::MissingKey>().is_some() {
+                exit::AUTH
+            } else if e.downcast_ref::<aparte_llm::LlmError>().is_some() {
+                exit::USAGE
+            } else {
+                exit::ERROR
+            };
+            ctx.ui.error(code, &format!("{e:#}"));
+            ExitCode::from(code)
         }
     }
 }
@@ -187,6 +238,8 @@ mod tests {
             exit::LOCKED,
             exit::FORMAT,
             exit::CANCELLED,
+            exit::AUTH,
+            exit::REFUSED,
         ];
         let mut sorted = codes.to_vec();
         sorted.sort_unstable();

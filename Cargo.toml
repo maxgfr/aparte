@@ -18,6 +18,10 @@ unsafe_code = "forbid"
 [workspace.dependencies]
 aparte-format = { path = "crates/aparte-format" }
 aparte-crypto = { path = "crates/aparte-crypto" }
+aparte-llm = { path = "crates/aparte-llm" }
+aparte-agent = { path = "crates/aparte-agent" }
+aparte-tools = { path = "crates/aparte-tools" }
+aparte-tui = { path = "crates/aparte-tui" }
 
 # Every external crate opts out of default features; each crate turns on what it uses.
 anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
@@ -49,7 +53,35 @@ subtle = { version = "2.6.1", default-features = false }
 unicode-normalization = { version = "0.1.26", default-features = false }
 zeroize = { version = "1.9.1", default-features = false, features = ["alloc"] }
 
+# The agent: async runtime, HTTP with rustls over ring (no OpenSSL, no aws-lc), tool schemas.
+tokio = { version = "1.53.3", default-features = false }
+futures-util = { version = "0.3.34", default-features = false, features = ["std", "alloc"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "http2", "stream"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+schemars = { version = "1.2.3", default-features = false, features = ["std", "derive"] }
+
+# Developer tools: ripgrep's walker and searcher, diffs.
+ignore = { version = "0.4.33", default-features = false }
+globset = { version = "0.4.20", default-features = false }
+grep-regex = { version = "0.1.14", default-features = false }
+grep-searcher = { version = "0.1.17", default-features = false }
+regex = { version = "1.13.1", default-features = false, features = ["std", "unicode-perl", "unicode-case"] }
+similar = { version = "3.2.0", default-features = false, features = ["text"] }
+
+# Terminal interface: inline viewport, input, Markdown and highlighting (pure-Rust regex engine).
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "scrolling-regions"] }
+crossterm = { version = "0.29.0", default-features = false, features = ["events", "event-stream"] }
+ratatui-textarea = { version = "0.9.3", default-features = false, features = ["crossterm"] }
+pulldown-cmark = { version = "0.13.4", default-features = false }
+syntect = { version = "5.3.0", default-features = false, features = [
+    "default-syntaxes",
+    "default-themes",
+    "regex-fancy",
+] }
+unicode-width = { version = "0.2.2", default-features = false }
+
 # Tests
+tempfile = { version = "3.27.0", default-features = false }
 assert_cmd = { version = "2.2.2", default-features = false }
 predicates = { version = "3.1.4", default-features = false }
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
