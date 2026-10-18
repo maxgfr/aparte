@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'wouter'
 import { useT } from '../i18n/react.tsx'
+import { fromAppWorker } from '../pwa/routes.ts'
 import { type ChatSession, useSession } from './chat.tsx'
 import { readPref } from './prefs.ts'
 import { chatPath } from './routes.ts'
@@ -117,6 +118,8 @@ export function AnswerNotifier(): null {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
     const onMessage = (event: MessageEvent<unknown>) => {
+      const source = event.source instanceof ServiceWorker ? event.source : null
+      if (!fromAppWorker(source, navigator.serviceWorker.controller, import.meta.env.BASE_URL)) return
       const data = event.data as { type?: unknown; conversation?: unknown } | null
       if (data?.type !== 'open-conversation' || typeof data.conversation !== 'string') return
       if (!/^[a-z2-7]{26}$/.test(data.conversation)) return

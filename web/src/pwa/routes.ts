@@ -39,14 +39,41 @@ export function isSkipWaiting(data: unknown): boolean {
 }
 
 /**
- * True when a message comes from one of Aparté's own windows. Any page of the shared origin can reach this worker
- * (`navigator.serviceWorker.getRegistration('/aparte/')`), so a sibling app could otherwise activate an update
- * under a page that is still streaming.
+ * True when a message comes from one of Aparté's own windows: a window that is not a frame, on a page the worker
+ * answers with the app shell. Any page of the shared origin can reach this worker
+ * (`navigator.serviceWorker.getRegistration('/aparte/')`), so a sibling app could otherwise activate an update under
+ * a page that is still streaming; and a sibling page can frame, or open, a page of the scope that is not the app (the
+ * OAuth callback, a 404 under the scope) and post from there. The worker also requires the window to be one it
+ * controls (src/sw.ts), which a sibling page that rewrote its own URL with `history.replaceState` is not.
  */
-export function fromOwnWindow(source: { type?: string; url?: string } | null, origin: string, base: string): boolean {
+export function fromOwnWindow(
+  source: { type?: string; frameType?: string; url?: string } | null,
+  origin: string,
+  base: string,
+): boolean {
   if (source?.type !== 'window' || typeof source.url !== 'string') return false
+  // An engine that does not report `frameType` is not refused on that ground: the shell check and the controlled
+  // check still hold, and refusing would leave its users without updates.
+  if (source.frameType === 'nested' || source.frameType === 'none') return false
   try {
-    return scopePath(new URL(source.url), origin, base) !== null
+    return servesAppShell(new URL(source.url), origin, base)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * True when a message the page received from a service worker comes from the worker that controls it, registered
+ * under the base: the page side of `fromOwnWindow`. A sibling site's worker can post to every window of the origin.
+ */
+export function fromAppWorker(
+  source: { readonly scriptURL?: string } | null,
+  controller: { readonly scriptURL: string } | null,
+  base: string,
+): boolean {
+  if (source === null || controller === null || source !== controller) return false
+  try {
+    return new URL(controller.scriptURL).pathname.startsWith(base)
   } catch {
     return false
   }

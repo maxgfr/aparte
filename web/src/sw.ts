@@ -160,11 +160,21 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+/** The windows this worker controls: never a sibling page, whatever URL it gave itself with `replaceState`. */
+async function controlledWindow(id: string): Promise<WindowClient | undefined> {
+  return (await self.clients.matchAll({ type: 'window' })).find((client) => client.id === id)
+}
+
 self.addEventListener('message', (event) => {
   if (!isSkipWaiting(event.data)) return
-  const source = event.source as { type?: string; url?: string } | null
-  if (!fromOwnWindow(source, origin, base)) return
-  event.waitUntil(self.skipWaiting())
+  const source = event.source as { id?: string; type?: string; frameType?: string; url?: string } | null
+  if (!fromOwnWindow(source, origin, base) || typeof source?.id !== 'string') return
+  const id = source.id
+  event.waitUntil(
+    (async () => {
+      if ((await controlledWindow(id)) !== undefined) await self.skipWaiting()
+    })(),
+  )
 })
 
 /**
@@ -177,7 +187,8 @@ self.addEventListener('notificationclick', (event) => {
   const target = new URL(conversation === null ? './' : `./#/chat/${conversation}`, scope).href
   event.waitUntil(
     (async () => {
-      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      // Controlled windows only: an uncontrolled one under the scope may be a sibling page that rewrote its URL.
+      const windows = await self.clients.matchAll({ type: 'window' })
       const own = windows.find((client) => fromOwnWindow(client, origin, base))
       if (own === undefined) {
         await self.clients.openWindow(target)

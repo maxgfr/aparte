@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import {
+  fromAppWorker,
   fromOwnWindow,
   isShareTarget,
   isSkipWaiting,
@@ -51,7 +52,13 @@ test('only the exact workbox-window message activates the waiting worker', () =>
 })
 
 test('messages are accepted from the app’s own windows only, never from sibling apps of the origin', () => {
-  expect(fromOwnWindow({ type: 'window', url: 'https://maxgfr.github.io/aparte/#/chat' }, origin, base)).toBe(true)
+  expect(
+    fromOwnWindow(
+      { type: 'window', frameType: 'top-level', url: 'https://maxgfr.github.io/aparte/#/chat' },
+      origin,
+      base,
+    ),
+  ).toBe(true)
   expect(fromOwnWindow({ type: 'window', url: 'https://maxgfr.github.io/cursus/' }, origin, base)).toBe(false)
   expect(fromOwnWindow({ type: 'window', url: 'https://maxgfr.github.io/' }, origin, base)).toBe(false)
   expect(fromOwnWindow({ type: 'worker', url: 'https://maxgfr.github.io/aparte/assets/w.js' }, origin, base)).toBe(
@@ -60,6 +67,19 @@ test('messages are accepted from the app’s own windows only, never from siblin
   expect(fromOwnWindow({ type: 'window' }, origin, base)).toBe(false)
   expect(fromOwnWindow({ type: 'window', url: 'not a url' }, origin, base)).toBe(false)
   expect(fromOwnWindow(null, origin, base)).toBe(false)
+})
+
+test('a window under the scope that is not the app shell, or not top-level, is not one of the app’s windows', () => {
+  // A sibling page can frame a page of the scope the worker does not answer with the app (the OAuth callback comes
+  // from the network, without frame-ancestors) and post from that frame, or open a page that only exists as a 404.
+  const top = (path: string) => ({ type: 'window', frameType: 'top-level', url: `${origin}${path}` })
+  expect(fromOwnWindow({ ...top('/aparte/'), frameType: 'nested' }, origin, base)).toBe(false)
+  expect(fromOwnWindow({ ...top('/aparte/'), frameType: 'auxiliary' }, origin, base)).toBe(true)
+  // An engine without Client.frameType is judged on the page alone.
+  expect(fromOwnWindow({ type: 'window', url: `${origin}/aparte/` }, origin, base)).toBe(true)
+  expect(fromOwnWindow(top('/aparte/oauth-callback.html'), origin, base)).toBe(false)
+  expect(fromOwnWindow(top('/aparte/sandbox/runner.html'), origin, base)).toBe(false)
+  expect(fromOwnWindow(top('/aparte/#/chat/x'), origin, base)).toBe(true)
 })
 
 test('only a POST to <base>share is the share target', () => {
@@ -78,4 +98,19 @@ test('a notification opens a well-formed conversation id only', () => {
   expect(notificationConversation({ conversation: 42 })).toBeNull()
   expect(notificationConversation(null)).toBeNull()
   expect(notificationConversation('abcdefghijklmnopqrstuvwxya')).toBeNull()
+})
+
+test('the page takes worker messages from the app’s own worker only, never from a sibling app’s', () => {
+  // A sibling site's worker can list every window of the origin (`clients.matchAll({ includeUncontrolled: true })`)
+  // and post to Aparté's: only the worker that controls this page, registered under the base, is heard.
+  const own = { scriptURL: `${origin}/aparte/sw.js` }
+  const sibling = { scriptURL: `${origin}/evil/sw.js` }
+  expect(fromAppWorker(own, own, base)).toBe(true)
+  expect(fromAppWorker(sibling, own, base)).toBe(false)
+  expect(fromAppWorker({ ...own }, own, base)).toBe(false)
+  expect(fromAppWorker(own, null, base)).toBe(false)
+  expect(fromAppWorker(null, own, base)).toBe(false)
+  // A broader worker (the origin's root site) controlling the page is not the app's.
+  const root = { scriptURL: `${origin}/sw.js` }
+  expect(fromAppWorker(root, root, base)).toBe(false)
 })
