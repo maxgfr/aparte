@@ -271,8 +271,17 @@ export function fetchUrlTool(deps: { readonly download: FetchLike }): Tool {
             { url: url.href },
           )
         }
+        // The approval named `url`; a redirect may have taken the request elsewhere. What came back from this machine,
+        // a private network or plain http is dropped unread: a local server may let the app's origin read it.
+        const final = response.redirected && response.url ? new URL(response.url) : url
+        if (final.protocol !== 'https:' || privateHost(final.hostname)) {
+          await response.body?.cancel().catch(() => undefined)
+          return failure('The site redirected to an address on this device, a private network or plain http.', {
+            url: url.href,
+          })
+        }
         const contentType = response.headers.get('content-type') ?? ''
-        const details = { url: url.href, status: response.status, contentType }
+        const details = { url: final.href, status: response.status, contentType }
         if (!response.ok) {
           await response.body?.cancel().catch(() => undefined)
           return failure(`The site answered HTTP ${response.status}.`, details)

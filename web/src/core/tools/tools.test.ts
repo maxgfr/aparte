@@ -492,6 +492,36 @@ describe('the built-in tools', () => {
     expect((cors.content[0] as { text: string }).text).toContain('CORS')
   })
 
+  test('fetch_url refuses what a redirect brought from this machine, a private network or plain http', async () => {
+    // The user approved a public address; the site answers with a redirect to a local model server, which may well
+    // let the app's origin read it. That answer must never reach the model.
+    const redirectedTo = (url: string) => {
+      const response = new Response('{"models":["secret-local-model"]}', {
+        headers: { 'content-type': 'application/json' },
+      })
+      Object.defineProperty(response, 'redirected', { value: true })
+      Object.defineProperty(response, 'url', { value: url })
+      return response
+    }
+    let served = redirectedTo('http://127.0.0.1:11434/api/tags')
+    const tool = fetchUrlTool({ download: async () => served })
+    for (const target of [
+      'http://127.0.0.1:11434/api/tags',
+      'https://10.0.0.1/',
+      'https://localhost:8443/',
+      'http://example.org/',
+    ]) {
+      served = redirectedTo(target)
+      const result = await tool.execute({ url: 'https://example.org/r' }, ctx())
+      expect(result.isError, target).toBe(true)
+      expect(JSON.stringify(result.content), target).not.toContain('secret-local-model')
+    }
+    served = redirectedTo('https://www.example.org/r')
+    const ok = await tool.execute({ url: 'https://example.org/r' }, ctx())
+    expect(ok.isError).toBeUndefined()
+    expect(ok.details).toMatchObject({ url: 'https://www.example.org/r' })
+  })
+
   test('fetch_url stops with the turn', async () => {
     const abort = new AbortController()
     const tool = fetchUrlTool({
