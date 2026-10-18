@@ -4,7 +4,8 @@ import type { Shape } from '../index.ts'
 /** French for the `chat` namespace; keys, kinds and placeholders match the English source. */
 export const chat = {
   // Navigation and session
-  navChats: 'Conversations',
+  // The tab bar's label: the screen itself is titled `listTitle`.
+  navChats: 'Chats',
   navNewChat: 'Nouveau chat',
   navProviders: 'Modèles',
   sessionOpening: 'Ouverture de vos conversations…',
