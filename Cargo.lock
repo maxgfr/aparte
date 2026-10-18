@@ -81,7 +81,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "aparte"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "aparte-agent",
@@ -111,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-agent"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-llm",
  "futures-util",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-crypto"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aes-gcm",
  "aparte-format",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-format"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-crypto",
  "flate2",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-llm"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "futures-util",
  "proptest",
@@ -174,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-mcp"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-agent",
  "aparte-crypto",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-skills"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-agent",
  "schemars",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-store"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-crypto",
  "aparte-format",
@@ -227,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-sync"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-crypto",
  "aparte-format",
@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-tools"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-agent",
  "aparte-llm",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "aparte-tui"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "aparte-agent",
  "aparte-llm",
