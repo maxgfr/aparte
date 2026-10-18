@@ -110,10 +110,11 @@ export function checkRequestURL(input: string | URL, purpose: NetPurpose, page: 
 
 /**
  * Purposes whose answers stay out of the browser's HTTP cache, a plaintext store on the disk: what a provider or an
- * MCP server answers and the pages a tool fetched are the user's data. Pinned downloads (public, hash-checked files),
- * sync objects (ciphertext) and the app's own files may be cached.
+ * MCP server answers, the pages a tool fetched and what a research search returned (its URL is the user's query) are
+ * the user's data. Pinned downloads (public, hash-checked files), public skill files, sync objects (ciphertext) and the
+ * app's own files may be cached.
  */
-const NO_STORE: ReadonlySet<NetPurpose> = new Set(['provider', 'mcp', 'tool'])
+const NO_STORE: ReadonlySet<NetPurpose> = new Set(['provider', 'mcp', 'tool', 'research'])
 
 /**
  * The only `fetch` in the app. Checks the URL, records the origin and purpose, then fetches without cookies or HTTP

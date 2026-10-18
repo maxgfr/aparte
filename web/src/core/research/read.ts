@@ -4,7 +4,7 @@
  *
  * Invariants:
  * - Only public addresses are read: https (an http address is read over https), no credentials, no host on this
- *   device or a private network. The page goes through `page` (web/src/security/net.ts with purpose `tool`): no cookie,
+ *   device or a private network, before and after any redirect. The page goes through `page` (web/src/security/net.ts with purpose `tool`): no cookie,
  *   no referrer, no header of its own.
  * - A few sites are read through their CORS-friendly APIs instead of their pages (`api`, purpose `research`, hosts in
  *   the allowlist): Wikipedia articles (plain-text extracts) and Hacker News items. The source keeps the page's URL.
@@ -252,6 +252,13 @@ export async function readPage(raw: string, o: ReadOptions): Promise<PageRead> {
     return failed(UNREACHABLE_NOTE)
   }
   const finalUrl = response.url !== '' && response.url !== url.href ? { finalUrl: response.url } : {}
+  // A redirect may have led the request to this machine, a private network or plain http, where a local server may
+  // let the app's origin read it: such an answer is dropped unread.
+  const landed = response.redirected && response.url !== '' ? new URL(response.url) : url
+  if (landed.protocol !== 'https:' || privateHost(landed.hostname)) {
+    await response.body?.cancel().catch(() => undefined)
+    return { ...failed('it redirected to an address on this device, a private network or plain http'), ...finalUrl }
+  }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined)
     return { ...failed(`the site answered HTTP ${response.status}`), ...finalUrl }

@@ -62,6 +62,28 @@ describe('readPage', () => {
     expect((await readPage('http://plain.example/', h.options)).text).toBe('hello there')
   })
 
+  test('what a redirect brought from this machine, a private network or plain http is never read', async () => {
+    // A page a search returned answers with a redirect to a local model server that lets the app's origin read it.
+    const redirected = (to: string) => async () => {
+      const response = new Response('{"models":["secret-local-model"]}', { headers: { 'content-type': 'text/plain' } })
+      Object.defineProperty(response, 'redirected', { value: true })
+      Object.defineProperty(response, 'url', { value: to })
+      return response
+    }
+    const w = web()
+    for (const to of ['http://127.0.0.1:11434/api/tags', 'https://192.168.1.10/', 'http://example.org/x']) {
+      const read = await readPage('https://redirects.example/r', { ...w.options, page: redirected(to) })
+      expect(read.status, to).toBe('failed')
+      expect(read.text, to).toBe('')
+      expect(JSON.stringify(read), to).not.toContain('secret-local-model')
+    }
+    const ok = await readPage('https://redirects.example/r', {
+      ...w.options,
+      page: redirected('https://www.redirects.example/r'),
+    })
+    expect(ok).toMatchObject({ status: 'ok', finalUrl: 'https://www.redirects.example/r' })
+  })
+
   test('failures in words: CORS refusal, HTTP errors, PDFs and binaries', async () => {
     const w = web({
       'https://nocors.example/': { body: '', refuse: true },

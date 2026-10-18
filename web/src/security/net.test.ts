@@ -136,7 +136,7 @@ describe('request', () => {
   test('keeps what a provider, an MCP server or a fetched page answers out of the HTTP cache', async () => {
     // The browser's HTTP cache is a plaintext store on the disk: a page fetch_url read, a model list or an MCP answer
     // must not land there. Pinned downloads, sync objects (ciphertext) and the app's own files may.
-    for (const purpose of ['provider', 'mcp', 'tool'] as const) {
+    for (const purpose of ['provider', 'mcp', 'tool', 'research'] as const) {
       await request('https://api.example.com/x', { purpose, cache: 'force-cache' })
       expect(calls.at(-1)?.init?.cache, purpose).toBe('no-store')
       await request('https://api.example.com/x', { purpose })
