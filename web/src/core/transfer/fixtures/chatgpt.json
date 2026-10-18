@@ -1,0 +1,116 @@
+[
+  {
+    "title": "Packing for Lisbon",
+    "create_time": 1760000000.123,
+    "update_time": 1760000600.5,
+    "current_node": "a2",
+    "mapping": {
+      "root": { "id": "root", "message": null, "parent": null, "children": ["sys"] },
+      "sys": {
+        "id": "sys",
+        "message": {
+          "id": "sys",
+          "author": { "role": "system" },
+          "create_time": null,
+          "content": { "content_type": "text", "parts": [""] },
+          "metadata": { "is_visually_hidden_from_conversation": true },
+          "recipient": "all"
+        },
+        "parent": "root",
+        "children": ["u1", "u2"]
+      },
+      "u1": {
+        "id": "u1",
+        "message": {
+          "id": "u1",
+          "author": { "role": "user" },
+          "create_time": 1760000010,
+          "content": { "content_type": "text", "parts": ["What should I pack for Lisbon in May?"] },
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "sys",
+        "children": ["a1"]
+      },
+      "a1": {
+        "id": "a1",
+        "message": {
+          "id": "a1",
+          "author": { "role": "assistant" },
+          "create_time": 1760000020,
+          "content": {
+            "content_type": "text",
+            "parts": ["Light layers and **comfortable shoes**: the hills are steep."]
+          },
+          "metadata": { "model_slug": "gpt-4o" },
+          "recipient": "all"
+        },
+        "parent": "u1",
+        "children": []
+      },
+      "u2": {
+        "id": "u2",
+        "message": {
+          "id": "u2",
+          "author": { "role": "user" },
+          "create_time": 1760000100,
+          "content": {
+            "content_type": "multimodal_text",
+            "parts": [
+              { "content_type": "image_asset_pointer", "asset_pointer": "file-service://file-abc" },
+              "And the weather in late May?"
+            ]
+          },
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "sys",
+        "children": ["c1"]
+      },
+      "c1": {
+        "id": "c1",
+        "message": {
+          "id": "c1",
+          "author": { "role": "assistant" },
+          "create_time": 1760000110,
+          "content": { "content_type": "code", "text": "search(\"Lisbon weather May\")" },
+          "metadata": {},
+          "recipient": "browser"
+        },
+        "parent": "u2",
+        "children": ["t1"]
+      },
+      "t1": {
+        "id": "t1",
+        "message": {
+          "id": "t1",
+          "author": { "role": "tool", "name": "browser" },
+          "create_time": 1760000115,
+          "content": { "content_type": "tether_browsing_display", "result": "Average high 24 C" },
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "c1",
+        "children": ["a2"]
+      },
+      "a2": {
+        "id": "a2",
+        "message": {
+          "id": "a2",
+          "author": { "role": "assistant" },
+          "create_time": 1760000120,
+          "content": { "content_type": "text", "parts": ["Warm days around 24 °C, cooler evenings."] },
+          "metadata": { "model_slug": "gpt-4o" },
+          "recipient": "all"
+        },
+        "parent": "t1",
+        "children": []
+      }
+    }
+  },
+  {
+    "title": "Empty",
+    "create_time": 1760000000,
+    "mapping": { "r": { "id": "r", "message": null, "parent": null, "children": [] } }
+  }
+]

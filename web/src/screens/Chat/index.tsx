@@ -2,6 +2,7 @@ import { ChevronLeft, MoreHorizontal, SquarePen } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, Redirect, useLocation } from 'wouter'
 import {
+  useBeam,
   useConversation,
   useKeyedProviders,
   useRegisteredTools,
@@ -27,9 +28,11 @@ import { ConversationActions } from '../../ui/chat/ConversationList.tsx'
 import { type MessageActions, MessageRow, StreamingAnswer } from '../../ui/chat/Messages.tsx'
 import { ToolsButton } from '../../ui/chat/Tools.tsx'
 import { visibleMessages, windowOf } from '../../ui/chat/view.ts'
+import { BeamButton, BeamPanel, useBeamSelection } from '../../ui/compare/Beam.tsx'
 import { Button, buttonClass } from '../../ui/components/Button.tsx'
 import { EmptyState } from '../../ui/components/EmptyState.tsx'
 import { IconButton } from '../../ui/components/IconButton.tsx'
+import { QuickRepliesBar, RoleplayButton, useRoleplay } from '../../ui/roleplay/RoleplayButton.tsx'
 
 /*
  * The chat screen: one conversation's active branch, the answer streaming into it, and the composer. `/chat` is a new
@@ -146,6 +149,13 @@ function ChatView({ id }: { id: Id | null }) {
   const defaultSystem = useSetting('defaultSystem')
   const [menu, setMenu] = useState(false)
   const [earlier, setEarlier] = useState(0)
+  const beam = useBeam(id)
+  // Beam: with two models or more chosen, the next message goes to all of them (core/compare/beam.ts).
+  const [beamModels, setBeamModels] = useBeamSelection()
+  // Characters, lorebooks and the Author's Note (ui/roleplay): what they add is committed with the user message.
+  const roleplay = useRoleplay(id)
+  const roleplayRef = useRef(roleplay)
+  roleplayRef.current = roleplay
 
   // A new chat keeps its choices here until its first message creates the conversation.
   const [draft, setDraft] = useState<{
@@ -188,20 +198,26 @@ function ChatView({ id }: { id: Id | null }) {
   const path = thread.status === 'ready' ? thread.path : []
   // A regenerated answer streams as a sibling of the one on screen: the branch shows up to its parent meanwhile.
   const streamParent = rawStream?.parentId ?? null
+  // While answers are compared, the branch shows up to the question they answer; the comparison takes the rest.
+  const beamUser = beam?.userMessageId ?? null
   const visible = useMemo(() => {
     const all = visibleMessages(path)
-    if (streamParent === null) return all
-    const at = all.findIndex((m) => m.id === streamParent)
+    const cut = beamUser ?? streamParent
+    if (cut === null) return all
+    const at = all.findIndex((m) => m.id === cut)
     return at < 0 ? all : all.slice(0, at + 1)
-  }, [path, streamParent])
+  }, [path, streamParent, beamUser])
   const { shown, hidden } = windowOf(visible, earlier)
   const treeSize = thread.status === 'ready' ? thread.thread.all().length : 0
   let streamed = 0
   for (const part of stream?.parts ?? [])
     if (part.type === 'text' || part.type === 'reasoning') streamed += part.text.length
   const calls = stream?.tools.map((c) => c.status).join(',') ?? ''
-  const follow = useFollow(`${visible.length}|${stream?.parts.length ?? 0}|${streamed}|${calls}`)
-  const busy = rawStream !== null
+  let beamed = 0
+  for (const c of beam?.candidates ?? [])
+    for (const part of c.parts) if (part.type === 'text') beamed += part.text.length
+  const follow = useFollow(`${visible.length}|${stream?.parts.length ?? 0}|${streamed}|${calls}|${beamed}`)
+  const busy = rawStream !== null || beam?.running === true
 
   // Esc stops the answer from anywhere on the screen, unless a dialog is open (Esc closes it instead).
   useEffect(() => {
@@ -224,7 +240,8 @@ function ChatView({ id }: { id: Id | null }) {
     [toast, t],
   )
 
-  const onSend = async (parts: readonly Part[]): Promise<boolean> => {
+  const onSend = async (typed: readonly Part[]): Promise<boolean> => {
+    let parts = typed
     if (session === null) return false
     if (modelRef === null || model === null) {
       toast(t('chat.sendFailedNoModel'))
@@ -235,23 +252,39 @@ function ChatView({ id }: { id: Id | null }) {
       toast(t('chat.sendFailedNoKey', { provider: provider.label }))
       return false
     }
+    // Answers being compared finish first: a message sent now would branch from an answer not yet chosen.
+    if (beam?.running === true) {
+      toast(t('compare.beamBusy'))
+      return false
+    }
     let target = id
     let created = false
     if (target === null) {
       const tools = await session.tools.snapshot([...toolNames], { webSearch })
+      const system = roleplay.draftSystem() ?? draft.system
       target = session.workspace.conversations.create({
         model: modelRef,
         effort: draft.effort,
         tools,
-        ...(draft.system === null ? {} : { system: draft.system }),
+        ...(system === null ? {} : { system }),
       })
+      roleplay.commitDraft(target)
       created = true
     }
     try {
-      const turn = await session.chat.send(target, parts)
+      parts = await roleplay.prepare(target, parts)
+      if (beamModels.length >= 2) {
+        if (session.chat.stream(target) !== null) {
+          toast(t('chat.sendFailed'))
+          return false
+        }
+        await session.beam.start(target, parts, beamModels)
+      } else {
+        const turn = await session.chat.send(target, parts)
+        turn.done.catch(() => undefined)
+      }
       if (created) navigate(chatPath(target), { replace: true })
       follow()
-      turn.done.catch(() => undefined)
       return true
     } catch (error) {
       // Nothing was written for the turn: a chat created for it goes away again.
@@ -269,7 +302,8 @@ function ChatView({ id }: { id: Id | null }) {
       busy,
       onEdit: async (messageId, parts) => {
         try {
-          await session.chat.edit(id, messageId, parts)
+          const parent = tree.get(messageId)?.parent ?? null
+          await session.chat.edit(id, messageId, await roleplayRef.current.prepare(id, parts, parent))
         } catch (error) {
           explain(error)
         }
@@ -422,6 +456,7 @@ function ChatView({ id }: { id: Id | null }) {
               live={stream?.phase === 'tools' && stream.parentId === message.id ? stream.tools : undefined}
             />
           ))}
+        {beam !== null && id !== null && <BeamPanel conversationId={id} state={beam} />}
         {stream !== null && stream.phase === 'model' && <StreamingAnswer stream={stream} />}
         {stream !== null && stream.phase === 'tools' && (
           <p className={styles.caption} role="status" aria-live="polite">
@@ -431,6 +466,7 @@ function ChatView({ id }: { id: Id | null }) {
       </div>
 
       <div className={styles.composerDock}>
+        <QuickRepliesBar disabled={beam?.running === true} onSend={(text) => void onSend([{ type: 'text', text }])} />
         <Composer
           modelRef={modelRef}
           model={model}
@@ -441,34 +477,42 @@ function ChatView({ id }: { id: Id | null }) {
           systemFrozen={started}
           onSystem={onSystem}
           tools={
-            <ToolsButton
-              options={registered.map((r) => ({
-                name: r.tool.name,
-                source: r.tool.source,
-                ...(r.tool.title === undefined ? {} : { title: r.tool.title }),
-                ...(r.tool.origin === undefined ? {} : { origin: r.tool.origin }),
-              }))}
-              selected={toolNames}
-              webSearch={webSearch}
-              frozen={started}
-              model={model}
-              drifted={resolved?.drifted ?? []}
-              missing={resolved?.missing ?? []}
-              onToggle={(name, on) => {
-                const next = new Set(toolNames)
-                if (on) next.add(name)
-                else next.delete(name)
-                setTools(next, webSearch)
-              }}
-              onWebSearch={(on) => setTools(toolNames, on)}
-              onRevoke={(key) => session?.workspace.toolApprovals.revoke(key, null)}
-              modelTools={modelTools}
-            />
+            <>
+              <ToolsButton
+                options={registered.map((r) => ({
+                  name: r.tool.name,
+                  source: r.tool.source,
+                  ...(r.tool.title === undefined ? {} : { title: r.tool.title }),
+                  ...(r.tool.origin === undefined ? {} : { origin: r.tool.origin }),
+                }))}
+                selected={toolNames}
+                webSearch={webSearch}
+                frozen={started}
+                model={model}
+                drifted={resolved?.drifted ?? []}
+                missing={resolved?.missing ?? []}
+                onToggle={(name, on) => {
+                  const next = new Set(toolNames)
+                  if (on) next.add(name)
+                  else next.delete(name)
+                  setTools(next, webSearch)
+                }}
+                onWebSearch={(on) => setTools(toolNames, on)}
+                onRevoke={(key) => session?.workspace.toolApprovals.revoke(key, null)}
+                modelTools={modelTools}
+              />
+              <BeamButton models={beamModels} onChange={setBeamModels} />
+              <RoleplayButton roleplay={roleplay} started={started} />
+            </>
           }
           streaming={busy}
           queued={rawStream?.queued ?? 0}
           onSend={onSend}
-          onStop={() => id !== null && session?.chat.stop(id)}
+          onStop={() => {
+            if (id === null) return
+            session?.chat.stop(id)
+            session?.beam.stop(id)
+          }}
         />
       </div>
 

@@ -42,6 +42,9 @@ export function pwaOptions(base: string): Partial<VitePWAOptions> {
       background_color: '#f6f4ef',
       launch_handler: { client_mode: 'focus-existing' },
       shortcuts: [{ name: 'New chat', url: './#/new' }],
+      // An `.aparte` backup opened with the installed app lands on the Transfer screen, which reads it from the launch
+      // queue and offers to merge it (nothing is read before the vault is open).
+      file_handlers: [{ action: './#/transfer?launch', accept: { 'application/x-aparte-backup': ['.aparte'] } }],
     },
     injectManifest: {
       // A classic script with everything inlined: no `import` at runtime, so nothing the worker runs escapes the

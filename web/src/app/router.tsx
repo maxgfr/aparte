@@ -20,6 +20,13 @@ const Sync = lazyChunk(() => import('../screens/Sync/index.tsx').then((m) => m.d
 const SyncJoin = lazyChunk(() => import('../screens/Sync/Join.tsx').then((m) => m.default))
 const McpServers = lazyChunk(() => import('../screens/Mcp/index.tsx').then((m) => m.default))
 const McpServer = lazyChunk(() => import('../screens/Mcp/Server.tsx').then((m) => m.default))
+const More = lazyChunk(() => import('../screens/More/index.tsx').then((m) => m.default))
+const Transfer = lazyChunk(() => import('../screens/Transfer/index.tsx').then((m) => m.default))
+const Characters = lazyChunk(() => import('../screens/Characters/index.tsx').then((m) => m.default))
+const Character = lazyChunk(() => import('../screens/Characters/Character.tsx').then((m) => m.default))
+const Lorebook = lazyChunk(() => import('../screens/Characters/Lorebook.tsx').then((m) => m.default))
+const Arena = lazyChunk(() => import('../screens/Arena/index.tsx').then((m) => m.default))
+const Stats = lazyChunk(() => import('../screens/Stats/index.tsx').then((m) => m.default))
 
 /** Hash routing (path and query in the hash): GitHub Pages serves one file and has no SPA rewrite. */
 export function HashRouter({ children }: { children: ReactNode }) {
@@ -50,6 +57,13 @@ export function Routes() {
           <Route path={paths.mcp} component={McpServers} />
           <Route path={paths.mcpNew} component={McpServer} />
           <Route path={paths.mcpServer} component={McpServer} />
+          <Route path={paths.more} component={More} />
+          <Route path={paths.transfer} component={Transfer} />
+          <Route path={paths.characters} component={Characters} />
+          <Route path={paths.character} component={Character} />
+          <Route path={paths.lorebook} component={Lorebook} />
+          <Route path={paths.arena} component={Arena} />
+          <Route path={paths.stats} component={Stats} />
           {/* Recovery is a screen of the lock gate; once the vault is open, its address leads home. */}
           <Route path={paths.recover}>
             <Redirect to={paths.welcome} replace />

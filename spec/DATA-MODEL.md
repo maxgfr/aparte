@@ -52,7 +52,8 @@ Top-level `Y.Map`s, each `id -> Y.Map` of one entity whose fields are `Any` valu
 | `keyslots` | `slotId -> {label: string, createdAt}`: names the user gave the keyslots; the slots themselves are not in the document |
 
 Every entity also has `createdAt` and `updatedAt`, and the trash fields of [3.1](#31-trash). `order` is a fractional
-index string for manual ordering among siblings.
+index string for manual ordering among siblings. The maps added after the freeze (characters in `personas`, lorebooks,
+quick replies, regex rules, per-chat options and Arena votes) are in [3.6](#36-collections-added-after-the-freeze).
 
 ### 3.1 Trash
 
@@ -132,6 +133,30 @@ whose definition changed is held back until the user accepts it again (which wri
 without an entry is new and off. The first listing of a server just added writes an entry for every tool, enabled.
 `tools` is replaced as a whole (last writer wins). No field holds a secret: a value shaped like a key or token is
 refused.
+
+### 3.6 Collections added after the freeze
+
+These top-level maps of the index were added in milestone M9. They follow the entity rules above (`id`, `createdAt`,
+`updatedAt`, the trash fields of [3.1](#31-trash)); a reader that does not know a map ignores it, and a reader keeps
+fields of an entity it does not know, so no earlier build misreads a vault that has them. Field names never contain
+`key`, `token`, `secret`, `password`, `auth` or `credential`, and no value is a secret (section 6). The TypeScript
+shapes are in `web/src/core/contracts/extras.ts`.
+
+| Map | Entity |
+|---|---|
+| `personas` | the map of section 3, holding characters: `{name, systemPrompt, description?, personality?, scenario?, firstMessage?, alternateGreetings?: string[], examples?, creator?, creatorNotes?, tags?: string[], lorebook?: lorebookId, avatar?: blob ref, source?: 'card-v2' \| 'card-v3' \| 'manual', model?: ModelRef}` |
+| `lorebooks` | `{name, description?, entries: {triggers: string[], secondary?: string[], content, enabled, constant?, caseSensitive?, wholeWord?, order: number, comment?}[], scanDepth: number, budget: number}` (`budget` in characters; `entries` is replaced as a whole) |
+| `quickReplies` | `{label, text, order: string}` |
+| `regexRules` | `{name, find, flags, replace, placement: 'input' \| 'display', enabled}`: `input` rules rewrite text before it is committed, `display` rules change only what is shown |
+| `chatOptions` | per conversation, under the conversation's own id: `{character?: personaId, userName?, lorebooks?: lorebookId[], note?, noteEvery?: number}` (`note` is the Author's Note) |
+| `arenaVotes` | `{a: ModelRef, b: ModelRef, winner: 'a' \| 'b' \| 'tie' \| 'bad', conversation}`; ratings are recomputed from the votes in `createdAt`, then id, order and never stored |
+
+None of them rewrites a conversation. What a character, a lorebook or the Author's Note adds to a turn is committed in
+the user message it goes with, as `text` parts carrying `injected: 'lorebook' | 'authors-note' | 'character'` (an
+extra member, replayed as text; the interface does not show it as the user's words). A character chosen after the
+first message is a `system` message (section 5, rule 1). A Beam or Arena answer is an ordinary assistant sibling; an
+answer merged from others keeps only its `text` and `source` parts, since it was produced over a request that is not
+the stored path.
 
 ## 4. Conversation shard documents
 

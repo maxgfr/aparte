@@ -11,10 +11,25 @@ export function visibleMessages(path: readonly Message[]): readonly Message[] {
   return path.filter((m) => m.deletedAt === undefined)
 }
 
-/** The text parts of a message, joined by blank lines: what Copy puts on the clipboard. */
+/** Whether a part was added by a feature (a lorebook entry, an Author's Note) rather than written. */
+export function isInjected(part: Part): boolean {
+  return part.type === 'text' && typeof (part as { injected?: unknown }).injected === 'string'
+}
+
+/**
+ * The text parts of a message, joined by blank lines: what Copy puts on the clipboard. Injected parts (roleplay
+ * context sent with a user message, contracts/extras.ts) are left out: the user did not write them.
+ */
 export function textOf(parts: readonly Part[]): string {
   const out: string[] = []
-  for (const p of parts) if (p.type === 'text' && p.text.trim() !== '') out.push(p.text)
+  for (const p of parts) if (p.type === 'text' && !isInjected(p) && p.text.trim() !== '') out.push(p.text)
+  return out.join('\n\n')
+}
+
+/** The injected parts of a message, as text. */
+export function injectedTextOf(parts: readonly Part[]): string {
+  const out: string[] = []
+  for (const p of parts) if (p.type === 'text' && isInjected(p) && p.text.trim() !== '') out.push(p.text)
   return out.join('\n\n')
 }
 

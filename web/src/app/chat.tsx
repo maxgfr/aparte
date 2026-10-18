@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import type { Catalog } from '../core/ai/catalog.ts'
+import type { BeamEngine, BeamState } from '../core/compare/beam.ts'
 import type {
   AdaptersModule,
   CapabilitiesModule,
@@ -21,11 +22,13 @@ import type {
   ProviderKind,
 } from '../core/contracts/ai.ts'
 import type { ChatController, RequestModule, StreamState } from '../core/contracts/chat.ts'
+import type { CollectionName, CollectionTypes } from '../core/contracts/extras.ts'
 import type { RegisteredTool, ToolApproval, ToolRegistry } from '../core/contracts/tools.ts'
 import type { Vault } from '../core/contracts/vault.ts'
 import type {
   Conversation,
   ConversationFilter,
+  Entity,
   Id,
   Message,
   ModelRef,
@@ -79,6 +82,8 @@ export interface ObservableKeys extends ProviderKeys {
 export interface ChatSession {
   readonly workspace: Workspace
   readonly chat: ChatController
+  /** Beam and the Arena: several models answering one message (core/compare/beam.ts). */
+  readonly beam: BeamEngine
   readonly keys: ObservableKeys
   readonly blobs: LocalBlobs
   /** Full-text search over the conversations, in memory only; dropped on lock. */
@@ -154,6 +159,7 @@ async function openSession(vault: Vault): Promise<{
     toolFetchModule,
     local,
     streams,
+    beamModule,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -172,6 +178,7 @@ async function openSession(vault: Vault): Promise<{
     import('../core/tools/fetch.ts'),
     import('./local.ts'),
     import('../core/sync/streams.ts'),
+    import('../core/compare/beam.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
@@ -226,6 +233,18 @@ async function openSession(vault: Vault): Promise<{
     clock,
     tools: { registry: tools, approvals: workspace.toolApprovals },
   })
+  const beam = beamModule.createBeamEngine({
+    workspace,
+    holdLock: (reason: string) => vault.holdLock(reason),
+    holdReload,
+    adapter,
+    keys,
+    resolveModel,
+    blobs,
+    rng,
+    clock,
+    tools: { registry: tools },
+  })
 
   const urls = new Map<string, Promise<string | null>>()
   const blobUrl = (blob: string, mediaType: string): Promise<string | null> => {
@@ -275,7 +294,7 @@ async function openSession(vault: Vault): Promise<{
     if (closed) return
     closed = true
     try {
-      await chat.dispose()
+      await Promise.all([chat.dispose(), beam.dispose()])
       await mcp.dispose().catch(() => undefined)
     } finally {
       // The model workers hold the conversation in memory (its prompt, its cache on the GPU): they go with the lock.
@@ -296,6 +315,7 @@ async function openSession(vault: Vault): Promise<{
   const session: ChatSession = {
     workspace,
     chat,
+    beam,
     keys,
     blobs,
     search,
@@ -587,5 +607,46 @@ export function usePersistence(): { readonly unsaved: number; readonly blocked: 
   const ws = session?.workspace ?? null
   const subscribe = useMemo(() => (ws === null ? null : (fn: () => void) => ws.onPersistence(fn)), [ws])
   const read = useCallback(() => (ws === null ? null : ws.persistence()), [ws])
+  return useExternal(subscribe, read)
+}
+
+/** The Beam or Arena comparison of a conversation, or null; re-renders on every stream change. */
+export function useBeam(id: Id | null): BeamState | null {
+  const session = useSession()
+  const beam = session?.beam ?? null
+  const subscribe = useMemo(
+    () =>
+      beam === null || id === null
+        ? null
+        : (fn: () => void) =>
+            beam.subscribe((conv) => {
+              if (conv === id) fn()
+            }),
+    [beam, id],
+  )
+  const read = useCallback(() => (beam === null || id === null ? null : beam.state(id)), [beam, id])
+  return useExternal(subscribe, read)
+}
+
+const EMPTY_ENTITIES: readonly Entity<never>[] = []
+
+/** The entities of a collection (contracts/extras.ts), not trashed, oldest first. */
+export function useCollection<N extends CollectionName>(name: N): readonly Entity<CollectionTypes[N]>[] {
+  const session = useSession()
+  const ws = session?.workspace ?? null
+  const subscribe = useMemo(() => (ws === null ? null : (fn: () => void) => ws.subscribe(name, fn)), [ws, name])
+  const read = useCallback(
+    () => (ws === null ? (EMPTY_ENTITIES as readonly Entity<CollectionTypes[N]>[]) : ws.collection(name).list()),
+    [ws, name],
+  )
+  return useExternal(subscribe, read)
+}
+
+/** One entity of a collection, or undefined. */
+export function useEntity<N extends CollectionName>(name: N, id: Id | null): Entity<CollectionTypes[N]> | undefined {
+  const session = useSession()
+  const ws = session?.workspace ?? null
+  const subscribe = useMemo(() => (ws === null ? null : (fn: () => void) => ws.subscribe(name, fn)), [ws, name])
+  const read = useCallback(() => (ws === null || id === null ? undefined : ws.collection(name).get(id)), [ws, name, id])
   return useExternal(subscribe, read)
 }

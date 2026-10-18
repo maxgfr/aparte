@@ -4,6 +4,7 @@ import {
   costOf,
   groupConversations,
   groupOf,
+  injectedTextOf,
   matches,
   queryWords,
   reasoningOf,
@@ -57,6 +58,18 @@ describe('thread view', () => {
     ] as const
     expect(textOf(parts)).toBe('First\n\nSecond')
     expect(reasoningOf(parts)).toBe('thinking')
+  })
+
+  test('injected roleplay context is not part of the text shown or copied', () => {
+    const parts = [
+      { type: 'text', text: 'Is the lighthouse open?' },
+      { type: 'text', text: '<lore>\nThe lamp is lit.\n</lore>', injected: 'lorebook' },
+      { type: 'text', text: '<authors-note>\nBe brief.\n</authors-note>', injected: 'authors-note' },
+    ] as unknown as Message['parts']
+    expect(textOf(parts)).toBe('Is the lighthouse open?')
+    expect(injectedTextOf(parts)).toBe(
+      '<lore>\nThe lamp is lit.\n</lore>\n\n<authors-note>\nBe brief.\n</authors-note>',
+    )
   })
 
   test('cost prices fresh input, cache reads and writes and output apart', () => {

@@ -86,7 +86,7 @@ export default function Join() {
               id={fileId}
               className={styles.file}
               type="file"
-              accept=".zip,application/zip"
+              accept=".aparte,.zip,application/zip"
               disabled={busy}
               onChange={(e) => void fromArchive(e.target.files?.[0])}
             />

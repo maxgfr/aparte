@@ -24,6 +24,20 @@ export const paths = {
   mcpNew: '/mcp/new',
   /** One MCP server: `/mcp/<server id>`. */
   mcpServer: '/mcp/:id',
+  /** The screens beyond the tab bar: Arena, characters, import and export, usage, About. */
+  more: '/more',
+  /** Exports, the encrypted backup and imports from other apps; `?launch` when opened with a file (file_handlers). */
+  transfer: '/transfer',
+  /** Characters, lorebooks, quick replies and regex rules. */
+  characters: '/characters',
+  /** One character: `/characters/<persona id>`. */
+  character: '/characters/:id',
+  /** One lorebook: `/lorebooks/<lorebook id>`. */
+  lorebook: '/lorebooks/:id',
+  /** Blind A/B rounds between two models and the local leaderboard. */
+  arena: '/arena',
+  /** Tokens and cost over time. */
+  stats: '/stats',
 } as const
 
 export type RouteName = keyof typeof paths
@@ -31,6 +45,16 @@ export type RouteName = keyof typeof paths
 /** The path of one chat. */
 export function chatPath(id: string): string {
   return `/chat/${encodeURIComponent(id)}`
+}
+
+/** The path of one character. */
+export function characterPath(id: string): string {
+  return `/characters/${encodeURIComponent(id)}`
+}
+
+/** The path of one lorebook. */
+export function lorebookPath(id: string): string {
+  return `/lorebooks/${encodeURIComponent(id)}`
 }
 
 /** The path of one provider's settings. */

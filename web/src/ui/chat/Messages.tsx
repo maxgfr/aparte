@@ -11,10 +11,12 @@ import { useLocale, useT } from '../../i18n/react.tsx'
 import { Button } from '../components/Button.tsx'
 import { IconButton } from '../components/IconButton.tsx'
 import { CopyButton, Markdown } from '../render/Sanitized.tsx'
+import { useDisplayText } from '../roleplay/hooks.ts'
+import roleplayStyles from '../roleplay/Roleplay.module.css'
 import styles from './Chat.module.css'
 import { useEffortLabel } from './ModelPicker.tsx'
 import { isWebSearchCall, SourcesList, ToolCallCard, WebSearchNote } from './Tools.tsx'
-import { costOf, type ImagePart, imagesOf, reasoningOf, textOf } from './view.ts'
+import { costOf, type ImagePart, imagesOf, injectedTextOf, reasoningOf, textOf } from './view.ts'
 
 /** Marks the element that holds a message's rendered text, apart from its reasoning, notes and controls. */
 const CONTENT = { 'data-message-content': '' } as const
@@ -166,6 +168,7 @@ function UserMessage({ thread, message, actions }: { thread: Thread; message: Me
   const [busy, setBusy] = useState(false)
   const parts = useResolvedParts(message.parts)
   const text = textOf(parts)
+  const injected = injectedTextOf(parts)
   const images = imagesOf(parts)
   return (
     <article
@@ -234,6 +237,15 @@ function UserMessage({ thread, message, actions }: { thread: Thread; message: Me
             </p>
           )}
         </div>
+      )}
+      {!editing && injected !== '' && (
+        <details className={roleplayStyles.injected}>
+          <summary>{t('roleplay.injectedSummary')}</summary>
+          <p className={roleplayStyles.injectedText}>
+            <span className="sr-only">{t('roleplay.injectedHint')} </span>
+            {injected}
+          </p>
+        </details>
       )}
       {!editing && (
         <div className={styles.actions}>
@@ -363,6 +375,9 @@ function AssistantMessage({
   const toolMessage = hasCalls ? thread.children(message.id).find((m) => m.role === 'tool') : undefined
   const results = useResolvedParts(toolMessage?.parts ?? NO_PARTS)
   const text = textOf(parts)
+  // Display regex rules (roleplay) change how the answer reads here, never what is stored, copied or sent.
+  const display = useDisplayText(message.conv)
+  const shown = display(text)
   const reasoning = reasoningOf(parts)
   const hadReasoning = parts.some((p) => p.type === 'reasoning')
   return (
@@ -374,7 +389,7 @@ function AssistantMessage({
       data-status={message.status}
     >
       <Reasoning text={reasoning} live={false} hidden={hadReasoning && reasoning === ''} />
-      {text !== '' && <Markdown source={text} className={styles.answerContent} data={CONTENT} />}
+      {shown !== '' && <Markdown source={shown} className={styles.answerContent} data={CONTENT} />}
       <ToolWork parts={parts} results={results} live={live} streaming={false} onApprove={actions.onApprove} />
       <AnswerNote message={message} />
       <div className={styles.answerFooter}>

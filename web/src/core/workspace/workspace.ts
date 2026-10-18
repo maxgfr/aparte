@@ -25,13 +25,16 @@ import {
   LockedError,
   type ShardId,
 } from '../contracts/crypto.ts'
+import { COLLECTIONS, type CollectionName, type CollectionTypes } from '../contracts/extras.ts'
 import type { McpServerConfig, McpServerPatch, McpServers, McpToolChoice, NewMcpServer } from '../contracts/mcp.ts'
 import type { ToolApproval, ToolApprovals } from '../contracts/tools.ts'
 import type {
+  Collection,
   Conversation,
   ConversationFilter,
   ConversationPatch,
   Conversations,
+  Entity,
   Folder,
   Folders,
   Id,
@@ -632,6 +635,43 @@ function readProvider(id: Id, m: Y.Map<unknown>): ProviderConfig {
   return frozenCopy<ProviderConfig>(out)
 }
 
+/** Fields every entity has, which a collection write never sets directly. */
+const META_FIELDS: ReadonlySet<string> = new Set(['id', 'createdAt', 'updatedAt', 'deletedAt', 'purgedAt'])
+
+function readEntity<T>(id: Id, m: Y.Map<unknown>): Entity<T> {
+  // Unknown fields (a newer build's) are kept, as for providers.
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of m.entries()) if (value !== undefined) out[key] = value
+  out.id = id
+  out.createdAt = num(out.createdAt) ?? 0
+  out.updatedAt = num(out.updatedAt) ?? out.createdAt
+  for (const key of ['deletedAt', 'purgedAt'] as const) {
+    if (out[key] !== undefined && num(out[key]) === undefined) delete out[key]
+  }
+  return frozenCopy<Entity<T>>(out)
+}
+
+/** Validates the fields of a collection write; `undefined` (partial writes only) means "remove this field". */
+function checkEntityFields(name: string, input: unknown, partial: boolean): Map<string, unknown> {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+    throw new InvalidInputError(`A ${name} entity must be an object`)
+  }
+  const out = new Map<string, unknown>()
+  for (const [field, value] of Object.entries(input)) {
+    if (META_FIELDS.has(field)) throw new InvalidInputError(`${field} is set by the workspace`)
+    if (!wellFormed(field)) throw new InvalidInputError('A field name is not well-formed Unicode')
+    if (SECRET_NAME.test(field)) throw new InvalidInputError(`A ${name} entity never holds a ${field}`)
+    if (value === undefined) {
+      if (partial) out.set(field, undefined)
+      continue
+    }
+    const clean = toAny(value, field)
+    checkSecretFree(clean, field)
+    out.set(field, clean)
+  }
+  return out
+}
+
 const sortConversations = (a: Conversation, b: Conversation): number =>
   Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
@@ -813,7 +853,10 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   const listeners = new Map<string, Set<Listener>>()
   const scopeKey = (scope: Scope): string => {
     if (typeof scope === 'string') {
-      if (!['conversations', 'folders', 'settings', 'providers', 'toolApprovals', 'mcp'].includes(scope)) {
+      if (
+        !['conversations', 'folders', 'settings', 'providers', 'toolApprovals', 'mcp'].includes(scope) &&
+        !(COLLECTIONS as readonly string[]).includes(scope)
+      ) {
         throw new InvalidInputError('Unknown scope')
       }
       return scope
@@ -859,6 +902,11 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   let mcpList: readonly McpServerConfig[] | null = null
   const settingsCache = new Map<string, unknown>()
   const threadCaches = new Map<Id, ConvCache>()
+  const collectionMaps = new Map<CollectionName, Y.Map<Y.Map<unknown>>>()
+  /** Entities read, by `<collection>|<id>`. */
+  const entityCache = new Map<string, Entity<unknown>>()
+  /** Sorted lists, by `<collection>|<trashed>`. */
+  const entityLists = new Map<string, readonly Entity<unknown>[]>()
 
   const attachIndex = (doc: Y.Doc): void => {
     conversationsMap = doc.getMap('conversations')
@@ -899,6 +947,16 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       providerList = null
       emit(['providers'])
     })
+    for (const name of COLLECTIONS) {
+      const map = doc.getMap<Y.Map<unknown>>(name)
+      collectionMaps.set(name, map)
+      map.observeDeep((events) => {
+        for (const id of changedKeys(events, map)) entityCache.delete(`${name}|${id}`)
+        entityLists.delete(`${name}|true`)
+        entityLists.delete(`${name}|false`)
+        emit([name])
+      })
+    }
   }
 
   // Shard documents
@@ -1462,6 +1520,103 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     },
   }
 
+  // Collections (contracts/extras.ts)
+
+  const collections = new Map<CollectionName, Collection<unknown>>()
+
+  const makeCollection = <T>(name: CollectionName): Collection<T> => {
+    const map = (): Y.Map<Y.Map<unknown>> => collectionMaps.get(name) as Y.Map<Y.Map<unknown>>
+    const read = (id: Id): Entity<T> | undefined => {
+      const key = `${name}|${id}`
+      const cached = entityCache.get(key)
+      if (cached) return cached as Entity<T>
+      const m = typeof id === 'string' ? map().get(id) : undefined
+      if (!(m instanceof Y.Map)) return undefined
+      const value = readEntity<T>(id, m)
+      entityCache.set(key, value as Entity<unknown>)
+      return value
+    }
+    const entity = (id: Id): Y.Map<unknown> => {
+      const m = typeof id === 'string' ? map().get(id) : undefined
+      if (!(m instanceof Y.Map) || m.has('purgedAt')) throw new InvalidInputError(`Unknown ${name} entity`)
+      return m
+    }
+    return {
+      list(options = {}) {
+        live()
+        const trashed = options.trashed === true
+        const key = `${name}|${trashed}`
+        const cached = entityLists.get(key)
+        if (cached) return cached as readonly Entity<T>[]
+        const out: Entity<T>[] = []
+        for (const id of map().keys()) {
+          const e = read(id)
+          if (e && e.purgedAt === undefined && (e.deletedAt !== undefined) === trashed) out.push(e)
+        }
+        out.sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+        const list = Object.freeze(out)
+        entityLists.set(key, list as readonly Entity<unknown>[])
+        return list
+      },
+      get(id) {
+        live()
+        return read(id)
+      },
+      create(fields, options = {}) {
+        live()
+        const clean = checkEntityFields(name, fields, false)
+        let id: Id
+        if (options.id === undefined) id = newId()
+        else {
+          if (!isId(options.id)) throw new InvalidInputError('An entity id is 26 base32 characters')
+          if (map().has(options.id)) throw new InvalidInputError(`This ${name} entity exists`)
+          id = options.id
+        }
+        const t = now()
+        const m = new Y.Map<unknown>([['id', id], ...clean.entries(), ['createdAt', t], ['updatedAt', t]])
+        local(indexDoc(), () => map().set(id, m))
+        return id
+      },
+      update(id, patch) {
+        live()
+        const m = entity(id)
+        const clean = checkEntityFields(name, patch, true)
+        const t = now()
+        local(indexDoc(), () => {
+          for (const [key, value] of clean) {
+            if (value === undefined) m.delete(key)
+            else m.set(key, value)
+          }
+          m.set('updatedAt', t)
+        })
+      },
+      trash(id) {
+        live()
+        const m = entity(id)
+        if (m.has('deletedAt')) return
+        const t = now()
+        local(indexDoc(), () => m.set('deletedAt', t))
+      },
+      restore(id) {
+        live()
+        const m = entity(id)
+        if (!m.has('deletedAt')) return
+        local(indexDoc(), () => m.delete('deletedAt'))
+      },
+    }
+  }
+
+  const collection = <N extends CollectionName>(name: N): Collection<CollectionTypes[N]> => {
+    live()
+    if (!(COLLECTIONS as readonly string[]).includes(name)) throw new InvalidInputError('Unknown collection')
+    let c = collections.get(name)
+    if (!c) {
+      c = makeCollection<unknown>(name)
+      collections.set(name, c)
+    }
+    return c as Collection<CollectionTypes[N]>
+  }
+
   // Threads
 
   const threads = new Map<Id, Thread>()
@@ -1622,6 +1777,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     providers,
     toolApprovals,
     mcp,
+    collection,
     async thread(conversationId) {
       live()
       const m = convEntity(conversationId)
@@ -1745,6 +1901,10 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       mcpList = null
       approvalList = null
       settingsCache.clear()
+      entityCache.clear()
+      entityLists.clear()
+      collections.clear()
+      collectionMaps.clear()
       shardIds.clear()
       listeners.clear()
       persistenceListeners.clear()

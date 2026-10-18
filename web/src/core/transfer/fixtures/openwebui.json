@@ -1,0 +1,63 @@
+[
+  {
+    "id": "c1a2b3c4-0000-4000-8000-00000000000a",
+    "user_id": "u-1",
+    "title": "Haiku about rain",
+    "created_at": 1759000000,
+    "updated_at": 1759000300,
+    "chat": {
+      "id": "",
+      "title": "Haiku about rain",
+      "models": ["llama3.2:latest"],
+      "history": {
+        "currentId": "r2",
+        "messages": {
+          "q1": {
+            "id": "q1",
+            "parentId": null,
+            "childrenIds": ["r1", "r2"],
+            "role": "user",
+            "content": "Write a haiku about rain.",
+            "timestamp": 1759000000
+          },
+          "r1": {
+            "id": "r1",
+            "parentId": "q1",
+            "childrenIds": [],
+            "role": "assistant",
+            "content": "Grey roofs drum softly",
+            "model": "llama3.2:latest",
+            "timestamp": 1759000005
+          },
+          "r2": {
+            "id": "r2",
+            "parentId": "q1",
+            "childrenIds": [],
+            "role": "assistant",
+            "content": "Puddles hold the sky",
+            "model": "llama3.2:latest",
+            "timestamp": 1759000050
+          }
+        }
+      },
+      "messages": []
+    }
+  },
+  {
+    "id": "c1a2b3c4-0000-4000-8000-00000000000b",
+    "title": "Old format",
+    "created_at": 1758000000,
+    "chat": {
+      "title": "Old format",
+      "messages": [
+        { "id": "x1", "role": "user", "content": "Hello", "timestamp": 1758000000 },
+        {
+          "id": "x2",
+          "role": "assistant",
+          "content": [{ "type": "text", "text": "Hello, how can I help?" }],
+          "timestamp": 1758000002
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,286 @@
+/* Roleplay: the chat's Roleplay sheet and quick replies, and the Characters screens. Tokens only (DESIGN.md). */
+
+.stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 650;
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.form > button {
+  justify-self: start;
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}
+
+.footnote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-footnote);
+  font-weight: 500;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.625rem var(--space-3);
+  border: var(--hairline-width) solid var(--hairline-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: max(16px, var(--text-body));
+  line-height: var(--leading-body);
+  resize: vertical;
+}
+
+.textarea:focus-visible,
+.select:focus-visible {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+.select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline-width) solid var(--control-border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: max(16px, var(--text-body));
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.choices {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices > legend {
+  margin-bottom: var(--space-1);
+  padding: 0;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.choice input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 12rem;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-footnote);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.chipName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Quick replies: one row above the composer that scrolls sideways inside itself, never the page. */
+.quickBar {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.quickBar > li {
+  flex: none;
+}
+
+.quickButton {
+  min-height: 44px;
+  max-width: 16rem;
+  padding: 0 var(--space-4);
+  overflow: hidden;
+  border: var(--hairline-width) solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-footnote);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.quickButton:hover {
+  background: var(--surface-pressed);
+}
+
+.quickButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-control);
+  object-fit: cover;
+  background: var(--surface-pressed);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  overflow-wrap: anywhere;
+}
+
+.preview {
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--hairline-width) solid var(--tool-border);
+  border-radius: var(--radius-surface);
+  background: var(--tool-bg);
+  color: var(--tool-ink);
+  font-size: var(--text-footnote);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.file {
+  font: inherit;
+  font-size: var(--text-footnote);
+  max-width: 100%;
+}
+
+/* A user message's injected context: a quiet caption, the text on demand. */
+.injected {
+  justify-self: end;
+  max-width: 85%;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+}
+
+.injected > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.injectedText {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--tool-bg);
+  color: var(--tool-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

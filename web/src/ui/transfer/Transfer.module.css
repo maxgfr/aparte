@@ -1,0 +1,118 @@
+/* Import and export: the backup, imports and exports. Tokens only (DESIGN.md). */
+
+.stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 650;
+}
+
+.lead {
+  margin: 0;
+  max-width: var(--measure-prose);
+  color: var(--ink-2);
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section > button {
+  justify-self: start;
+}
+
+.pick {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}
+
+.file {
+  min-height: 44px;
+  font: inherit;
+  font-size: var(--text-footnote);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-footnote);
+  font-weight: 500;
+}
+
+.notice {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.options {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline-width) solid var(--control-border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--surface-pressed);
+}
+
+.option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.optionTitle {
+  font-weight: 600;
+}
+
+.optionHint {
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}
+
+.sheet {
+  display: grid;
+  gap: var(--space-3);
+}

@@ -1,4 +1,4 @@
-import { Archive, MoreHorizontal, Pin, SquarePen } from 'lucide-react'
+import { Archive, Download, MoreHorizontal, Pin, SquarePen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'wouter'
 import { useConversations, useSession, useStreaming } from '../../app/chat.tsx'
@@ -13,6 +13,7 @@ import { Field } from '../components/Field.tsx'
 import { IconButton } from '../components/IconButton.tsx'
 import { Sheet } from '../components/Sheet.tsx'
 import { cx } from '../cx.ts'
+import { ExportSheet } from '../transfer/ExportSheet.tsx'
 import styles from './Chat.module.css'
 import { groupConversations, type ListGroupKey, matches, queryWords } from './view.ts'
 
@@ -41,6 +42,8 @@ export function ConversationActions({
   const session = useSession()
   const toast = useToast()
   const [title, setTitle] = useState(conversation.title)
+  // The export sheet replaces this one; closing it closes both.
+  const [exporting, setExporting] = useState(false)
   useEffect(() => {
     if (open) setTitle(conversation.title)
   }, [open, conversation.title])
@@ -49,63 +52,93 @@ export function ConversationActions({
   const id = conversation.id
   const name = conversation.title || t('chat.untitled')
   return (
-    <Sheet open={open} title={t('chat.actionsFor', { title: name })} onClose={onClose}>
-      <form
-        className={styles.actionsSheet}
-        onSubmit={(e) => {
-          e.preventDefault()
-          const next = title.trim()
-          if (next !== conversation.title) ws.conversations.update(id, { title: next })
-          onClose()
+    <>
+      <Sheet
+        open={open && !exporting}
+        title={t('chat.actionsFor', { title: name })}
+        onClose={() => {
+          if (!exporting) onClose()
         }}
       >
-        <Field label={t('chat.renameLabel')} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
-        <Button type="submit" variant="secondary" disabled={title.trim() === conversation.title}>
-          {t('chat.rename')}
-        </Button>
-        <div className={styles.sheetActions}>
-          <Button
-            variant="plain"
-            icon={<Pin size={18} strokeWidth={1.75} aria-hidden="true" />}
-            onClick={() => {
-              ws.conversations.update(id, { pinned: !conversation.pinned })
-              onClose()
-            }}
-          >
-            {conversation.pinned ? t('chat.unpin') : t('chat.pin')}
+        <form
+          className={styles.actionsSheet}
+          onSubmit={(e) => {
+            e.preventDefault()
+            const next = title.trim()
+            if (next !== conversation.title) ws.conversations.update(id, { title: next })
+            onClose()
+          }}
+        >
+          <Field
+            label={t('chat.renameLabel')}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={200}
+          />
+          <Button type="submit" variant="secondary" disabled={title.trim() === conversation.title}>
+            {t('chat.rename')}
           </Button>
-          <Button
-            variant="plain"
-            icon={<Archive size={18} strokeWidth={1.75} aria-hidden="true" />}
-            onClick={() => {
-              const archived = !conversation.archived
-              ws.conversations.update(id, { archived })
-              onClose()
-              if (archived) {
-                toast(t('chat.archived'), [
-                  { label: t('chat.undo'), onClick: () => ws.conversations.update(id, { archived: false }) },
-                ])
-              }
-            }}
-          >
-            {conversation.archived ? t('chat.unarchive') : t('chat.archive')}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              // Reversible: the trash keeps it until it is purged, so the delete acts at once and offers Undo.
-              session.chat.stop(id)
-              ws.conversations.trash(id)
-              onClose()
-              onDeleted?.()
-              toast(t('chat.deleted'), [{ label: t('chat.undo'), onClick: () => ws.conversations.restore(id) }])
-            }}
-          >
-            {t('chat.delete')}
-          </Button>
-        </div>
-      </form>
-    </Sheet>
+          <div className={styles.sheetActions}>
+            <Button
+              variant="plain"
+              icon={<Pin size={18} strokeWidth={1.75} aria-hidden="true" />}
+              onClick={() => {
+                ws.conversations.update(id, { pinned: !conversation.pinned })
+                onClose()
+              }}
+            >
+              {conversation.pinned ? t('chat.unpin') : t('chat.pin')}
+            </Button>
+            <Button
+              variant="plain"
+              icon={<Archive size={18} strokeWidth={1.75} aria-hidden="true" />}
+              onClick={() => {
+                const archived = !conversation.archived
+                ws.conversations.update(id, { archived })
+                onClose()
+                if (archived) {
+                  toast(t('chat.archived'), [
+                    { label: t('chat.undo'), onClick: () => ws.conversations.update(id, { archived: false }) },
+                  ])
+                }
+              }}
+            >
+              {conversation.archived ? t('chat.unarchive') : t('chat.archive')}
+            </Button>
+            <Button
+              variant="plain"
+              icon={<Download size={18} strokeWidth={1.75} aria-hidden="true" />}
+              onClick={() => setExporting(true)}
+            >
+              {t('transfer.exportAction')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                // Reversible: the trash keeps it until it is purged, so the delete acts at once and offers Undo.
+                session.chat.stop(id)
+                ws.conversations.trash(id)
+                onClose()
+                onDeleted?.()
+                toast(t('chat.deleted'), [{ label: t('chat.undo'), onClick: () => ws.conversations.restore(id) }])
+              }}
+            >
+              {t('chat.delete')}
+            </Button>
+          </div>
+        </form>
+      </Sheet>
+      {exporting && (
+        <ExportSheet
+          conversation={conversation}
+          open={open}
+          onClose={() => {
+            setExporting(false)
+            onClose()
+          }}
+        />
+      )}
+    </>
   )
 }
 

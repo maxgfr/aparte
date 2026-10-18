@@ -23,6 +23,7 @@
 
 import type { Effort, ProviderConfig, StopReason, Usage } from './ai.ts'
 import type { Bytes, DocId, Rng, ShardId, Subkeys } from './crypto.ts'
+import type { CollectionName, CollectionTypes } from './extras.ts'
 import type { McpServers } from './mcp.ts'
 import type { LocalStore } from './store.ts'
 import type { ToolApprovals, ToolSource } from './tools.ts'
@@ -109,7 +110,7 @@ export interface ToolSnapshotEntry {
   readonly fingerprint: string
 }
 
-interface EntityMeta {
+export interface EntityMeta {
   readonly id: Id
   readonly createdAt: number
   readonly updatedAt: number
@@ -232,6 +233,30 @@ export interface Providers {
   trash(id: Id): void
 }
 
+// Collections (contracts/extras.ts, spec/DATA-MODEL.md section 3.6)
+
+/** An entity of a collection as read: its fields, frozen, with the entity metadata. */
+export type Entity<T> = T & EntityMeta
+
+/** A patch of a collection entity: `undefined` removes an optional field. */
+export type EntityPatch<T> = { readonly [K in keyof T]?: T[K] | undefined }
+
+export interface Collection<T> {
+  /** Never-purged entities, not trashed (or only the trashed ones), by `createdAt` then id. */
+  list(options?: { readonly trashed?: boolean }): readonly Entity<T>[]
+  /** Includes trashed ones. */
+  get(id: Id): Entity<T> | undefined
+  /**
+   * Stores a new entity. With `id` (an Id no entity of the collection has), the entity takes it: the per-chat options
+   * live under their conversation's id. InvalidInputError when a value is not `Any` or looks like a secret.
+   */
+  create(fields: T, options?: { readonly id?: Id }): Id
+  /** InvalidInputError for an unknown id or a value that is not `Any`. */
+  update(id: Id, patch: EntityPatch<T>): void
+  trash(id: Id): void
+  restore(id: Id): void
+}
+
 // Messages
 
 export type MessageStatus = 'done' | 'stopped' | 'error' | 'refused'
@@ -318,6 +343,8 @@ export type Scope =
   | 'mcp'
   /** The messages and leaf of one conversation. */
   | { readonly conversation: Id }
+  /** One collection of contracts/extras.ts. */
+  | CollectionName
 
 export interface PersistenceStatus {
   /** Local updates captured but not yet acknowledged by the pending queue. */
@@ -335,6 +362,8 @@ export interface Workspace {
   readonly toolApprovals: ToolApprovals
   /** MCP servers (contracts/mcp.ts): configuration only; their secrets are device-only local records. */
   readonly mcp: McpServers
+  /** A collection of the index added after the fixed entities (contracts/extras.ts). */
+  collection<N extends CollectionName>(name: N): Collection<CollectionTypes[N]>
   /** Loads the conversation's shard (once) and returns its tree; InvalidInputError for an unknown or purged id. */
   thread(conversationId: Id): Promise<Thread>
   /** Runs `fn` as one transaction per touched document (one update each). */

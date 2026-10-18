@@ -1,0 +1,86 @@
+[
+  {
+    "uuid": "6b1c7a4e-0000-4000-8000-000000000001",
+    "name": "Sourdough starter",
+    "created_at": "2025-10-01T08:00:00.000000Z",
+    "updated_at": "2025-10-01T08:10:00.000000Z",
+    "chat_messages": [
+      {
+        "uuid": "m-1",
+        "text": "How often do I feed a starter?",
+        "content": [{ "type": "text", "text": "How often do I feed a starter?" }],
+        "sender": "human",
+        "created_at": "2025-10-01T08:00:00.000000Z",
+        "attachments": [],
+        "files": [{ "file_name": "jar.jpg" }]
+      },
+      {
+        "uuid": "m-2",
+        "text": "",
+        "content": [
+          { "type": "text", "text": "Once a day at room temperature." },
+          { "type": "tool_use", "name": "web_search", "input": {} }
+        ],
+        "sender": "assistant",
+        "created_at": "2025-10-01T08:00:05.000000Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "m-3",
+        "text": "And in the fridge?",
+        "content": [],
+        "sender": "human",
+        "created_at": "2025-10-01T08:01:00.000000Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "m-4",
+        "text": "Once a week.",
+        "content": [{ "type": "text", "text": "Once a week." }],
+        "sender": "assistant",
+        "created_at": "2025-10-01T08:01:04.000000Z",
+        "attachments": [],
+        "files": []
+      }
+    ]
+  },
+  {
+    "uuid": "6b1c7a4e-0000-4000-8000-000000000002",
+    "name": "Branched",
+    "created_at": "2025-10-02T08:00:00Z",
+    "updated_at": "2025-10-02T08:10:00Z",
+    "current_leaf_message_uuid": "b-4",
+    "chat_messages": [
+      {
+        "uuid": "b-1",
+        "parent_message_uuid": "00000000-0000-4000-8000-000000000000",
+        "sender": "human",
+        "created_at": "2025-10-02T08:00:00Z",
+        "content": [{ "type": "text", "text": "Name a colour." }]
+      },
+      {
+        "uuid": "b-2",
+        "parent_message_uuid": "b-1",
+        "sender": "assistant",
+        "created_at": "2025-10-02T08:00:01Z",
+        "content": [{ "type": "text", "text": "Teal." }]
+      },
+      {
+        "uuid": "b-3",
+        "parent_message_uuid": "00000000-0000-4000-8000-000000000000",
+        "sender": "human",
+        "created_at": "2025-10-02T08:01:00Z",
+        "content": [{ "type": "text", "text": "Name a warm colour." }]
+      },
+      {
+        "uuid": "b-4",
+        "parent_message_uuid": "b-3",
+        "sender": "assistant",
+        "created_at": "2025-10-02T08:01:01Z",
+        "content": [{ "type": "text", "text": "Ochre." }]
+      }
+    ]
+  }
+]

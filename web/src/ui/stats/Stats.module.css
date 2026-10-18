@@ -1,0 +1,228 @@
+/* The usage screen: filters, stat tiles, the hand-drawn chart and its tables. */
+
+.stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.filters {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 760px) {
+  .filters {
+    grid-template-columns: repeat(3, auto);
+    justify-content: start;
+    align-items: end;
+  }
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.tile {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.tileLabel {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}
+
+.tileValue {
+  margin: 0;
+  font-size: var(--text-headline);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tileDetail {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+}
+
+.figure {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.chartTitle {
+  font-size: var(--text-footnote);
+  font-weight: 600;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+  list-style: none;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swatch {
+  display: inline-block;
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+}
+
+.plot {
+  position: relative;
+  min-width: 0;
+}
+
+.svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.grid {
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+
+.baseline {
+  stroke: var(--hairline-strong);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: var(--ink-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip {
+  position: absolute;
+  top: 0;
+  width: 180px;
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline-width) solid var(--hairline-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: var(--lift);
+  pointer-events: none;
+  font-size: var(--text-caption);
+}
+
+.tooltipTitle {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.tooltipLabel {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tooltipValue {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-footnote);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--hairline-width) solid var(--hairline);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table tr:last-child > * {
+  border-bottom: 0;
+}
+
+.table thead th {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.table .num {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.nameCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.details summary {
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  color: var(--accent-ink);
+  font-size: var(--text-footnote);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}

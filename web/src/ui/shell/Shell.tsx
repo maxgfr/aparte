@@ -1,5 +1,6 @@
 import {
   Info,
+  LayoutGrid,
   Lock,
   type LucideIcon,
   MessageSquareLock,
@@ -39,7 +40,15 @@ const TABS: readonly Tab[] = [
   { href: paths.conversations, label: 'chat.navChats', icon: MessagesSquare, also: [paths.chat], unlocked: true },
   { href: paths.providers, label: 'chat.navProviders', icon: Sparkles, also: [paths.mcp], unlocked: true },
   { href: paths.sync, label: 'sync.navSync', icon: RefreshCw, unlocked: true },
-  { href: paths.about, label: 'shell.navAbout', icon: Info },
+  {
+    href: paths.more,
+    label: 'shell.navMore',
+    icon: LayoutGrid,
+    unlocked: true,
+    also: [paths.transfer, paths.characters, '/lorebooks', paths.arena, paths.stats],
+  },
+  // On a phone with the vault open, About is a row of More: the tab bar keeps six places.
+  { href: paths.about, label: 'shell.navAbout', icon: Info, width: 'wide-or-locked' },
 ]
 
 /** Whether `tab` is the current screen: "New chat" on an empty chat, "Chats" on the list and on an open chat. */
