@@ -11,8 +11,16 @@ version="${1:?usage: scripts/cli-version.sh <version>}"
 
 cd "$(dirname "$0")/.."
 
-# The crates whose version is inherited from the workspace; each has a [[package]] entry in Cargo.lock.
-CRATES=(aparte aparte-format aparte-crypto)
+# The crates whose version is inherited from the workspace (`version.workspace = true`); each has a [[package]]
+# entry in Cargo.lock. Read from the manifests, so a new crate is stamped without editing this script.
+CRATES=()
+for manifest in crates/*/Cargo.toml; do
+  grep -qx 'version.workspace = true' "$manifest" || continue
+  name=$(awk -F'"' '/^name = /{ print $2; exit }' "$manifest")
+  [[ -n "$name" ]] || { echo "no package name in $manifest" >&2; exit 1; }
+  CRATES+=("$name")
+done
+(( ${#CRATES[@]} > 0 )) || { echo "no workspace crate found" >&2; exit 1; }
 
 # Rewrites the first `version = ...` line that follows a line equal to `after`, and fails if there is none.
 set_version() {
