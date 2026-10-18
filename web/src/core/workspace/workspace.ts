@@ -1312,6 +1312,8 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       live()
       const state = shards.get(shard) as ShardState
       const entity = liveConvEntity(id)
+      // Restored while its shard loaded (here or through sync): it is no longer in the trash, so it is kept.
+      if (!entity.has('deletedAt')) throw new InvalidStateError('Only a trashed conversation can be purged')
       const t = now()
       batch(() => {
         for (const messageId of [...(state.byConv.get(id) ?? [])]) state.messages.delete(messageId)

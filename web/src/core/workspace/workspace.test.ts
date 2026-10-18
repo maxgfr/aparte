@@ -223,6 +223,19 @@ describe('conversations', () => {
     const messages = doc.getMap('messages')
     for (const value of messages.values()) expect((value as Y.Map<unknown>).get('conv')).not.toBe(id)
   })
+
+  test('a conversation restored while its purge loads its shard is kept', async () => {
+    const { ws } = await setup()
+    const id = ws.conversations.create({ title: 'changed my mind' })
+    const thread = await ws.thread(id)
+    thread.commit(msg(newId(), null, 'user', 'keep me'))
+    ws.conversations.trash(id)
+    const purging = ws.conversations.purge(id)
+    ws.conversations.restore(id)
+    await expect(purging).rejects.toBeInstanceOf(InvalidStateError)
+    expect(ws.conversations.get(id)?.title).toBe('changed my mind')
+    expect((await ws.thread(id)).all()).toHaveLength(1)
+  })
 })
 
 describe('the message tree', () => {
