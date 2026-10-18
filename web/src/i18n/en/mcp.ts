@@ -11,7 +11,7 @@ export const mcp = {
   addHint: 'Its address, and how to sign in',
   corsTitle: 'Servers the browser cannot reach',
   corsBody:
-    'Aparté talks to a server straight from this page, so the server must allow requests from {origin} (CORS). A server that does not, or one that runs on your computer as a command, will be usable through the Aparté CLI: `aparte mcp bridge` relays it from your computer. The bridge comes in a later release.',
+    'Aparté talks to a server straight from this page, so the server must allow requests from {origin} (CORS). For a server that does not, or one that runs on your computer as a command, use the Aparté CLI: `aparte mcp bridge <name>` relays it from your computer at http://127.0.0.1:27181/mcp/<name>. Add that address here with Token authentication and the token the bridge prints.',
 
   // A server
   newTitle: 'Add an MCP server',

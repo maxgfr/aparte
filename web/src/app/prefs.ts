@@ -1,11 +1,16 @@
 /*
  * Device-local interface preferences: the only module that touches localStorage. What it may hold is listed in
- * PREFS below and is never sensitive (a theme, a layout choice, the fact that an Emergency Kit still waits to be
+ * PREFS below and is never sensitive (a theme, an interface language, a layout choice, the fact that an Emergency Kit still waits to be
  * confirmed): no secret, no key, no conversation, no provider or account detail. Anything that matters goes into the encrypted vault instead. Every read is validated, so a value
  * written by an older build or edited by hand falls back to the default rather than reaching the UI.
  */
 
+import { type BaseLocale, LOCALES } from '../i18n/index.ts'
+
 export type Theme = 'system' | 'light' | 'dark'
+
+/** The interface language picked on this device, or `system` to follow the device languages. */
+export type LocalePref = 'system' | BaseLocale
 
 interface PrefSpec<T> {
   readonly key: string
@@ -43,6 +48,7 @@ const flag = (raw: string): boolean | undefined => (raw === '1' ? true : raw ===
 /** Every preference this device may keep, with its type. */
 interface Prefs {
   theme: Theme
+  locale: LocalePref
   kitPending: KitPending
   /**
    * The dictation engine. `browser` (Chrome's Web Speech API, which sends the audio to Google) is set by the app only
@@ -69,6 +75,7 @@ export type PrefValue<N extends PrefName> = Prefs[N]
 
 const PREFS: { readonly [N in PrefName]: PrefSpec<Prefs[N]> } = {
   theme: { key: 'aparte:theme', fallback: 'system', parse: (raw) => THEMES.find((t) => t === raw) },
+  locale: { key: 'aparte:locale', fallback: 'system', parse: (raw) => LOCALES.find((l) => l === raw) },
   kitPending: {
     key: 'aparte:kit-pending',
     fallback: '',

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { BUILD, REPOSITORY } from '../../app/buildInfo.ts'
+import { type LocalePref, writePref } from '../../app/prefs.ts'
 import { useTheme } from '../../app/theme.ts'
-import type { Key } from '../../i18n/index.ts'
-import { useT } from '../../i18n/react.tsx'
+import { useToast } from '../../app/toast.tsx'
+import { usePref } from '../../app/usePref.ts'
+import { detectLocale, type Key, LOCALE_NAMES, LOCALES } from '../../i18n/index.ts'
+import { useSetLocale, useT } from '../../i18n/react.tsx'
 import { type NetPurpose, networkLog } from '../../security/net.ts'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
 import { Segmented } from '../../ui/components/Segmented.tsx'
@@ -45,6 +48,24 @@ const NO_REQUESTS: readonly never[] = []
 
 const THEMES = ['system', 'light', 'dark'] as const
 
+/**
+ * The interface language picked on this device, and its setter: the new catalog is fetched and applied in place
+ * (nothing unmounts, nothing is lost), then the choice is kept for the next launch. A `?locale=` query still wins
+ * at launch; a pick made here applies at once all the same.
+ */
+function useLanguage(): [LocalePref, (next: LocalePref) => void] {
+  const t = useT()
+  const toast = useToast()
+  const setLocale = useSetLocale()
+  const pref = usePref('locale')
+  const pick = (next: LocalePref) => {
+    setLocale(detectLocale({ stored: next, languages: navigator.languages }))
+      .then(() => writePref('locale', next))
+      .catch(() => toast(t('about.languageFailed')))
+  }
+  return [pref, pick]
+}
+
 function useStorageState(): StorageState | null {
   const [state, setState] = useState<StorageState | null>(null)
   useEffect(() => {
@@ -61,6 +82,7 @@ function useStorageState(): StorageState | null {
 export default function About() {
   const t = useT()
   const [theme, setTheme] = useTheme()
+  const [language, setLanguage] = useLanguage()
   // Trusted Types cannot change during a page's life: read once.
   const tt = useMemo(trustedTypesState, [])
   const worker = useSyncExternalStore(subscribeWorker, workerState, () => 'unsupported' as const)
@@ -160,6 +182,15 @@ export default function About() {
               value === 'system' ? 'about.themeSystem' : value === 'light' ? 'about.themeLight' : 'about.themeDark',
             ),
           }))}
+        />
+        <Segmented
+          label={t('about.language')}
+          value={language}
+          onChange={setLanguage}
+          options={[
+            { value: 'system', label: t('about.languageSystem') },
+            ...LOCALES.map((value) => ({ value, label: LOCALE_NAMES[value], lang: value })),
+          ]}
         />
       </section>
 

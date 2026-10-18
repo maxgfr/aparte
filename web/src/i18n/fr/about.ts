@@ -1,0 +1,62 @@
+import type { about as source } from '../en/about.ts'
+import type { Shape } from '../index.ts'
+
+/** French for the `about` namespace; keys, kinds and placeholders match the English source. */
+export const about = {
+  title: 'À propos',
+  buildTitle: 'Cette version',
+  version: 'Version',
+  commit: 'Commit',
+  mode: 'Mode de compilation',
+  modeProduction: 'Production',
+  modeDevelopment: 'Développement',
+  protectionTitle: 'Protections',
+  trustedTypes: 'Trusted Types',
+  trustedTypesEnforced: 'Appliquées',
+  trustedTypesAvailable: 'Disponibles, non appliquées',
+  trustedTypesUnsupported: 'Non prises en charge par ce navigateur',
+  trustedTypesHint:
+    'Le navigateur refuse de transformer du texte en script ou en balisage en dehors des politiques validées.',
+  serviceWorker: 'Service hors ligne',
+  serviceWorkerActive: 'Contrôle cette page',
+  serviceWorkerInactive: 'Ne contrôle pas cette page',
+  serviceWorkerUnsupported: 'Non pris en charge',
+  serviceWorkerHint:
+    'Il sert l’application depuis cet appareil et ajoute les en-têtes de sécurité à chaque chargement de page.',
+  storage: 'Stockage persistant',
+  storagePersisted: 'Accordé',
+  storageBestEffort: 'Non garanti',
+  storageHint:
+    'Le stockage accordé n’est jamais effacé par le navigateur pour libérer de la place ; le stockage non garanti peut l’être.',
+  storageUnsupported: 'Non pris en charge',
+  networkTitle: 'Réseau pendant cette session',
+  networkHint:
+    'Chaque adresse contactée par cette page depuis son ouverture, et pourquoi. Seule l’adresse est enregistrée, jamais un chemin, une requête ou ce qui a été envoyé, et rien n’est conservé après la fermeture de la page.',
+  networkEmpty: 'Rien n’a encore quitté cet appareil.',
+  networkRequests: 'Requêtes : {count}',
+  networkPurposeApp: 'Cette application',
+  networkPurposeProvider: 'Fournisseur de modèles',
+  networkPurposeMcp: 'Serveur MCP',
+  networkPurposeTool: 'Outil',
+  networkPurposeSync: 'Synchronisation',
+  networkPurposeDownload: 'Téléchargement',
+  networkPurposeCatalog: 'Catalogue de modèles',
+  networkPurposeSkills: 'Import de compétences',
+  networkPurposeResearch: 'Recherche approfondie',
+  originTitle: 'Origine',
+  originShared:
+    'Cette copie s’exécute sur {origin}, une adresse partagée avec tous les autres sites publiés par le même compte GitHub. Une page de l’un d’eux pourrait lire ce qu’Aparté stocke ici, c’est pourquoi tout ce qu’il conserve est chiffré.',
+  originDedicated: 'Cette copie s’exécute sur {origin}, une adresse qui lui est propre.',
+  appearanceTitle: 'Apparence',
+  theme: 'Thème',
+  themeSystem: 'Système',
+  themeLight: 'Clair',
+  themeDark: 'Sombre',
+  language: 'Langue',
+  languageSystem: 'Langue de l’appareil',
+  languageFailed: 'Cette langue n’a pas pu se charger. Vérifiez la connexion, puis réessayez.',
+  linksTitle: 'Source',
+  sourceCode: 'Code source sur GitHub',
+  reportIssue: 'Signaler un problème',
+  securityPolicy: 'Politique de sécurité',
+} as const satisfies Shape<typeof source>

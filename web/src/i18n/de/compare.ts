@@ -1,0 +1,71 @@
+import type { compare as source } from '../en/compare.ts'
+import type { Shape } from '../index.ts'
+
+/** German for the `compare` namespace; keys, kinds and placeholders match the English source. */
+export const compare = {
+  // Beam in the chat
+  beamButton: 'Beam',
+  beamButtonOn: 'Beam: {count} Modelle',
+  beamSheetTitle: 'Beam',
+  beamLead:
+    'Senden Sie Ihre nächste Nachricht an bis zu {max} Modelle gleichzeitig und vergleichen Sie ihre Antworten nebeneinander. Jede wird als Version der Antwort gespeichert.',
+  beamModels: 'Modelle',
+  beamPickAtMost: 'Wählen Sie zwei bis {max} Modelle.',
+  beamNoModels: 'Fügen Sie auf dem Bildschirm „Modelle“ ein zweites Modell hinzu, um Antworten zu vergleichen.',
+  beamOff: 'Beam ausschalten',
+  beamRegion: 'Zu vergleichende Antworten',
+  beamAnswerFrom: 'Antwort von {model}',
+  beamAnswerNumber: 'Antwort {index}',
+  beamStreaming: 'Schreibt…',
+  beamStopped: 'Gestoppt',
+  beamFailed: 'Diese Antwort ist fehlgeschlagen.',
+  beamRefused: 'Das Modell hat die Antwort verweigert.',
+  beamEmpty: 'Kein Text in dieser Antwort.',
+  beamKeep: 'Diese Antwort behalten',
+  beamKept: 'Behalten. Die anderen Antworten bleiben als Versionen der Antwort erhalten.',
+  beamMergeTitle: 'Antworten zusammenführen',
+  beamMergeLead:
+    'Ein Modell Ihrer Wahl formuliert aus dem Besten jeder Antwort eine neue. Nur deren Text wird behalten.',
+  beamMergeWith: 'Mit {model} zusammenführen',
+  beamMerge: 'Zusammenführen',
+  beamMerging: 'Wird zusammengeführt…',
+  beamMergeNeedsTwo: 'Zum Zusammenführen werden mindestens zwei Antworten mit Text benötigt.',
+  beamMerged: 'Zusammengeführte Antwort',
+  beamClose: 'Vergleich beenden',
+  beamStop: 'Alle stoppen',
+  beamBusy: 'Warten Sie, bis die verglichenen Antworten fertig sind, oder stoppen Sie sie, bevor Sie senden.',
+  beamFailedStart: 'Die Antworten konnten nicht starten: Prüfen Sie, ob jedes Modell seinen API-Schlüssel hat.',
+
+  // Arena
+  arenaTitle: 'Arena',
+  arenaLead:
+    'Zwei Ihrer Modelle beantworten dieselbe Nachricht anonym. Wählen Sie die bessere: Die Stimmen ordnen Ihre Modelle auf diesem Gerät ein, verschlüsselt wie der Rest Ihrer Daten.',
+  arenaNeedsTwo:
+    'Die Arena braucht mindestens zwei Modelle. Fügen Sie zuerst ein weiteres Modell oder einen weiteren Anbieter hinzu.',
+  arenaAddModels: 'Modelle hinzufügen',
+  arenaPrompt: 'Ihre Nachricht',
+  arenaPromptPlaceholder: 'Fragen Sie beide Modelle etwas',
+  arenaSend: 'An zwei Modelle senden',
+  arenaPoolHint: 'Zwei davon werden für jede Runde zufällig ausgewählt.',
+  arenaRound: 'Diese Runde',
+  arenaVoteTitle: 'Welche Antwort ist besser?',
+  arenaVoteA: 'Antwort 1 ist besser',
+  arenaVoteB: 'Antwort 2 ist besser',
+  arenaVoteTie: 'Beide sind gut',
+  arenaVoteBad: 'Beide sind schlecht',
+  arenaVoteWaiting: 'Stimmen Sie ab, sobald beide Antworten vollständig sind.',
+  arenaRevealed: 'Antwort 1 war {a}; Antwort 2 war {b}.',
+  arenaVoted: 'Stimme gespeichert.',
+  arenaContinue: 'Diesen Chat fortsetzen',
+  arenaNext: 'Neue Runde',
+  arenaLeaderboard: 'Rangliste',
+  arenaLeaderboardEmpty: 'Noch keine Stimmen. Jede Runde, über die Sie abstimmen, verändert die Bewertungen.',
+  arenaColRank: 'Rang',
+  arenaColModel: 'Modell',
+  arenaColRating: 'Bewertung',
+  arenaColRecord: 'Gewonnen, verloren, unentschieden',
+  arenaRecord: '{wins} gewonnen, {losses} verloren, {ties} unentschieden',
+  arenaGames: 'Stimmen: {count}',
+  arenaRatingNote: 'Elo-Bewertungen ab 1000, K = 32, aus allen Stimmen der Reihe nach neu berechnet.',
+  arenaFailed: 'Die Runde konnte nicht starten: Prüfen Sie, ob beide Modelle ihren API-Schlüssel haben.',
+} as const satisfies Shape<typeof source>

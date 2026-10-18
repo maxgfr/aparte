@@ -74,6 +74,18 @@ describe('prefs', () => {
     }
   })
 
+  test('the interface language is a shipped locale or the device default', () => {
+    const s = memory()
+    expect(readPref('locale', s)).toBe('system')
+    writePref('locale', 'de', s)
+    expect(s.data.get('aparte:locale')).toBe('de')
+    expect(readPref('locale', s)).toBe('de')
+    s.data.set('aparte:locale', 'pseudo')
+    expect(readPref('locale', s)).toBe('system')
+    writePref('locale', 'system', s)
+    expect(s.data.has('aparte:locale')).toBe(false)
+  })
+
   test('a storage that throws never breaks a read or a write', () => {
     const broken: PrefStorage = {
       getItem: () => {

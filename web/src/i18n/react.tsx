@@ -3,6 +3,7 @@ import { Button } from '../ui/components/Button.tsx'
 import { EmptyState } from '../ui/components/EmptyState.tsx'
 import {
   applyDocumentLocale,
+  type BaseLocale,
   createTranslator,
   type Locale,
   loadCatalog,
@@ -47,7 +48,7 @@ export function I18nProvider({ locale, children }: { readonly locale: Locale; re
   useEffect(() => {
     if (value !== null) applyDocumentLocale(value.locale)
   }, [value])
-  if (failed && value === null) return <CatalogFailed />
+  if (failed && value === null) return <CatalogFailed locale={locale} />
   if (value === null) return null
   return (
     <SetLocaleContext.Provider value={setLocale}>
@@ -60,12 +61,22 @@ export function I18nProvider({ locale, children }: { readonly locale: Locale; re
  * Without a catalog there is no translated text: the few words needed are kept here, outside the catalogs,
  * keyed by language so a later locale adds its own line.
  */
-const noCatalog = {
+const noCatalog: { readonly [L in BaseLocale]: readonly [string, string, string] } = {
   en: ['Aparté didn’t load.', 'Nothing on this device was changed. Check the connection, then reload.', 'Reload'],
-} as const
+  fr: [
+    'Aparté n’a pas pu se charger.',
+    'Rien n’a été modifié sur cet appareil. Vérifiez la connexion, puis rechargez.',
+    'Recharger',
+  ],
+  de: [
+    'Aparté konnte nicht geladen werden.',
+    'Auf diesem Gerät wurde nichts geändert. Prüfen Sie die Verbindung und laden Sie dann neu.',
+    'Neu laden',
+  ],
+}
 
-function CatalogFailed() {
-  const [title, body, reload] = noCatalog.en
+function CatalogFailed({ locale }: { readonly locale: Locale }) {
+  const [title, body, reload] = noCatalog[locale === 'pseudo' ? 'en' : locale]
   return (
     <main>
       <EmptyState

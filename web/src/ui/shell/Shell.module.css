@@ -165,7 +165,8 @@
   composes: tab;
   border: 0;
   background: none;
-  font: inherit;
+  /* The family only: the size and weight stay the tab label's, like the links beside it. */
+  font-family: inherit;
   cursor: pointer;
 }
 

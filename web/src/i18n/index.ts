@@ -77,9 +77,12 @@ export type Catalog = { readonly [N in Namespace]: Shape<Source[N]> }
  * The interface languages this build ships. A new language adds its code here, a loader below and a default
  * region; the parity test then holds it to the English keys and placeholders.
  */
-export const LOCALES = ['en'] as const
+export const LOCALES = ['en', 'fr', 'de'] as const
 export type BaseLocale = (typeof LOCALES)[number]
 export type Locale = BaseLocale | 'pseudo'
+
+/** Each language named in itself, as a language picker lists it (the same in every interface language). */
+export const LOCALE_NAMES: { readonly [L in BaseLocale]: string } = { en: 'English', fr: 'Français', de: 'Deutsch' }
 
 /**
  * No catalog ships in the initial bundle: the one locale in use is fetched once, before the first render (the
@@ -87,68 +90,137 @@ export type Locale = BaseLocale | 'pseudo'
  */
 const loaded = new Map<Locale, Catalog>()
 
+/** One namespace module of a locale, as each file exports it (`export const common = {…}`). */
+type Module<N extends Namespace> = { readonly [K in N]: Shape<Source[N]> }
+type Modules = { readonly [N in Namespace]: Promise<Module<N>> }
+
+/** Joins a locale's namespace chunks (fetched in parallel) into its catalog. */
+async function assemble(m: Modules): Promise<Catalog> {
+  const [
+    common,
+    shell,
+    about,
+    vault,
+    chat,
+    tools,
+    local,
+    sync,
+    mcp,
+    transfer,
+    roleplay,
+    compare,
+    stats,
+    knowledge,
+    sandbox,
+    media,
+    skills,
+    research,
+  ] = await Promise.all([
+    m.common,
+    m.shell,
+    m.about,
+    m.vault,
+    m.chat,
+    m.tools,
+    m.local,
+    m.sync,
+    m.mcp,
+    m.transfer,
+    m.roleplay,
+    m.compare,
+    m.stats,
+    m.knowledge,
+    m.sandbox,
+    m.media,
+    m.skills,
+    m.research,
+  ])
+  return {
+    common: common.common,
+    shell: shell.shell,
+    about: about.about,
+    vault: vault.vault,
+    chat: chat.chat,
+    tools: tools.tools,
+    local: local.local,
+    sync: sync.sync,
+    mcp: mcp.mcp,
+    transfer: transfer.transfer,
+    roleplay: roleplay.roleplay,
+    compare: compare.compare,
+    stats: stats.stats,
+    knowledge: knowledge.knowledge,
+    sandbox: sandbox.sandbox,
+    media: media.media,
+    skills: skills.skills,
+    research: research.research,
+  }
+}
+
 const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
-  en: async () => {
-    const [
-      common,
-      shell,
-      about,
-      vault,
-      chat,
-      tools,
-      local,
-      sync,
-      mcp,
-      transfer,
-      roleplay,
-      compare,
-      stats,
-      knowledge,
-      sandbox,
-      media,
-      skills,
-      research,
-    ] = await Promise.all([
-      import('./en/common.ts'),
-      import('./en/shell.ts'),
-      import('./en/about.ts'),
-      import('./en/vault.ts'),
-      import('./en/chat.ts'),
-      import('./en/tools.ts'),
-      import('./en/local.ts'),
-      import('./en/sync.ts'),
-      import('./en/mcp.ts'),
-      import('./en/transfer.ts'),
-      import('./en/roleplay.ts'),
-      import('./en/compare.ts'),
-      import('./en/stats.ts'),
-      import('./en/knowledge.ts'),
-      import('./en/sandbox.ts'),
-      import('./en/media.ts'),
-      import('./en/skills.ts'),
-      import('./en/research.ts'),
-    ])
-    return {
-      common: common.common,
-      shell: shell.shell,
-      about: about.about,
-      vault: vault.vault,
-      chat: chat.chat,
-      tools: tools.tools,
-      local: local.local,
-      sync: sync.sync,
-      mcp: mcp.mcp,
-      transfer: transfer.transfer,
-      roleplay: roleplay.roleplay,
-      compare: compare.compare,
-      stats: stats.stats,
-      knowledge: knowledge.knowledge,
-      sandbox: sandbox.sandbox,
-      media: media.media,
-      skills: skills.skills,
-      research: research.research,
-    }
-  },
+  en: () =>
+    assemble({
+      common: import('./en/common.ts'),
+      shell: import('./en/shell.ts'),
+      about: import('./en/about.ts'),
+      vault: import('./en/vault.ts'),
+      chat: import('./en/chat.ts'),
+      tools: import('./en/tools.ts'),
+      local: import('./en/local.ts'),
+      sync: import('./en/sync.ts'),
+      mcp: import('./en/mcp.ts'),
+      transfer: import('./en/transfer.ts'),
+      roleplay: import('./en/roleplay.ts'),
+      compare: import('./en/compare.ts'),
+      stats: import('./en/stats.ts'),
+      knowledge: import('./en/knowledge.ts'),
+      sandbox: import('./en/sandbox.ts'),
+      media: import('./en/media.ts'),
+      skills: import('./en/skills.ts'),
+      research: import('./en/research.ts'),
+    }),
+  fr: () =>
+    assemble({
+      common: import('./fr/common.ts'),
+      shell: import('./fr/shell.ts'),
+      about: import('./fr/about.ts'),
+      vault: import('./fr/vault.ts'),
+      chat: import('./fr/chat.ts'),
+      tools: import('./fr/tools.ts'),
+      local: import('./fr/local.ts'),
+      sync: import('./fr/sync.ts'),
+      mcp: import('./fr/mcp.ts'),
+      transfer: import('./fr/transfer.ts'),
+      roleplay: import('./fr/roleplay.ts'),
+      compare: import('./fr/compare.ts'),
+      stats: import('./fr/stats.ts'),
+      knowledge: import('./fr/knowledge.ts'),
+      sandbox: import('./fr/sandbox.ts'),
+      media: import('./fr/media.ts'),
+      skills: import('./fr/skills.ts'),
+      research: import('./fr/research.ts'),
+    }),
+  de: () =>
+    assemble({
+      common: import('./de/common.ts'),
+      shell: import('./de/shell.ts'),
+      about: import('./de/about.ts'),
+      vault: import('./de/vault.ts'),
+      chat: import('./de/chat.ts'),
+      tools: import('./de/tools.ts'),
+      local: import('./de/local.ts'),
+      sync: import('./de/sync.ts'),
+      mcp: import('./de/mcp.ts'),
+      transfer: import('./de/transfer.ts'),
+      roleplay: import('./de/roleplay.ts'),
+      compare: import('./de/compare.ts'),
+      stats: import('./de/stats.ts'),
+      knowledge: import('./de/knowledge.ts'),
+      sandbox: import('./de/sandbox.ts'),
+      media: import('./de/media.ts'),
+      skills: import('./de/skills.ts'),
+      research: import('./de/research.ts'),
+    }),
   pseudo: async () => {
     const [{ pseudoCatalog }, en] = await Promise.all([import('./pseudo.ts'), loadCatalog('en')])
     return pseudoCatalog(en)
@@ -208,7 +280,7 @@ function isNamespace(value: string): value is Namespace {
 }
 
 /** Formatting region used when the device lists no regional variant of the interface language. */
-const DEFAULT_REGION: Record<BaseLocale, string> = { en: 'en-US' }
+const DEFAULT_REGION: Record<BaseLocale, string> = { en: 'en-US', fr: 'fr-FR', de: 'de-DE' }
 
 /** A well-formed BCP-47 language tag (language plus optional subtags); anything else is ignored. */
 const TAG = /^[a-z]{2,3}(-[a-z0-9]{1,8})*$/i
@@ -289,8 +361,13 @@ export function detectFromEnvironment(stored?: string | null): Locale {
   return detectLocale({ query, stored, languages })
 }
 
-/** Updates `<html lang>` when a document exists. */
+/** Languages written right to left, by base subtag; none ships yet, but `dir` follows the locale all the same. */
+const RTL = new Set(['ar', 'fa', 'he', 'ur'])
+
+/** Updates `<html lang>` and `<html dir>` when a document exists. */
 export function applyDocumentLocale(locale: Locale): void {
   if (typeof document === 'undefined') return
-  document.documentElement.lang = regionalTag(locale)
+  const root = document.documentElement
+  root.lang = regionalTag(locale)
+  root.dir = RTL.has(locale) ? 'rtl' : 'ltr'
 }

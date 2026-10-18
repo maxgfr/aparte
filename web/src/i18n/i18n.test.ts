@@ -122,6 +122,14 @@ describe('detectLocale', () => {
     expect(detectLocale({})).toBe('en')
   })
 
+  test('French and German: picked, or from the device languages', () => {
+    expect(detectLocale({ languages: ['ja', 'de-AT', 'en-US'] })).toBe('de')
+    expect(detectLocale({ languages: ['fr-CA'] })).toBe('fr')
+    expect(detectLocale({ stored: 'fr', languages: ['de-DE'] })).toBe('fr')
+    expect(detectLocale({ stored: 'system', languages: ['de-DE'] })).toBe('de')
+    expect(detectLocale({ query: 'de', stored: 'fr' })).toBe('de')
+  })
+
   test('applyDocumentLocale is safe without a DOM', () => {
     expect(() => applyDocumentLocale('en')).not.toThrow()
   })
@@ -135,6 +143,12 @@ describe('regional formats', () => {
   test('no matching device language: the default region', () => {
     expect(intlTag('en', ['de-CH'])).toBe('en-US')
     expect(intlTag('en', [])).toBe('en-US')
+  })
+
+  test('French and German default to France and Germany', () => {
+    expect(intlTag('fr', [])).toBe('fr-FR')
+    expect(intlTag('de', ['en-GB'])).toBe('de-DE')
+    expect(intlTag('fr', ['fr-CH'])).toBe('fr-CH')
   })
 
   test('malformed tags are skipped; pseudo stays en-XA for <html lang>', () => {

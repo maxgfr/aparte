@@ -18,8 +18,8 @@ import { UpdateToast } from './ui/UpdateToast.tsx'
 // while the catalog loads.
 applyTheme(readPref('theme'))
 
-/** Only English ships for now; detection still runs so `?locale=pseudo` works for layout checks. */
-const locale = detectFromEnvironment()
+/** `?locale=` first (pseudo is reached only that way), then the language picked on this device, then its languages. */
+const locale = detectFromEnvironment(readPref('locale'))
 
 export function App(): JSX.Element {
   return (

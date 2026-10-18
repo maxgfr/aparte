@@ -1,0 +1,143 @@
+import type { roleplay as source } from '../en/roleplay.ts'
+import type { Shape } from '../index.ts'
+
+/** French for the `roleplay` namespace; keys, kinds and placeholders match the English source. */
+export const roleplay = {
+  title: 'Personnages',
+  subtitle:
+    'Fiches de personnage, lorebooks, réponses rapides et règles regex. Stockés chiffrés et synchronisés comme vos conversations.',
+
+  // Characters
+  charactersTitle: 'Personnages',
+  charactersEmpty: 'Aucun personnage pour l’instant. Importez une fiche (PNG ou JSON) ou créez-en un.',
+  importCard: 'Importer une fiche de personnage',
+  importCardHint:
+    'Une fiche PNG ou JSON de SillyTavern ou d’un site de fiches : lue sur cet appareil, son image est stockée chiffrée.',
+  importing: 'Lecture de la fiche…',
+  imported: 'Personnage « {name} » importé.',
+  importedWithLorebook: 'Personnage « {name} » importé, avec son lorebook.',
+  importFailed: 'Ce fichier n’a pas pu être lu comme une fiche de personnage : {message}',
+  newCharacter: 'Nouveau personnage',
+  untitledCharacter: 'Nouveau personnage',
+  avatarOf: 'Image de {name}',
+
+  // One character
+  characterTitle: 'Personnage',
+  characterMissing: 'Ce personnage n’existe plus',
+  characterName: 'Nom',
+  characterDescription: 'Description',
+  characterPersonality: 'Personnalité',
+  characterScenario: 'Scénario',
+  characterFirstMessage: 'Première réplique',
+  characterFirstMessageHint:
+    'Présentée au modèle comme la réplique par laquelle le personnage a ouvert l’échange. Elle n’est jamais envoyée comme message à part entière.',
+  characterExamples: 'Exemples de dialogues',
+  characterSystem: 'Instructions propres',
+  characterSystemHint: 'Placées en tête du prompt système. Utilisez {{char}} et {{user}} pour les noms.',
+  characterLorebook: 'Lorebook',
+  characterNoLorebook: 'Aucun',
+  characterPreview: 'Prompt système qu’il fournit',
+  characterSave: 'Enregistrer',
+  characterSaved: 'Personnage enregistré.',
+  characterDelete: 'Supprimer le personnage',
+  characterDeleted: 'Personnage déplacé dans la corbeille.',
+  characterExport: 'Exporter comme fiche (JSON)',
+  characterCreator: 'Fiche de {creator}',
+
+  // Lorebooks
+  lorebooksTitle: 'Lorebooks',
+  lorebooksEmpty:
+    'Aucun lorebook pour l’instant. Un lorebook ajoute ses entrées à un message lorsque leurs mots déclencheurs apparaissent.',
+  newLorebook: 'Nouveau lorebook',
+  untitledLorebook: 'Nouveau lorebook',
+  lorebookEntries: 'Entrées : {count}',
+  lorebookTitle: 'Lorebook',
+  lorebookMissing: 'Ce lorebook n’existe plus',
+  lorebookName: 'Nom',
+  lorebookScanDepth: 'Messages analysés',
+  lorebookScanDepthHint:
+    'Combien des derniers messages sont recherchés pour trouver les mots déclencheurs, le nouveau compris.',
+  lorebookBudget: 'Budget (caractères)',
+  lorebookBudgetHint:
+    'Au plus ce volume de texte d’entrées est ajouté à un message, en commençant par l’ordre le plus bas.',
+  lorebookEntriesTitle: 'Entrées',
+  lorebookNoEntries: 'Aucune entrée pour l’instant.',
+  entryLabel: 'Entrée {index}',
+  entryComment: 'Note personnelle',
+  entryTriggers: 'Mots déclencheurs',
+  entryTriggersHint: 'Séparés par des virgules. L’entrée est ajoutée dès que l’un d’eux apparaît.',
+  entrySecondary: 'Exige aussi l’un de ces mots',
+  entrySecondaryHint: 'Facultatif, séparés par des virgules.',
+  entryContent: 'Contenu',
+  entryEnabled: 'Activée',
+  entryConstant: 'Toujours ajouter',
+  entryConstantHint: 'Ajoutée à chaque message, mots déclencheurs ou non.',
+  entryCaseSensitive: 'Respecter la casse',
+  entryWholeWord: 'Mots entiers uniquement',
+  entryOrder: 'Ordre',
+  entryAdd: 'Ajouter une entrée',
+  entryRemove: 'Supprimer l’entrée {index}',
+  lorebookSave: 'Enregistrer',
+  lorebookSaved: 'Lorebook enregistré.',
+  lorebookDelete: 'Supprimer le lorebook',
+  lorebookDeleted: 'Lorebook déplacé dans la corbeille.',
+
+  // Quick replies
+  quickTitle: 'Réponses rapides',
+  quickHint: 'Boutons au-dessus du champ de message qui envoient leur texte en un geste.',
+  quickEmpty: 'Aucune réponse rapide pour l’instant.',
+  quickLabel: 'Libellé du bouton',
+  quickText: 'Texte envoyé',
+  quickAdd: 'Ajouter une réponse rapide',
+  quickRemove: 'Supprimer « {label} »',
+  quickBar: 'Réponses rapides',
+
+  // Regex rules
+  regexTitle: 'Règles regex',
+  regexHint:
+    'Rechercher et remplacer. Les règles sur vos messages modifient le texte avant son enregistrement et son envoi ; les règles sur les réponses ne modifient que leur affichage.',
+  regexEmpty: 'Aucune règle regex pour l’instant.',
+  regexName: 'Nom',
+  regexFind: 'Rechercher (expression régulière)',
+  regexFlags: 'Options',
+  regexFlagsHint: 'Parmi g, i, m, s, u.',
+  regexReplace: 'Remplacer par',
+  regexReplaceHint: 'Utilisez $1 pour les groupes, {{char}} et {{user}} pour les noms.',
+  regexPlacement: 'S’applique à',
+  regexInput: 'Mes messages',
+  regexDisplay: 'Réponses telles qu’affichées',
+  regexAdd: 'Ajouter une règle',
+  regexRemove: 'Supprimer « {name} »',
+  regexEnabled: '« {name} » activée',
+  regexTest: 'Essayer sur',
+  regexResult: 'Résultat : {result}',
+  regexProblemEmpty: 'Le motif est vide.',
+  regexProblemFlags: 'Seules les options g, i, m, s et u sont autorisées.',
+  regexProblemPattern: 'Ce n’est pas une expression régulière valide.',
+  regexOnInput: 'Mes messages',
+  regexOnDisplay: 'Réponses',
+
+  // In a chat
+  chatButton: 'Jeu de rôle',
+  chatButtonWith: 'Jeu de rôle : {name}',
+  chatSheet: 'Jeu de rôle',
+  chatCharacter: 'Personnage',
+  chatNoCharacter: 'Aucun personnage',
+  chatCharacterHint:
+    'Le prompt du personnage devient les instructions de la conversation. Une fois la conversation commencée, un changement ajoute une nouvelle instruction à partir de ce point.',
+  chatNoCharacters:
+    'Aucun personnage pour l’instant : importez-en un depuis « Plus », puis « Personnages et lorebooks ».',
+  chatUserName: 'Votre nom',
+  chatUserNameHint: 'Utilisé pour {{user}}.',
+  chatLorebooks: 'Lorebooks',
+  chatNoLorebooks: 'Aucun lorebook pour l’instant.',
+  chatNote: 'Note de l’auteur',
+  chatNoteHint: 'Un rappel ajouté à vos messages, invisible dans le fil.',
+  chatNoteEvery: 'Ajouter tous les … messages',
+  chatSave: 'Appliquer',
+  chatSwitched: '{name} joue désormais le rôle.',
+  chatCharacterLeft: 'La conversation ne joue plus de personnage.',
+  chatNoCharacterSystem: 'Désormais, cessez de jouer un personnage et répondez en votre propre nom.',
+  injectedSummary: 'Contexte ajouté',
+  injectedHint: 'Envoyé avec ce message depuis un lorebook ou la note de l’auteur.',
+} as const satisfies Shape<typeof source>

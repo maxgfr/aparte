@@ -1,0 +1,62 @@
+import type { about as source } from '../en/about.ts'
+import type { Shape } from '../index.ts'
+
+/** German for the `about` namespace; keys, kinds and placeholders match the English source. */
+export const about = {
+  title: 'Info',
+  buildTitle: 'Diese Version',
+  version: 'Version',
+  commit: 'Commit',
+  mode: 'Build-Modus',
+  modeProduction: 'Produktion',
+  modeDevelopment: 'Entwicklung',
+  protectionTitle: 'Schutzmaßnahmen',
+  trustedTypes: 'Trusted Types',
+  trustedTypesEnforced: 'Erzwungen',
+  trustedTypesAvailable: 'Verfügbar, nicht erzwungen',
+  trustedTypesUnsupported: 'Von diesem Browser nicht unterstützt',
+  trustedTypesHint:
+    'Der Browser verweigert es, Text außerhalb der geprüften Richtlinien in Skript oder Markup umzuwandeln.',
+  serviceWorker: 'Offline-Worker',
+  serviceWorkerActive: 'Steuert diese Seite',
+  serviceWorkerInactive: 'Steuert diese Seite nicht',
+  serviceWorkerUnsupported: 'Nicht unterstützt',
+  serviceWorkerHint:
+    'Er liefert die App von diesem Gerät aus und fügt jedem Seitenaufruf die Sicherheits-Header hinzu.',
+  storage: 'Dauerhafter Speicher',
+  storagePersisted: 'Gewährt',
+  storageBestEffort: 'Nach Möglichkeit',
+  storageHint:
+    'Gewährter Speicher wird vom Browser nie zur Freigabe von Platz gelöscht; bei „Nach Möglichkeit“ kann das geschehen.',
+  storageUnsupported: 'Nicht unterstützt',
+  networkTitle: 'Netzwerk in dieser Sitzung',
+  networkHint:
+    'Jede Adresse, die diese Seite seit dem Öffnen kontaktiert hat, und warum. Erfasst wird nur die Adresse, nie ein Pfad, eine Abfrage oder das Gesendete, und nach dem Schließen der Seite wird nichts aufbewahrt.',
+  networkEmpty: 'Noch hat nichts dieses Gerät verlassen.',
+  networkRequests: 'Anfragen: {count}',
+  networkPurposeApp: 'Diese App',
+  networkPurposeProvider: 'Modellanbieter',
+  networkPurposeMcp: 'MCP-Server',
+  networkPurposeTool: 'Werkzeug',
+  networkPurposeSync: 'Synchronisierung',
+  networkPurposeDownload: 'Download',
+  networkPurposeCatalog: 'Modellkatalog',
+  networkPurposeSkills: 'Skill-Import',
+  networkPurposeResearch: 'Tiefenrecherche',
+  originTitle: 'Ursprung',
+  originShared:
+    'Diese Kopie läuft unter {origin}, einer Adresse, die mit allen anderen Seiten geteilt wird, die unter demselben GitHub-Konto veröffentlicht werden. Eine dieser Seiten könnte lesen, was Aparté hier speichert, deshalb speichert Aparté alles verschlüsselt.',
+  originDedicated: 'Diese Kopie läuft unter {origin}, einer eigenen Adresse.',
+  appearanceTitle: 'Darstellung',
+  theme: 'Design',
+  themeSystem: 'System',
+  themeLight: 'Hell',
+  themeDark: 'Dunkel',
+  language: 'Sprache',
+  languageSystem: 'Gerätesprache',
+  languageFailed: 'Diese Sprache konnte nicht geladen werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.',
+  linksTitle: 'Quellcode',
+  sourceCode: 'Quellcode auf GitHub',
+  reportIssue: 'Problem melden',
+  securityPolicy: 'Sicherheitsrichtlinie',
+} as const satisfies Shape<typeof source>
