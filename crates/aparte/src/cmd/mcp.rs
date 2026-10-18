@@ -8,6 +8,14 @@
 //!   `--approve` approves the current definitions (after a server changed a tool).
 //! - `login <name>` / `logout <name>`: OAuth for an HTTP server (browser, loopback redirect), tokens kept encrypted
 //!   under a key in the OS keychain.
+//! - `serve`: this CLI's tools for MCP clients, over Streamable HTTP on 127.0.0.1, read-only ones unless
+//!   `--allow-write`, whose calls are approved in the terminal one by one.
+//! - `bridge <name>...`: configured servers relayed to the web app over Streamable HTTP on 127.0.0.1, one endpoint
+//!   `/mcp/<name>` each (`spec/MCP-BRIDGE.md`).
+//! - `token`: prints a new random token, for `--token-file`.
+//!
+//! `serve` and `bridge` show a new 256-bit token once on stderr (never on stdout, never in a URL), unless one comes
+//! from `--token-file` or `APARTE_MCP_TOKEN`; clients send it as `Authorization: Bearer <token>`.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -18,6 +26,7 @@ use anyhow::{Context, bail};
 use aparte_mcp::auth::{Login, SecretVault, TokenStore};
 use aparte_mcp::client::check_pins;
 use aparte_mcp::config::{self, ConfigFile, ServerConfig, Source, Transport};
+use aparte_mcp::loopback::{LoopbackServer, TOKEN_ENV, Token};
 use aparte_mcp::{PinStatus, PinStore};
 use serde_json::{Value, json};
 
@@ -61,6 +70,43 @@ pub enum Action {
     },
     /// Forget the OAuth tokens of a server
     Logout { name: String },
+    /// Serve this CLI's tools (read-only by default) to MCP clients over HTTP on 127.0.0.1
+    Serve(ServeArgs),
+    /// Relay configured servers to the web app over HTTP on 127.0.0.1, one endpoint /mcp/<name> each
+    Bridge(BridgeArgs),
+    /// Print a new random token, for --token-file
+    Token,
+}
+
+/// Arguments of `aparte mcp serve`.
+#[derive(Debug, clap::Args)]
+pub struct ServeArgs {
+    /// The port on 127.0.0.1 (0 picks a free one)
+    #[arg(long, default_value_t = aparte_mcp::serve::DEFAULT_PORT)]
+    port: u16,
+    /// Also offer the tools that write, run commands or reach the network; each call asks in the terminal
+    #[arg(long)]
+    allow_write: bool,
+    /// Approve every call without asking (with --allow-write)
+    #[arg(long, requires = "allow_write")]
+    yes: bool,
+    /// Read the token from this file instead of making a new one (else APARTE_MCP_TOKEN, if set)
+    #[arg(long, value_name = "FILE")]
+    token_file: Option<PathBuf>,
+}
+
+/// Arguments of `aparte mcp bridge`.
+#[derive(Debug, clap::Args)]
+pub struct BridgeArgs {
+    /// The servers to relay, by name (from `aparte mcp list`)
+    #[arg(required = true, value_name = "NAME")]
+    servers: Vec<String>,
+    /// The port on 127.0.0.1 (0 picks a free one)
+    #[arg(long, default_value_t = aparte_mcp::bridge::DEFAULT_PORT)]
+    port: u16,
+    /// Read the token from this file instead of making a new one (else APARTE_MCP_TOKEN, if set)
+    #[arg(long, value_name = "FILE")]
+    token_file: Option<PathBuf>,
 }
 
 /// Arguments of `aparte mcp add`.
@@ -168,6 +214,17 @@ pub fn run(args: Args, ctx: &Ctx) -> anyhow::Result<ExitCode> {
             } else {
                 format!("{name} had no stored tokens")
             });
+            Ok(ExitCode::from(exit::OK))
+        }
+        Action::Serve(a) => serve(ctx, a),
+        Action::Bridge(a) => bridge(ctx, a),
+        Action::Token => {
+            let token = Token::generate()?;
+            if ctx.ui.is_json() {
+                ctx.ui.emit("mcp-token", json!({"token": token.display().as_str()}));
+            } else {
+                println!("{}", token.display().as_str());
+            }
             Ok(ExitCode::from(exit::OK))
         }
     }
@@ -540,5 +597,208 @@ fn login(ctx: &Ctx, name: &str, no_browser: bool) -> anyhow::Result<ExitCode> {
     ctx.ui.say(&format!(
         "signed in to {name}; the tokens are kept encrypted, their key in the OS keychain"
     ));
+    Ok(ExitCode::from(exit::OK))
+}
+
+/// The token of `serve` and `bridge`: from `--token-file`, else `APARTE_MCP_TOKEN`, else a new one; with where it
+/// came from (`None` for a new one).
+fn token(file: Option<&std::path::Path>) -> anyhow::Result<(Token, Option<String>)> {
+    if let Some(path) = file {
+        let text = std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+        let token = Token::parse(&text).with_context(|| format!("{} does not hold a token", path.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if std::fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o077 != 0) {
+                eprintln!(
+                    "aparte: note: {} can be read by other users; `chmod 600` it",
+                    path.display()
+                );
+            }
+        }
+        return Ok((token, Some(path.display().to_string())));
+    }
+    if let Some(text) = std::env::var(TOKEN_ENV).ok().filter(|v| !v.trim().is_empty()) {
+        let token = Token::parse(&text).with_context(|| format!("{TOKEN_ENV} does not hold a token"))?;
+        return Ok((token, Some(TOKEN_ENV.to_owned())));
+    }
+    Ok((Token::generate()?, None))
+}
+
+/// Shows a new token once, on stderr only, or says where the token came from.
+fn show_token(token: &Token, source: Option<&str>) {
+    match source {
+        Some(s) => eprintln!("aparte: the token comes from {s}"),
+        None => eprintln!(
+            "aparte: token, shown once; type or paste it into the client, which sends it as \
+             \"Authorization: Bearer <token>\":\n\n    {}\n",
+            token.display().as_str()
+        ),
+    }
+}
+
+fn runtime() -> anyhow::Result<tokio::runtime::Runtime> {
+    Ok(tokio::runtime::Builder::new_multi_thread().enable_all().build()?)
+}
+
+/// Resolves on Ctrl-C, or SIGTERM on Unix.
+async fn interrupted() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        if let Ok(mut term) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = term.recv() => {}
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+fn serve(ctx: &Ctx, a: ServeArgs) -> anyhow::Result<ExitCode> {
+    use aparte_mcp::serve::{AllowAll, CallLog, CallRecord, TerminalApprover, ToolServer, offered};
+    let cwd = setup::cwd()?;
+    let (token, source) = token(a.token_file.as_deref())?;
+    let blobs = Arc::new(aparte_tools::BlobStore::new().context("cannot create the output directory")?);
+    let cfg = aparte_tools::ToolsConfig {
+        sandbox: aparte_tools::SandboxPolicy {
+            required: true,
+            network: false,
+            writable: Vec::new(),
+        },
+        only: None,
+    };
+    let tools = offered(
+        aparte_tools::builtin(&cfg, blobs).context("cannot set up the tools")?,
+        a.allow_write,
+    );
+    let (approver, approvals): (Arc<dyn aparte_agent::Approver>, &str) = if !a.allow_write {
+        (Arc::new(aparte_agent::DenyAll), "none needed")
+    } else if a.yes {
+        (Arc::new(AllowAll), "every call approved (--yes)")
+    } else if let Some(t) = TerminalApprover::open() {
+        (Arc::new(t), "asked in this terminal")
+    } else {
+        (
+            Arc::new(aparte_agent::DenyAll),
+            "denied: stdin is not a terminal (--yes approves them)",
+        )
+    };
+    let rt = runtime()?;
+    rt.block_on(async {
+        let server = LoopbackServer::bind_port(a.port).await?;
+        let url = format!("http://{}{}", server.local_addr(), aparte_mcp::serve::ENDPOINT);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<CallRecord>();
+        let log: CallLog = Arc::new(move |r: &CallRecord| {
+            let _ = tx.send(r.clone());
+        });
+        let handler = Arc::new(ToolServer::new(tools, cwd.clone(), approver, log));
+        let names = handler.tool_names();
+        ctx.ui.emit(
+            "mcp-serve",
+            json!({
+                "url": url, "port": server.local_addr().port(), "root": cwd.display().to_string(),
+                "tools": names, "allowWrite": a.allow_write, "approvals": approvals,
+            }),
+        );
+        ctx.ui.say(&format!("serving {} at {url}", cwd.display()));
+        ctx.ui.say(&format!("tools: {}", names.join(", ")));
+        if a.allow_write {
+            ctx.ui.say(&format!("calls of tools that write: {approvals}"));
+        }
+        show_token(&token, source.as_deref());
+        eprintln!("aparte: Ctrl-C stops the server");
+        let serving = server.serve(Arc::new(token), handler, interrupted());
+        tokio::pin!(serving);
+        loop {
+            tokio::select! {
+                done = &mut serving => {
+                    done?;
+                    break;
+                }
+                Some(r) = rx.recv() => {
+                    let ms = r.elapsed.as_millis();
+                    ctx.ui.emit(
+                        "mcp-call",
+                        json!({"tool": r.tool, "input": r.summary, "outcome": r.outcome.name(), "ms": ms}),
+                    );
+                    eprintln!("aparte: call {} {} -> {} ({ms} ms)", r.tool, r.summary, r.outcome.name());
+                }
+            }
+        }
+        ctx.ui.emit("mcp-stopped", json!({}));
+        anyhow::Ok(())
+    })?;
+    Ok(ExitCode::from(exit::OK))
+}
+
+fn bridge(ctx: &Ctx, a: BridgeArgs) -> anyhow::Result<ExitCode> {
+    use aparte_mcp::bridge::{Bridge, BridgeLog, BridgeRecord};
+    let mut selected: Vec<ServerConfig> = Vec::new();
+    for name in &a.servers {
+        if selected.iter().any(|s| &s.name == name) {
+            continue;
+        }
+        let server = find(ctx, name)?;
+        if server.disabled {
+            bail!("{name} is disabled in {}", server.file.display());
+        }
+        selected.push(server);
+    }
+    let cwd = setup::cwd()?;
+    let opts = setup::mcp_options(ctx, &cwd);
+    let (token, source) = token(a.token_file.as_deref())?;
+    let rt = runtime()?;
+    rt.block_on(async {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<BridgeRecord>();
+        let log: BridgeLog = Arc::new(move |r: &BridgeRecord| {
+            let _ = tx.send(r.clone());
+        });
+        let bridge = Arc::new(Bridge::new(selected, opts, log)?);
+        let server = LoopbackServer::bind_port(a.port).await?;
+        let base = format!("http://{}", server.local_addr());
+        let endpoints: Vec<Value> = bridge
+            .names()
+            .iter()
+            .map(|n| json!({"name": n, "url": format!("{base}{}{n}", aparte_mcp::bridge::PREFIX)}))
+            .collect();
+        ctx.ui.emit(
+            "mcp-bridge",
+            json!({"port": server.local_addr().port(), "servers": endpoints}),
+        );
+        for e in &endpoints {
+            ctx.ui.say(&format!(
+                "{}: {}",
+                e["name"].as_str().unwrap_or_default(),
+                e["url"].as_str().unwrap_or_default()
+            ));
+        }
+        show_token(&token, source.as_deref());
+        eprintln!(
+            "aparte: open to {} and http://localhost or 127.0.0.1 pages; Ctrl-C stops the bridge",
+            aparte_mcp::loopback::APP_ORIGIN
+        );
+        let serving = server.serve(Arc::new(token), bridge.clone(), interrupted());
+        tokio::pin!(serving);
+        let outcome = loop {
+            tokio::select! {
+                done = &mut serving => break done,
+                Some(r) = rx.recv() => {
+                    ctx.ui.emit(
+                        "mcp-relay",
+                        json!({"server": r.server, "method": r.method, "tool": r.tool, "status": r.status}),
+                    );
+                    let tool = r.tool.as_deref().map(|t| format!(" {t}")).unwrap_or_default();
+                    eprintln!("aparte: {} {}{tool} -> {}", r.server, r.method, r.status);
+                }
+            }
+        };
+        bridge.shutdown().await;
+        outcome?;
+        ctx.ui.emit("mcp-stopped", json!({}));
+        anyhow::Ok(())
+    })?;
     Ok(ExitCode::from(exit::OK))
 }

@@ -191,6 +191,9 @@ pub fn print_with(
             }
         });
         let out = built.agent.prompt(prompt).await;
+        if let Err(e) = setup::record(&mut built, Some(&out)) {
+            eprintln!("aparte: {e:#}");
+        }
         setup::finish(args, built).await?;
         Ok(ExitCode::from(exit_for(&out)))
     })
@@ -243,6 +246,7 @@ pub fn interactive(args: &AgentArgs, ctx: &Ctx) -> anyhow::Result<ExitCode> {
             blobs,
             skills,
             mcp,
+            recorder,
         } = built;
         let result = aparte_tui::run(agent, channels, opts).await;
         let agent = match result {
@@ -258,6 +262,7 @@ pub fn interactive(args: &AgentArgs, ctx: &Ctx) -> anyhow::Result<ExitCode> {
             blobs,
             skills,
             mcp,
+            recorder,
         };
         setup::finish(args, built).await?;
         Ok(ExitCode::from(exit::OK))

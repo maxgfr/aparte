@@ -15,7 +15,7 @@ use aparte_mcp::{ConnectOptions, McpManager, PinStore};
 use aparte_skills::Catalog;
 use aparte_tools::{BlobStore, SandboxPolicy, ToolsConfig};
 
-use crate::{Ctx, keychain, paths};
+use crate::{Ctx, device, keychain, paths, session as vault_session};
 
 /// Flags of the agent modes.
 #[derive(Debug, Clone, clap::Args)]
@@ -71,6 +71,15 @@ pub struct AgentArgs {
     /// Write the conversation as JSONL when done
     #[arg(long, value_name = "FILE")]
     pub export: Option<PathBuf>,
+    /// Continue a conversation of the vault (`aparte sessions list`), the CLI's or the web app's
+    #[arg(long, value_name = "ID", conflicts_with = "resume")]
+    pub session: Option<String>,
+    /// With --session: continue from this message; the new messages become a branch beside the old ones
+    #[arg(long, value_name = "MESSAGE", requires = "session")]
+    pub branch_from: Option<String>,
+    /// Do not record the conversation in the vault
+    #[arg(long, conflicts_with = "session")]
+    pub no_save: bool,
 }
 
 fn parse_effort(s: &str) -> Result<Effort, String> {
@@ -87,6 +96,42 @@ pub struct Built {
     pub skills: Arc<Catalog>,
     /// The MCP servers started; shut down by [`finish`].
     pub mcp: McpManager,
+    /// The vault conversation the session is recorded in, when there is one.
+    pub recorder: Option<Recording>,
+}
+
+/// An unlocked vault and the conversation a session is recorded in.
+pub struct Recording {
+    pub open: device::Open,
+    pub recorder: vault_session::Recorder,
+    /// The system prompt and tool snapshot a new conversation is created with.
+    pub system: String,
+    pub tools: serde_json::Value,
+}
+
+/// Opens the vault for recording, as the flags ask: `None` with `--no-save`, without a vault, or (with a warning)
+/// when the passphrase cannot be asked for.
+fn open_recording(ctx: &Ctx, args: &AgentArgs) -> anyhow::Result<Option<device::Open>> {
+    if args.no_save {
+        return Ok(None);
+    }
+    let vault = device::vault(ctx)?;
+    if vault.state()? == aparte_store::VaultState::Absent {
+        if args.session.is_some() {
+            bail!("no vault on this device: `aparte vault create` or `aparte vault join`");
+        }
+        return Ok(None);
+    }
+    match device::open(ctx) {
+        Ok(open) => Ok(Some(open)),
+        Err(e) if args.session.is_none() && e.downcast_ref::<device::NoPassphrase>().is_some() => {
+            if !ctx.global.quiet {
+                eprintln!("aparte: this conversation is not saved in the vault: {e} (or pass --no-save)");
+            }
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Every tool name `--tools` takes.
@@ -267,10 +312,34 @@ pub async fn build(
         system.push('\n');
         system.push_str(extra);
     }
-    let mut cfg = AgentConfig::new(
-        args.model.clone().unwrap_or_else(|| preset.default_model.to_owned()),
-        cwd,
-    );
+    let model_id = args.model.clone().unwrap_or_else(|| preset.default_model.to_owned());
+    let mut recording = None;
+    let mut history = Vec::new();
+    let mut sink = sink;
+    if let Some(open) = open_recording(ctx, args)? {
+        let provider = vault_session::ensure_provider(&open.workspace, preset, args.base_url.as_deref())?;
+        let (recorder, past, frozen) = vault_session::Recorder::start(
+            &open.workspace,
+            args.session.as_deref(),
+            args.branch_from.as_deref(),
+            provider,
+            model_id.clone(),
+            args.effort,
+        )?;
+        // A continued conversation keeps the system prompt it was signed over (spec/DATA-MODEL.md section 5).
+        if let Some(frozen) = frozen {
+            system = frozen;
+        }
+        sink = recorder.sink(sink);
+        history = past;
+        recording = Some(Recording {
+            open,
+            recorder,
+            system: system.clone(),
+            tools: vault_session::tool_snapshot(&tools),
+        });
+    }
+    let mut cfg = AgentConfig::new(model_id, cwd);
     cfg.system = system;
     cfg.effort = args.effort;
     cfg.max_output_tokens = args.max_output_tokens;
@@ -285,6 +354,8 @@ pub async fn build(
         let text = std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
         let (_, messages): (_, Vec<Message>) = session::import(&text)?;
         agent.set_messages(messages);
+    } else if !history.is_empty() {
+        agent.set_messages(history);
     }
     Ok(Built {
         agent,
@@ -292,14 +363,33 @@ pub async fn build(
         blobs,
         skills,
         mcp,
+        recorder: recording,
     })
 }
 
-/// Ends a session: writes `--export` when asked, then stops the MCP servers.
-pub async fn finish(args: &AgentArgs, built: Built) -> anyhow::Result<()> {
+/// Commits what the agent added to the vault conversation, when the session is recorded.
+pub fn record(built: &mut Built, outcome: Option<&aparte_agent::RunOutcome>) -> anyhow::Result<()> {
+    let Some(r) = built.recorder.as_mut() else {
+        return Ok(());
+    };
+    r.recorder
+        .commit(&r.open.workspace, &r.system, &r.tools, built.agent.messages(), outcome)
+        .context("cannot save the conversation in the vault")?;
+    Ok(())
+}
+
+/// Ends a session: records it in the vault, writes `--export` when asked, then stops the MCP servers.
+pub async fn finish(args: &AgentArgs, mut built: Built) -> anyhow::Result<()> {
+    let recorded = record(&mut built, None);
+    if let Some(r) = &built.recorder
+        && !r.recorder.conversation().is_empty()
+        && !args.no_save
+    {
+        tracing::info!(conversation = r.recorder.conversation(), "saved in the vault");
+    }
     let exported = export(args, &built);
     built.mcp.shutdown().await;
-    exported
+    recorded.and(exported)
 }
 
 /// Writes `--export` when asked.

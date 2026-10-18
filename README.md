@@ -18,6 +18,7 @@ cd web && bun install && bun run dev      # http://localhost:5173/aparte/
 cd web && bun run check                   # types, lint, tests, build, security scan, size budget
 scripts/check.sh                          # Rust: fmt, clippy, tests, cargo deny
 scripts/check-vectors.sh                  # aparte/1 vectors and fixtures, TypeScript against Rust
+scripts/check-interop.sh                  # the web app's sync code and the CLI sync one vault through Git
 ```
 
 ## CLI
@@ -26,7 +27,8 @@ scripts/check-vectors.sh                  # aparte/1 vectors and fixtures, TypeS
 Anthropic Messages, OpenAI Responses, OpenAI chat completions and Gemini), `aparte-tools` (read, write, edit,
 sandboxed bash, grep, find, ls, git, web fetch), `aparte-agent` (tool trait, hooks, approvals, steering and
 follow-up queues, JSONL sessions), `aparte-skills` (`SKILL.md` skills), `aparte-mcp` (MCP client) and `aparte-tui`
-(inline terminal interface).
+(inline terminal interface), `aparte-store` (the encrypted device store and the vault) and `aparte-sync` (the Yjs
+documents through `yrs`, the sync engine, and the folder, Git, GitHub and S3 stores).
 
 ```sh
 aparte                                  # terminal interface in the current project
@@ -40,6 +42,13 @@ aparte skills list                      # skills found, and whether the model is
 aparte mcp add files -- npx -y @modelcontextprotocol/server-filesystem .
 aparte mcp add docs https://example.com/mcp && aparte mcp login docs
 aparte mcp tools                        # start the servers, list their tools and approval state
+aparte mcp bridge files                 # let the web app reach a stdio server, over 127.0.0.1 with a token
+aparte mcp serve                        # offer the CLI's read-only tools to MCP clients
+aparte vault create                     # a new vault; the Emergency Kit is shown once
+aparte vault join github owner/repo     # take the vault the web app syncs there (or folder, git, s3)
+aparte sync setup git git@host:me/vault.git && aparte sync now
+aparte sessions list                    # the vault's conversations, from the CLI and the web app
+aparte --session <id>                   # continue one of them here
 ```
 
 Keys come from the provider's variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`...) or the OS
@@ -58,7 +67,15 @@ project's `.aparte/mcp.json` is read only when the project is trusted). Stdio se
 with a filtered environment and are killed with it; HTTP servers use Streamable HTTP and OAuth 2.1 with PKCE, their
 tokens encrypted under a key kept in the OS keychain. MCP annotations drive approvals (only read-only, closed-world
 tools run without asking), and every tool definition is pinned by fingerprint: a tool that changes later is held back
-until `aparte mcp tools <server> --approve`.
+until `aparte mcp tools <server> --approve`. `aparte mcp bridge` and `aparte mcp serve` listen on `127.0.0.1` only and
+ask for a 256-bit token typed into the client, never put in a URL ([spec/MCP-BRIDGE.md](spec/MCP-BRIDGE.md)).
+
+The CLI opens the same vault as the web app: the same keyslots (a passphrase with the Secret Key of the Emergency
+Kit, or the recovery key), the same encrypted objects, the same anti-rollback checks. Its store is
+`~/.local/share/aparte/vault`, ciphertext only, files 0600; the Secret Key is kept in the OS keychain (unless `--no-keychain`),
+never in a file. Once a vault exists, chats are recorded in it as conversations (append-only branches, reasoning
+signatures kept) and show in the web app after a sync; `--no-save` skips that. A Git destination is any remote
+`git` can reach, written in the layout of the web app's GitHub store, so both can sync through one repository.
 
 ## License
 

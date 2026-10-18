@@ -5,7 +5,9 @@
 # 2. Runs the Rust generator into a temporary directory and compares every generated file with the TypeScript one,
 #    after `jq -S` (member order and whitespace are not compared, every name and value is).
 # 3. Checks that the frozen fixtures of spec/fixtures are committed and unchanged, and that both implementations read
-#    them back (spec/fixtures/README.md).
+#    them back (spec/fixtures/README.md), the CLI's sync layer included (documents, join, photo).
+# 4. Runs the mixed end-to-end gate (scripts/check-interop.sh): the reference and the CLI sync one vault both ways
+#    through a local Git repository.
 # Exits non-zero with a unified diff on any mismatch. CI runs this script as is.
 # Usage: scripts/check-vectors.sh
 set -euo pipefail
@@ -107,5 +109,9 @@ if ! git diff --exit-code --stat -- "$FIXTURES"; then
 fi
 (cd web && bun test src/core/sync/fixtures.test.ts)
 cargo test -q --locked -p aparte-format --test fixtures
+cargo test -q --locked -p aparte-sync --test fixture
 printf 'Both implementations read the fixtures\n'
-printf '\ncheck-vectors: all vectors agree, and the fixtures read back\n'
+
+printf '\n==> Mixed sync, reference and CLI\n'
+scripts/check-interop.sh
+printf '\ncheck-vectors: all vectors agree, the fixtures read back, and both implementations sync one vault\n'

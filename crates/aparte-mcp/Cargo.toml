@@ -16,6 +16,9 @@ aparte-crypto = { workspace = true }
 async-trait = { workspace = true }
 futures-util = { workspace = true }
 getrandom = { workspace = true, features = ["std"] }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 process-wrap = { workspace = true }
 reqwest = { workspace = true }
 rmcp = { workspace = true }
@@ -29,6 +32,7 @@ tracing = { workspace = true }
 zeroize = { workspace = true }
 
 [dev-dependencies]
+aparte-tools = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "io-util", "net", "time", "signal"] }
 

@@ -49,6 +49,9 @@ pub fn run(args: Args, ctx: &Ctx) -> anyhow::Result<ExitCode> {
             allow_net: false,
             resume: None,
             export: None,
+            session: None,
+            branch_from: None,
+            no_save: true,
         };
         let (client, preset) = setup::client(&agent_args)?;
         let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;

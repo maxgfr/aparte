@@ -24,6 +24,8 @@ aparte-tools = { path = "crates/aparte-tools" }
 aparte-tui = { path = "crates/aparte-tui" }
 aparte-skills = { path = "crates/aparte-skills" }
 aparte-mcp = { path = "crates/aparte-mcp" }
+aparte-store = { path = "crates/aparte-store" }
+aparte-sync = { path = "crates/aparte-sync" }
 
 # Every external crate opts out of default features; each crate turns on what it uses.
 anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
@@ -73,6 +75,15 @@ rmcp = { version = "=3.5.1", default-features = false, features = [
 ] }
 async-trait = { version = "0.1.92", default-features = false }
 process-wrap = { version = "10.0.1", default-features = false, features = ["tokio1", "process-group", "kill-on-drop"] }
+
+# Sync: the Yjs documents of a vault, byte-compatible with the web app's Yjs (OffsetKind::Utf16), pinned.
+yrs = { version = "=0.28.0", default-features = false }
+
+# MCP serve and bridge: a loopback HTTP/1.1 server.
+hyper = { version = "1.12.0", default-features = false, features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", default-features = false, features = ["tokio"] }
+http-body-util = { version = "0.1.5", default-features = false }
+# (end of MCP serve and bridge)
 
 # Developer tools: ripgrep's walker and searcher, diffs.
 ignore = { version = "0.4.33", default-features = false }

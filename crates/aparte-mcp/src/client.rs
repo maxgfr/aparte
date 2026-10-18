@@ -91,7 +91,7 @@ impl ConnectOptions {
         }
     }
 
-    fn token_store(&self, server: &str) -> Option<TokenStore> {
+    pub(crate) fn token_store(&self, server: &str) -> Option<TokenStore> {
         Some(TokenStore::new(self.config_dir.as_ref()?, server, self.vault.clone()?))
     }
 }
@@ -217,51 +217,72 @@ fn is_auth_required(message: &str) -> bool {
     m.contains("auth required") || m.contains("authorization required") || m.contains("401")
 }
 
+/// The command of a stdio server, not started: its `${VAR}`s expanded, an environment rebuilt from
+/// [`ENV_ALLOWLIST`] plus the entry's `env`, its own process group, killed on drop. Also returns the program, for
+/// messages. An HTTP server is an error.
+pub fn stdio_command(
+    server: &ServerConfig,
+    opts: &ConnectOptions,
+) -> Result<(process_wrap::tokio::CommandWrap, String), McpError> {
+    let fail = |m: String| server_err(&server.name, m);
+    let Transport::Stdio {
+        command,
+        args,
+        env,
+        cwd,
+    } = &server.transport
+    else {
+        return Err(fail("not a stdio server".into()));
+    };
+    let command = expand_env(command).map_err(fail)?;
+    let args: Vec<String> = args
+        .iter()
+        .map(|a| expand_env(a))
+        .collect::<Result<_, _>>()
+        .map_err(fail)?;
+    let mut cmd = tokio::process::Command::new(&command);
+    cmd.args(&args).env_clear();
+    for key in ENV_ALLOWLIST {
+        if let Some(v) = std::env::var_os(key) {
+            cmd.env(key, v);
+        }
+    }
+    for (k, v) in env {
+        cmd.env(k, expand_env(v).map_err(fail)?);
+    }
+    cmd.current_dir(cwd.clone().unwrap_or_else(|| opts.cwd.clone()));
+    let mut wrap = process_wrap::tokio::CommandWrap::from(cmd);
+    #[cfg(unix)]
+    wrap.wrap(process_wrap::tokio::ProcessGroup::leader());
+    wrap.wrap(process_wrap::tokio::KillOnDrop);
+    Ok((wrap, command))
+}
+
+/// Sends the stderr of a stdio server to the debug log, line by line.
+pub fn log_stderr(server: &str, stderr: tokio::process::ChildStderr) {
+    let label = server.to_owned();
+    tokio::spawn(async move {
+        let mut lines = tokio::io::BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            tracing::debug!(server = %label, "stderr: {}", line.chars().take(2000).collect::<String>());
+        }
+    });
+}
+
 /// Connects to a server and lists its tools.
 pub async fn connect(server: &ServerConfig, opts: &ConnectOptions) -> Result<Connection, McpError> {
     let name = server.name.as_str();
     let fail = |m: String| server_err(name, m);
     let (service, pgid) = match &server.transport {
-        Transport::Stdio {
-            command,
-            args,
-            env,
-            cwd,
-        } => {
-            let command = expand_env(command).map_err(fail)?;
-            let args: Vec<String> = args
-                .iter()
-                .map(|a| expand_env(a))
-                .collect::<Result<_, _>>()
-                .map_err(fail)?;
-            let mut cmd = tokio::process::Command::new(&command);
-            cmd.args(&args).env_clear();
-            for key in ENV_ALLOWLIST {
-                if let Some(v) = std::env::var_os(key) {
-                    cmd.env(key, v);
-                }
-            }
-            for (k, v) in env {
-                cmd.env(k, expand_env(v).map_err(fail)?);
-            }
-            cmd.current_dir(cwd.clone().unwrap_or_else(|| opts.cwd.clone()));
-            let mut wrap = process_wrap::tokio::CommandWrap::from(cmd);
-            #[cfg(unix)]
-            wrap.wrap(process_wrap::tokio::ProcessGroup::leader());
-            wrap.wrap(process_wrap::tokio::KillOnDrop);
+        Transport::Stdio { .. } => {
+            let (wrap, command) = stdio_command(server, opts)?;
             let (transport, stderr) = TokioChildProcess::builder(wrap)
                 .stderr(Stdio::piped())
                 .spawn()
                 .map_err(|e| fail(format!("cannot start {command:?}: {e}")))?;
             let pgid = if cfg!(unix) { transport.id() } else { None };
             if let Some(stderr) = stderr {
-                let label = name.to_owned();
-                tokio::spawn(async move {
-                    let mut lines = tokio::io::BufReader::new(stderr).lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        tracing::debug!(server = %label, "stderr: {}", line.chars().take(2000).collect::<String>());
-                    }
-                });
+                log_stderr(name, stderr);
             }
             let started = tokio::time::timeout(opts.connect_timeout, client_info().serve(transport)).await;
             let service = match started {

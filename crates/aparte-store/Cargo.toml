@@ -1,0 +1,24 @@
+[package]
+name = "aparte-store"
+description = "The device store of the aparte CLI: ciphertext-only files, keyslots, pending updates, and the vault"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+aparte-format = { workspace = true }
+aparte-crypto = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -13,11 +13,17 @@ mod cmd {
     pub mod models;
     pub mod rpc;
     pub mod selftest;
+    pub mod sessions;
     pub mod skills;
+    pub mod sync;
     pub mod trust;
+    pub mod vault;
 }
+mod destinations;
+mod device;
 mod keychain;
 mod paths;
+mod session;
 mod setup;
 mod ui;
 
@@ -73,6 +79,10 @@ Environment:
   APARTE_PROVIDER    default provider (anthropic)
   APARTE_MODEL       default model
   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY ...  provider keys (else the OS keychain)
+  APARTE_PASSPHRASE  the vault passphrase (else asked on the terminal)
+  APARTE_NEW_PASSPHRASE  the new passphrase of `vault create` and `vault change-passphrase`
+  APARTE_SECRET_KEY  the Secret Key of the Emergency Kit (else the OS keychain, else asked)
+  APARTE_GITHUB_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY  credentials of `sync setup`
   APARTE_NO_KEYCHAIN set to 1 to never read the OS keychain
   NO_COLOR           disable colors";
 
@@ -129,6 +139,12 @@ enum Command {
     Mcp(cmd::mcp::Args),
     /// Store, remove or locate provider API keys
     Key(cmd::key::Args),
+    /// Create, join, unlock-test the encrypted vault the web app shares, change its passphrase
+    Vault(cmd::vault::Args),
+    /// Sync the vault end to end with a folder, a Git repository, GitHub or S3
+    Sync(cmd::sync::Args),
+    /// List, show and export the conversations of the vault
+    Sessions(cmd::sessions::Args),
     /// Offline self-check (no key, no network, no files)
     Selftest(cmd::selftest::Args),
     /// Print facts about this machine and the directories in use
@@ -185,6 +201,9 @@ fn dispatch(cli: Cli, ctx: &Ctx) -> anyhow::Result<ExitCode> {
         Command::Skills(args) => cmd::skills::run(args, ctx),
         Command::Mcp(args) => cmd::mcp::run(args, ctx),
         Command::Key(args) => cmd::key::run(args, ctx),
+        Command::Vault(args) => cmd::vault::run(args, ctx),
+        Command::Sync(args) => cmd::sync::run(args, ctx),
+        Command::Sessions(args) => cmd::sessions::run(args, ctx),
         Command::Selftest(args) => cmd::selftest::run(args, ctx),
         Command::Doctor(args) => cmd::doctor::run(args, ctx),
         Command::Completions(args) => cmd::completions::run(args, ctx),
@@ -205,16 +224,52 @@ fn main() -> ExitCode {
     match dispatch(cli, &ctx) {
         Ok(code) => code,
         Err(e) => {
-            let code = if e.downcast_ref::<setup::MissingKey>().is_some() {
-                exit::AUTH
-            } else if e.downcast_ref::<aparte_llm::LlmError>().is_some() {
-                exit::USAGE
-            } else {
-                exit::ERROR
-            };
+            let code = exit_code(&e);
             ctx.ui.error(code, &format!("{e:#}"));
             ExitCode::from(code)
         }
+    }
+}
+
+/// The exit code of an error: its format code (a wrong secret, damaged data, another format), a sync store's
+/// failure, a missing key, or a usage error.
+fn exit_code(e: &anyhow::Error) -> u8 {
+    use aparte_format::ErrorCode;
+    if e.downcast_ref::<setup::MissingKey>().is_some() {
+        return exit::AUTH;
+    }
+    if e.downcast_ref::<aparte_llm::LlmError>().is_some() {
+        return exit::USAGE;
+    }
+    let format = e.chain().find_map(|c| {
+        c.downcast_ref::<aparte_format::Error>()
+            .map(aparte_format::Error::code)
+            .or_else(|| {
+                c.downcast_ref::<aparte_store::Error>()
+                    .and_then(aparte_store::Error::code)
+            })
+            .or_else(|| {
+                c.downcast_ref::<aparte_sync::Error>()
+                    .and_then(aparte_sync::Error::format_code)
+            })
+    });
+    let remote = e.chain().find_map(|c| {
+        c.downcast_ref::<aparte_sync::RemoteError>()
+            .map(|r| r.kind)
+            .or_else(|| {
+                c.downcast_ref::<aparte_sync::Error>()
+                    .and_then(aparte_sync::Error::remote_kind)
+            })
+    });
+    match (format, remote) {
+        (Some(ErrorCode::WrongSecret), _) => exit::LOCKED,
+        (Some(ErrorCode::Tampered | ErrorCode::Corrupt), _) => exit::INTEGRITY,
+        (Some(ErrorCode::UnsupportedFormat | ErrorCode::UnsupportedKeyslot), _) => exit::FORMAT,
+        (Some(ErrorCode::InvalidInput), _) => exit::USAGE,
+        (_, Some(aparte_sync::RemoteErrorKind::Auth | aparte_sync::RemoteErrorKind::Permission)) => exit::AUTH,
+        (_, Some(aparte_sync::RemoteErrorKind::Incompatible)) => exit::FORMAT,
+        (_, Some(_)) => exit::NETWORK,
+        _ => exit::ERROR,
     }
 }
 

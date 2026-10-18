@@ -160,6 +160,7 @@ async fn serve(
         blobs,
         skills,
         mcp,
+        recorder,
     } = built;
     let trusted = agent.config().trusted;
     let skills_json: Vec<Value> = skills
@@ -365,6 +366,7 @@ async fn serve(
         blobs,
         skills,
         mcp,
+        recorder,
     };
     setup::finish(&args.agent, built).await?;
     Ok(ExitCode::from(exit::OK))

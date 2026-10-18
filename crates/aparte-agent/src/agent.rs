@@ -324,6 +324,11 @@ impl Agent {
     }
 
     /// The tools as declared to the model.
+    pub fn tools(&self) -> &[Arc<dyn Tool>] {
+        &self.tools
+    }
+
+    /// The tools as declared to the provider.
     pub fn tool_specs(&self) -> Vec<ToolSpec> {
         self.tools
             .iter()
