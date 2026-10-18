@@ -38,6 +38,37 @@ export async function fakeMicrophone(page: Page): Promise<void> {
   })
 }
 
+/**
+ * A machine whose sound system never starts, as Firefox has on a Linux machine without audio output: every
+ * AudioContext stays suspended and resume() never settles. getUserMedia still hands out a stream (a canvas track
+ * standing in for the microphone); its tracks are kept in `window.__microphoneTracks` to check they are released.
+ */
+export async function fakeStalledAudio(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const devices = navigator.mediaDevices
+    const w = window as unknown as {
+      AudioContext?: typeof AudioContext
+      webkitAudioContext?: typeof AudioContext
+      __microphoneTracks?: MediaStreamTrack[]
+    }
+    const tracks: MediaStreamTrack[] = []
+    w.__microphoneTracks = tracks
+    for (const Ctor of [w.AudioContext, w.webkitAudioContext]) {
+      if (!Ctor) continue
+      Object.defineProperty(Ctor.prototype, 'state', { get: () => 'suspended', configurable: true })
+      Object.defineProperty(Ctor.prototype, 'resume', { value: () => new Promise(() => undefined), configurable: true })
+    }
+    if (!devices) return
+    const fake = async () => {
+      const stream = document.createElement('canvas').captureStream()
+      tracks.push(...stream.getTracks())
+      return stream
+    }
+    Object.defineProperty(Object.getPrototypeOf(devices), 'getUserMedia', { value: fake, configurable: true })
+    Object.defineProperty(devices, 'getUserMedia', { value: fake, configurable: true })
+  })
+}
+
 export interface FakeVoice {
   readonly name: string
   readonly lang: string

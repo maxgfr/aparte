@@ -5,7 +5,8 @@
  *
  * Invariants:
  * - The recording stays in memory: samples are collected from the microphone stream (no MediaRecorder file), handed
- *   to the transcriber, then zeroed. The microphone is released as soon as a recording stops or is cancelled.
+ *   to the transcriber, then zeroed. The microphone is released as soon as a recording stops or is cancelled, or
+ *   when Web Audio does not start (a machine without a sound server, where Firefox never runs an AudioContext).
  * - Reading aloud uses `localService` voices only. A remote voice would send the answer to the browser maker; without
  *   a local voice for the text's language nothing is spoken.
  * - Speech from a provider is decoded and played through Web Audio, never as a `blob:` URL.
@@ -19,7 +20,7 @@ import { startTransformersWorker } from './local.ts'
 // Recording
 
 /** Why a recording could not start. */
-export type RecordFailure = 'denied' | 'no-microphone' | 'unsupported' | 'failed'
+export type RecordFailure = 'denied' | 'no-microphone' | 'no-audio' | 'unsupported' | 'failed'
 
 export class RecordError extends Error {
   constructor(readonly reason: RecordFailure) {
@@ -48,6 +49,34 @@ export function recordingSupported(): boolean {
 
 let active: Recording | null = null
 
+/** How long recording or playback waits for Web Audio to start before giving up (and releasing the microphone). */
+const AUDIO_START_MS = 3_000
+
+/**
+ * Resumes `ctx` and resolves true once it runs, false when it still does not after `ms`. Without a sound server
+ * (Firefox on a Linux machine with no audio output) an AudioContext stays suspended and resume() never settles, so
+ * waiting for it would leave dictation listening to nothing, or a reading busy, forever.
+ */
+function audioStarts(ctx: AudioContext, ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (running: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      ctx.removeEventListener('statechange', check)
+      resolve(running)
+    }
+    const check = () => {
+      if (ctx.state === 'running') finish(true)
+    }
+    const timer = setTimeout(() => finish(false), ms)
+    ctx.addEventListener('statechange', check)
+    check()
+    ctx.resume().then(check, () => undefined)
+  })
+}
+
 /** Starts recording the microphone; RecordError when it cannot. `onLevel` hears the input level, 0 to 1. */
 export async function startRecording(onLevel?: (level: number) => void): Promise<Recording> {
   const Ctor = audioContextCtor()
@@ -65,7 +94,11 @@ export async function startRecording(onLevel?: (level: number) => void): Promise
     throw new RecordError('failed')
   }
   const ctx = new Ctor()
-  await ctx.resume().catch(() => undefined)
+  if (!(await audioStarts(ctx, AUDIO_START_MS))) {
+    for (const track of stream.getTracks()) track.stop()
+    void ctx.close().catch(() => undefined)
+    throw new RecordError('no-audio')
+  }
   const source = ctx.createMediaStreamSource(stream)
   // A ScriptProcessor, deprecated but in every engine, hands the samples over without a module to load.
   const processor = ctx.createScriptProcessor(4096, 1, 1)
@@ -311,7 +344,10 @@ export async function playSpeech(bytes: Uint8Array): Promise<Speaking> {
   if (Ctor === null) throw new RecordError('unsupported')
   speaking?.stop()
   const ctx = new Ctor()
-  await ctx.resume().catch(() => undefined)
+  if (!(await audioStarts(ctx, AUDIO_START_MS))) {
+    void ctx.close().catch(() => undefined)
+    throw new RecordError('no-audio')
+  }
   const buffer = await ctx.decodeAudioData(new Uint8Array(bytes).buffer)
   const source = ctx.createBufferSource()
   source.buffer = buffer

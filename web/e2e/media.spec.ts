@@ -13,7 +13,14 @@ import {
   startChat,
   stopButton,
 } from './fixtures/chat-ui.ts'
-import { fakeMicrophone, fakeNotifications, fakeVoices, PNG_BASE64, servePost } from './fixtures/media.ts'
+import {
+  fakeMicrophone,
+  fakeNotifications,
+  fakeStalledAudio,
+  fakeVoices,
+  PNG_BASE64,
+  servePost,
+} from './fixtures/media.ts'
 import { CUSTOM_ORIGIN, GOOGLE_ORIGIN } from './fixtures/providers.ts'
 import { openAIText } from './fixtures/sse.ts'
 import { dumpStorage, plaintextHits } from './fixtures/storage.ts'
@@ -108,6 +115,37 @@ test('dictation through a provider sends the recording as WAV and fills the fiel
   await page.mouse.up()
   await expect(messageBox(page)).toHaveValue(reply, { timeout: 20_000 })
   expect(transcriptions).toHaveLength(2)
+})
+
+test('without a running sound system, dictation says so and lets go of the microphone', async ({
+  page,
+  context,
+  providers,
+  gates,
+}) => {
+  admitCustomEndpoint(gates)
+  await fakeStalledAudio(page)
+  const transcriptions = await servePost(context, `${CUSTOM_ORIGIN}/v1/audio/transcriptions`, () => ({
+    contentType: 'application/json',
+    body: JSON.stringify({ text: 'Never heard.' }),
+  }))
+  await startChat(page, providers, { ...CUSTOM, key: 'sk-test-media-stalled' })
+  await openVoiceSettings(page)
+  await page.getByRole('group', { name: media.dictationTitle }).getByRole('radio', { name: media.engineApi }).check()
+  await page.getByRole('group', { name: media.transcriptionProvider }).getByRole('radio').first().check()
+
+  await newChat(page, CUSTOM.model)
+  await composer(page).getByRole('button', { name: media.dictate, exact: true }).click()
+  // Not "Listening…" forever: the wait for Web Audio is bounded, then the reason shows and the button is back.
+  await expect(composer(page).getByText(media.dictateNoAudio)).toBeVisible({ timeout: 10_000 })
+  await expect(composer(page).getByRole('button', { name: media.dictate, exact: true })).toBeEnabled()
+  const tracks = await page.evaluate(() =>
+    (window as unknown as { __microphoneTracks: MediaStreamTrack[] }).__microphoneTracks.map((t) => t.readyState),
+  )
+  expect(tracks.length).toBeGreaterThan(0)
+  expect(tracks.every((state) => state === 'ended')).toBe(true)
+  await expect(messageBox(page)).toHaveValue('')
+  expect(transcriptions).toHaveLength(0)
 })
 
 test('reading aloud uses this device’s own voices only', async ({ page, providers, gates }) => {

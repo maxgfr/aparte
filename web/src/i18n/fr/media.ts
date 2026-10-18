@@ -7,6 +7,7 @@ export const media = {
   dictate: 'Dicter',
   dictateStop: 'Arrêter la dictée',
   dictateHold: 'Maintenir pour dicter',
+  dictateStarting: 'Démarrage du microphone…',
   dictateListening: 'Écoute en cours… appuyez à nouveau pour arrêter.',
   dictateListeningHold: 'Écoute en cours… relâchez pour arrêter.',
   dictateTranscribing: 'Transcription…',
@@ -14,6 +15,7 @@ export const media = {
   dictateDenied:
     'L’accès au microphone a été refusé. Autorisez-le dans les paramètres du site, dans le navigateur, pour dicter.',
   dictateNoMicrophone: 'Aucun microphone n’a été trouvé sur cet appareil.',
+  dictateNoAudio: 'Le système audio de cet appareil ne fonctionne pas : rien ne peut être enregistré.',
   dictateNothing: 'Rien n’a été entendu.',
   dictateFailed: 'La dictée a échoué.',
   dictateNoProvider:

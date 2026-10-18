@@ -38,6 +38,7 @@ type Phase =
 const FAILURES: Readonly<Record<RecordError['reason'], Extract<Key, `media.dictate${string}`>>> = {
   denied: 'media.dictateDenied',
   'no-microphone': 'media.dictateNoMicrophone',
+  'no-audio': 'media.dictateNoAudio',
   unsupported: 'media.dictateUnsupported',
   failed: 'media.dictateFailed',
 }
@@ -65,11 +66,15 @@ export function MicButton({ onText, onStatus, disabled = false }: MicButtonProps
   /** The start in flight (asking for the microphone): a quick release waits for it, then stops what it started. */
   const starting = useRef<Promise<void> | null>(null)
 
-  // Leaving the screen drops whatever is being recorded or transcribed.
+  // Leaving the screen drops whatever is being recorded or transcribed, or is still starting.
   useEffect(
     () => () => {
-      recording.current?.cancel()
-      browser.current?.cancel()
+      const drop = () => {
+        recording.current?.cancel()
+        browser.current?.cancel()
+      }
+      drop()
+      void starting.current?.then(drop)
       abort.current?.abort()
     },
     [],
@@ -96,7 +101,9 @@ export function MicButton({ onText, onStatus, disabled = false }: MicButtonProps
       return
     }
     setPhase({ kind: 'recording' })
-    onStatus(hold ? t('media.dictateListeningHold') : t('media.dictateListening'))
+    // "Listening" only once the microphone is live: words said while it starts (a permission prompt, Web Audio
+    // waking up, a second or more in Firefox) would be lost.
+    onStatus(t('media.dictateStarting'))
     starting.current = (async () => {
       try {
         if (engine === 'browser') {
@@ -104,6 +111,7 @@ export function MicButton({ onText, onStatus, disabled = false }: MicButtonProps
         } else {
           recording.current = await startRecording()
         }
+        onStatus(hold ? t('media.dictateListeningHold') : t('media.dictateListening'))
       } catch (error) {
         recording.current = null
         browser.current = null
