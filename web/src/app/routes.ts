@@ -38,6 +38,10 @@ export const paths = {
   arena: '/arena',
   /** Tokens and cost over time. */
   stats: '/stats',
+  /** The knowledge bases. */
+  knowledge: '/knowledge',
+  /** One knowledge base: `/knowledge/<knowledge base id>`. */
+  knowledgeBase: '/knowledge/:id',
 } as const
 
 export type RouteName = keyof typeof paths
@@ -55,6 +59,11 @@ export function characterPath(id: string): string {
 /** The path of one lorebook. */
 export function lorebookPath(id: string): string {
   return `/lorebooks/${encodeURIComponent(id)}`
+}
+
+/** The path of one knowledge base. */
+export function knowledgePath(id: string): string {
+  return `/knowledge/${encodeURIComponent(id)}`
 }
 
 /** The path of one provider's settings. */

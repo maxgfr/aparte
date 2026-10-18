@@ -34,10 +34,14 @@ import type {
   ConversationFilter,
   ConversationPatch,
   Conversations,
+  EmbedderRef,
   Entity,
   Folder,
   Folders,
   Id,
+  KnowledgeBase,
+  KnowledgeBases,
+  KnowledgeDocument,
   Message,
   MessageStatus,
   ModelRef,
@@ -253,6 +257,83 @@ function checkTools(value: unknown): ToolSnapshotEntry[] {
   })
   // The snapshot is sorted by name (spec/DATA-MODEL.md section 3.2): the same set always serialises the same way.
   return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+}
+
+/** The 26-character manifest id of a blob (spec/FORMAT.md section 8.6). */
+const BLOB_ID = /^[a-z2-7]{26}$/
+
+/** Knowledge base ids, deduplicated, in the order given. */
+function checkKnowledgeIds(value: unknown): Id[] {
+  if (!Array.isArray(value)) throw new InvalidInputError('knowledge must be an array of knowledge base ids')
+  const out: Id[] = []
+  for (const id of value) {
+    if (!isId(id)) throw new InvalidInputError('knowledge must be an array of knowledge base ids')
+    if (!out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+function checkEmbedder(value: unknown): EmbedderRef | null {
+  if (value === null) return null
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidInputError('embedder must be an object or null')
+  }
+  const v = value as Record<string, unknown>
+  const model = checkText(v.model, 'embedder.model')
+  if (model === '') throw new InvalidInputError('embedder.model is empty')
+  if (v.kind === 'local') return { kind: 'local', model }
+  if (v.kind === 'provider') {
+    if (!isId(v.provider)) throw new InvalidInputError('embedder.provider must be a provider id')
+    return { kind: 'provider', provider: v.provider, model }
+  }
+  throw new InvalidInputError('Unknown embedder kind')
+}
+
+function checkKnowledgeDocument(value: unknown): KnowledgeDocument {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidInputError('A document must be an object')
+  }
+  const v = value as Record<string, unknown>
+  if (typeof v.blob !== 'string' || !BLOB_ID.test(v.blob)) throw new InvalidInputError('document.blob is a blob id')
+  const out: Record<string, unknown> = {
+    blob: v.blob,
+    name: checkText(v.name, 'document.name'),
+    mediaType: checkText(v.mediaType, 'document.mediaType'),
+  }
+  if (v.index !== undefined) {
+    if (typeof v.index !== 'string' || !BLOB_ID.test(v.index))
+      throw new InvalidInputError('document.index is a blob id')
+    out.index = v.index
+  }
+  for (const key of ['size', 'chunks', 'addedAt'] as const) {
+    const n = v[key]
+    if (n === undefined) continue
+    if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0) throw new InvalidInputError(`document.${key}`)
+    out[key] = n
+  }
+  return out as unknown as KnowledgeDocument
+}
+
+/** The documents of a stored base that read as documents; anything else is skipped, never repaired in place. */
+function readDocuments(value: unknown): KnowledgeDocument[] {
+  if (!Array.isArray(value)) return []
+  const out: KnowledgeDocument[] = []
+  for (const item of value) {
+    try {
+      out.push(checkKnowledgeDocument(item))
+    } catch {
+      // A document a newer build wrote in a shape this one does not know is left out of the view.
+    }
+  }
+  return out
+}
+
+function readEmbedder(value: unknown): EmbedderRef | null {
+  try {
+    return checkEmbedder(value ?? null)
+  } catch {
+    return null
+  }
 }
 
 function checkDocId(docId: unknown): DocId {
@@ -602,6 +683,8 @@ function readConversation(id: Id, m: Y.Map<unknown>): Conversation {
   if (startedAt !== undefined) out.startedAt = startedAt
   const deletedAt = num(m.get('deletedAt'))
   if (deletedAt !== undefined) out.deletedAt = deletedAt
+  const knowledge = m.get('knowledge')
+  if (Array.isArray(knowledge)) out.knowledge = knowledge.filter(isId)
   return frozenCopy<Conversation>(out)
 }
 
@@ -620,6 +703,23 @@ function readFolder(id: Id, m: Y.Map<unknown>): Folder {
     if (value !== undefined) out[key] = value
   }
   return frozenCopy<Folder>(out)
+}
+
+function readKnowledge(id: Id, m: Y.Map<unknown>): KnowledgeBase {
+  const createdAt = num(m.get('createdAt')) ?? 0
+  const out: Record<string, unknown> = {
+    id,
+    name: str(m.get('name')),
+    documents: readDocuments(m.get('documents')),
+    embedder: readEmbedder(m.get('embedder')),
+    createdAt,
+    updatedAt: num(m.get('updatedAt')) ?? createdAt,
+  }
+  for (const key of ['deletedAt', 'purgedAt'] as const) {
+    const value = num(m.get(key))
+    if (value !== undefined) out[key] = value
+  }
+  return frozenCopy<KnowledgeBase>(out)
 }
 
 function readProvider(id: Id, m: Y.Map<unknown>): ProviderConfig {
@@ -854,7 +954,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   const scopeKey = (scope: Scope): string => {
     if (typeof scope === 'string') {
       if (
-        !['conversations', 'folders', 'settings', 'providers', 'toolApprovals', 'mcp'].includes(scope) &&
+        !['conversations', 'folders', 'settings', 'providers', 'toolApprovals', 'mcp', 'knowledge'].includes(scope) &&
         !(COLLECTIONS as readonly string[]).includes(scope)
       ) {
         throw new InvalidInputError('Unknown scope')
@@ -890,7 +990,10 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   let settingsMap: Y.Map<unknown>
   let providersMap: Y.Map<Y.Map<unknown>>
   let approvalsMap: Y.Map<unknown>
+  let knowledgeMap: Y.Map<Y.Map<unknown>>
   let approvalList: readonly ToolApproval[] | null = null
+  const knowledgeCache = new Map<Id, KnowledgeBase>()
+  const knowledgeLists = new Map<string, readonly KnowledgeBase[]>()
   const convCache = new Map<Id, Conversation>()
   const convLists = new Map<string, readonly Conversation[]>()
   const folderCache = new Map<Id, Folder>()
@@ -919,6 +1022,12 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       for (const id of changedKeys(events, mcpMap)) mcpCache.delete(id)
       mcpList = null
       emit(['mcp'])
+    })
+    knowledgeMap = doc.getMap('knowledge')
+    knowledgeMap.observeDeep((events) => {
+      for (const id of changedKeys(events, knowledgeMap)) knowledgeCache.delete(id)
+      knowledgeLists.clear()
+      emit(['knowledge'])
     })
     approvalsMap.observe(() => {
       approvalList = null
@@ -1109,6 +1218,10 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
         createdAt: t,
         updatedAt: t,
       }
+      if (input.knowledge !== undefined) {
+        const knowledge = checkKnowledgeIds(input.knowledge)
+        if (knowledge.length > 0) fields.knowledge = knowledge
+      }
       const id = newId()
       const entity = new Y.Map<unknown>(
         Object.entries({ id, ...fields }).map(([k, v]) => [k, toAny(v, k)] as [string, unknown]),
@@ -1139,6 +1252,10 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
           case 'pinned':
           case 'archived':
             writes.push([key, checkBool(value, key)])
+            break
+          case 'knowledge':
+            // Attached bases feed user messages, never the frozen prefix: they may change at any time.
+            writes.push([key, checkKnowledgeIds(value)])
             break
           case 'system':
           case 'tools':
@@ -1382,6 +1499,114 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       const key = approvalKeyFor(approvalKey, conversation)
       if (!approvalsMap.has(key)) return
       local(indexDoc(), () => approvalsMap.delete(key))
+    },
+  }
+
+  // Knowledge bases (spec/DATA-MODEL.md section 3)
+
+  const getKnowledge = (id: Id): KnowledgeBase | undefined => {
+    const cached = knowledgeCache.get(id)
+    if (cached) return cached
+    const m = knowledgeMap.get(id)
+    if (!(m instanceof Y.Map)) return undefined
+    const value = readKnowledge(id, m)
+    knowledgeCache.set(id, value)
+    return value
+  }
+  const knowledgeEntity = (id: Id): Y.Map<unknown> => {
+    const m = typeof id === 'string' ? knowledgeMap.get(id) : undefined
+    if (!(m instanceof Y.Map) || m.has('purgedAt')) throw new InvalidInputError('Unknown knowledge base')
+    return m
+  }
+  const writeDocuments = (m: Y.Map<unknown>, documents: readonly KnowledgeDocument[]): void => {
+    const t = now()
+    local(indexDoc(), () => {
+      m.set('documents', toAny(documents, 'documents'))
+      m.set('updatedAt', t)
+    })
+  }
+
+  const knowledge: KnowledgeBases = {
+    list(options = {}) {
+      live()
+      const trashed = options.trashed === true
+      const key = String(trashed)
+      const cached = knowledgeLists.get(key)
+      if (cached) return cached
+      const out: KnowledgeBase[] = []
+      for (const id of knowledgeMap.keys()) {
+        const k = getKnowledge(id)
+        if (k && k.purgedAt === undefined && (k.deletedAt !== undefined) === trashed) out.push(k)
+      }
+      out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      const list = Object.freeze(out)
+      knowledgeLists.set(key, list)
+      return list
+    },
+    get(id) {
+      live()
+      return getKnowledge(id)
+    },
+    create(input) {
+      live()
+      if (input === null || typeof input !== 'object') throw new InvalidInputError('A knowledge base needs a name')
+      const name = checkText(input.name, 'name')
+      const embedder = input.embedder === undefined ? null : checkEmbedder(input.embedder)
+      const t = now()
+      const id = newId()
+      const entity = new Y.Map<unknown>([
+        ['id', id],
+        ['name', name],
+        ['documents', []],
+        ['embedder', toAny(embedder, 'embedder')],
+        ['createdAt', t],
+        ['updatedAt', t],
+      ])
+      local(indexDoc(), () => knowledgeMap.set(id, entity))
+      return id
+    },
+    update(id, patch) {
+      live()
+      const m = knowledgeEntity(id)
+      if (patch === null || typeof patch !== 'object') throw new InvalidInputError('A patch must be an object')
+      const writes: [string, unknown][] = []
+      if (patch.name !== undefined) writes.push(['name', checkText(patch.name, 'name')])
+      if (patch.embedder !== undefined) writes.push(['embedder', toAny(checkEmbedder(patch.embedder), 'embedder')])
+      const t = now()
+      local(indexDoc(), () => {
+        for (const [key, value] of writes) m.set(key, value)
+        m.set('updatedAt', t)
+      })
+    },
+    addDocument(id, document) {
+      live()
+      const m = knowledgeEntity(id)
+      const doc = checkKnowledgeDocument(document)
+      const documents = readDocuments(m.get('documents'))
+      const at = documents.findIndex((d) => d.blob === doc.blob)
+      if (at >= 0) documents[at] = doc
+      else documents.push(doc)
+      writeDocuments(m, documents)
+    },
+    removeDocument(id, blob) {
+      live()
+      const m = knowledgeEntity(id)
+      const documents = readDocuments(m.get('documents'))
+      const kept = documents.filter((d) => d.blob !== blob)
+      if (kept.length !== documents.length) writeDocuments(m, kept)
+    },
+    trash(id) {
+      live()
+      const m = knowledgeEntity(id)
+      if (m.has('deletedAt')) return
+      const t = now()
+      local(indexDoc(), () => m.set('deletedAt', t))
+    },
+    restore(id) {
+      live()
+      const m = knowledgeEntity(id)
+      if (!m.has('deletedAt')) return
+      local(indexDoc(), () => m.delete('deletedAt'))
     },
   }
 
@@ -1778,6 +2003,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     toolApprovals,
     mcp,
     collection,
+    knowledge,
     async thread(conversationId) {
       live()
       const m = convEntity(conversationId)
@@ -1900,6 +2126,8 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       mcpCache.clear()
       mcpList = null
       approvalList = null
+      knowledgeCache.clear()
+      knowledgeLists.clear()
       settingsCache.clear()
       entityCache.clear()
       entityLists.clear()

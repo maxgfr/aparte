@@ -27,6 +27,8 @@ const Character = lazyChunk(() => import('../screens/Characters/Character.tsx').
 const Lorebook = lazyChunk(() => import('../screens/Characters/Lorebook.tsx').then((m) => m.default))
 const Arena = lazyChunk(() => import('../screens/Arena/index.tsx').then((m) => m.default))
 const Stats = lazyChunk(() => import('../screens/Stats/index.tsx').then((m) => m.default))
+const Knowledge = lazyChunk(() => import('../screens/Knowledge/index.tsx').then((m) => m.default))
+const KnowledgeBase = lazyChunk(() => import('../screens/Knowledge/Base.tsx').then((m) => m.default))
 
 /** Hash routing (path and query in the hash): GitHub Pages serves one file and has no SPA rewrite. */
 export function HashRouter({ children }: { children: ReactNode }) {
@@ -64,6 +66,8 @@ export function Routes() {
           <Route path={paths.lorebook} component={Lorebook} />
           <Route path={paths.arena} component={Arena} />
           <Route path={paths.stats} component={Stats} />
+          <Route path={paths.knowledge} component={Knowledge} />
+          <Route path={paths.knowledgeBase} component={KnowledgeBase} />
           {/* Recovery is a screen of the lock gate; once the vault is open, its address leads home. */}
           <Route path={paths.recover}>
             <Redirect to={paths.welcome} replace />

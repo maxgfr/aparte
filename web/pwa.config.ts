@@ -69,6 +69,10 @@ export function pwaOptions(base: string): Partial<VitePWAOptions> {
         // in-browser model or embeddings are used, never at install.
         '**/webllm.worker-*.js',
         '**/transformers.worker-*.js',
+        // pdf.js (the `pdf` chunk, after its pdf.mjs) and its worker, about 1.6 MB, serve only adding a PDF to a
+        // knowledge base: fetched then, never at install.
+        '**/pdf-*.js',
+        '**/pdf.worker-*.js',
         '**/mermaid*',
       ],
       // Files over the cap (a WebAssembly runtime, say) are left out of the precache with a build warning.

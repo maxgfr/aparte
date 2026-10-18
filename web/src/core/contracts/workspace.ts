@@ -97,6 +97,26 @@ export type Part =
     }
   | { readonly type: 'provider'; readonly provider: string; readonly block: unknown }
   | { readonly type: 'ref'; readonly partType: string; readonly blob: string; readonly size: number }
+  /**
+   * Passages of the conversation's knowledge bases retrieved for this user message (contracts/knowledge.ts). Sent as
+   * one delimited text block in the user turn (core/knowledge/context.ts), never shown as the user's own text.
+   */
+  | { readonly type: 'knowledge'; readonly query: string; readonly passages: readonly KnowledgePassage[] }
+
+/** One passage of a knowledge base document, as given to a model and cited back. */
+export interface KnowledgePassage {
+  /** `<first 6 characters of the document's blob id>-<1-based chunk number>`: what a citation names. */
+  readonly id: string
+  /** The knowledge base. */
+  readonly base: Id
+  /** The document's file name. */
+  readonly document: string
+  /** The document's original blob. */
+  readonly blob: string
+  readonly page?: number
+  readonly heading?: string
+  readonly text: string
+}
 
 /**
  * One entry of a conversation's tool snapshot (spec/DATA-MODEL.md section 3.2), sorted by `name`. Source `provider` is
@@ -139,6 +159,11 @@ export interface Conversation extends EntityMeta {
   readonly archived: boolean
   /** When the first message was appended: from then on `system` and `tools` never change. */
   readonly startedAt?: number
+  /**
+   * Knowledge bases attached to the chat: each user message gets their best passages, and `search_knowledge` searches
+   * them. May change at any time (the context goes into user messages, never into the frozen prefix). Absent: none.
+   */
+  readonly knowledge?: readonly Id[]
 }
 
 export interface NewConversation {
@@ -151,11 +176,21 @@ export interface NewConversation {
   readonly system?: string
   readonly tools?: readonly ToolSnapshotEntry[]
   readonly pinned?: boolean
+  readonly knowledge?: readonly Id[]
 }
 
 /** What `update` may change; `system` and `tools` only before `startedAt` (InvalidStateError afterwards). */
 export type ConversationPatch = {
-  readonly [K in 'title' | 'folder' | 'model' | 'effort' | 'pinned' | 'archived' | 'system' | 'tools']?: Conversation[K]
+  readonly [K in
+    | 'title'
+    | 'folder'
+    | 'model'
+    | 'effort'
+    | 'pinned'
+    | 'archived'
+    | 'system'
+    | 'tools'
+    | 'knowledge']?: Conversation[K]
 }
 
 export interface ConversationFilter {
@@ -257,6 +292,53 @@ export interface Collection<T> {
   restore(id: Id): void
 }
 
+// Knowledge bases
+
+/** Which model a knowledge base embeds its passages with. */
+export type EmbedderRef =
+  /** The pinned sentence-embedding model of the transformers.js worker (core/ai/local/embed.ts), by repository. */
+  | { readonly kind: 'local'; readonly model: string }
+  /** A provider's embeddings API, with that provider's key on this device. */
+  | { readonly kind: 'provider'; readonly provider: Id; readonly model: string }
+
+/** A document of a knowledge base (spec/DATA-MODEL.md section 3). */
+export interface KnowledgeDocument {
+  /** The original file, as an encrypted blob. */
+  readonly blob: string
+  readonly name: string
+  readonly mediaType: string
+  readonly size?: number
+  /** Its search index (passages and vectors), as an encrypted blob (contracts/knowledge.ts `DocumentIndex`). */
+  readonly index?: string
+  /** Passages in the index. */
+  readonly chunks?: number
+  readonly addedAt?: number
+}
+
+export interface KnowledgeBase extends EntityMeta {
+  readonly name: string
+  /** In the order they were added. */
+  readonly documents: readonly KnowledgeDocument[]
+  /** Null: keywords only. */
+  readonly embedder: EmbedderRef | null
+}
+
+export interface KnowledgeBases {
+  /** Never-purged bases, trashed ones only on request, by name then id. */
+  list(options?: { readonly trashed?: boolean }): readonly KnowledgeBase[]
+  get(id: Id): KnowledgeBase | undefined
+  create(input: { readonly name: string; readonly embedder?: EmbedderRef | null }): Id
+  /** InvalidInputError for an unknown or purged id. */
+  update(id: Id, patch: { readonly name?: string; readonly embedder?: EmbedderRef | null }): void
+  /** Adds a document, or replaces the one with the same `blob`. */
+  addDocument(id: Id, document: KnowledgeDocument): void
+  /** Removes the document with this `blob` (its blobs stay on the store, spec/FORMAT.md section 14). */
+  removeDocument(id: Id, blob: string): void
+  /** Sets `deletedAt`; the base is detached from no conversation, it simply stops being found. */
+  trash(id: Id): void
+  restore(id: Id): void
+}
+
 // Messages
 
 export type MessageStatus = 'done' | 'stopped' | 'error' | 'refused'
@@ -341,6 +423,8 @@ export type Scope =
   | 'toolApprovals'
   /** The MCP servers' configuration. */
   | 'mcp'
+  /** The knowledge bases. */
+  | 'knowledge'
   /** The messages and leaf of one conversation. */
   | { readonly conversation: Id }
   /** One collection of contracts/extras.ts. */
@@ -364,6 +448,7 @@ export interface Workspace {
   readonly mcp: McpServers
   /** A collection of the index added after the fixed entities (contracts/extras.ts). */
   collection<N extends CollectionName>(name: N): Collection<CollectionTypes[N]>
+  readonly knowledge: KnowledgeBases
   /** Loads the conversation's shard (once) and returns its tree; InvalidInputError for an unknown or purged id. */
   thread(conversationId: Id): Promise<Thread>
   /** Runs `fn` as one transaction per touched document (one update each). */

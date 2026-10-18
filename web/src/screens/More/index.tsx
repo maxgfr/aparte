@@ -1,4 +1,4 @@
-import { ArrowLeftRight, BarChart3, Info, Swords, Theater } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, BookOpen, Info, Swords, Theater } from 'lucide-react'
 import { paths } from '../../app/routes.ts'
 import { useT } from '../../i18n/react.tsx'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
@@ -27,6 +27,12 @@ export default function MoreScreen() {
         />
       </ListGroup>
       <ListGroup title={t('shell.moreData')}>
+        <ListRow
+          href={paths.knowledge}
+          leading={<BookOpen {...icon} />}
+          title={t('knowledge.navKnowledge')}
+          subtitle={t('knowledge.moreHint')}
+        />
         <ListRow
           href={paths.transfer}
           leading={<ArrowLeftRight {...icon} />}

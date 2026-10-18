@@ -1,15 +1,17 @@
 import { ChevronLeft, ChevronRight, Pencil, RefreshCw } from 'lucide-react'
-import { memo, useEffect, useId, useState } from 'react'
+import { memo, useEffect, useId, useMemo, useState } from 'react'
 import { useResolvedParts, useSession } from '../../app/chat.tsx'
 import type { ModelDescriptor } from '../../core/contracts/ai.ts'
 import type { StreamState, ToolCallState } from '../../core/contracts/chat.ts'
 import type { ApprovalDecision } from '../../core/contracts/tools.ts'
 import type { Id, Message, Part, Thread } from '../../core/contracts/workspace.ts'
+import { citeText } from '../../core/knowledge/citations.ts'
 import { formatNumber, formatUsd } from '../../i18n/format.ts'
 import type { Key } from '../../i18n/index.ts'
 import { useLocale, useT } from '../../i18n/react.tsx'
 import { Button } from '../components/Button.tsx'
 import { IconButton } from '../components/IconButton.tsx'
+import { ContextChip, KnowledgeSources, useKnownPassages } from '../knowledge/Sources.tsx'
 import { CopyButton, Markdown } from '../render/Sanitized.tsx'
 import { useDisplayText } from '../roleplay/hooks.ts'
 import roleplayStyles from '../roleplay/Roleplay.module.css'
@@ -35,8 +37,10 @@ export interface MessageActions {
 type CallPart = Extract<Part, { readonly type: 'tool-call' }>
 type ResultPart = Extract<Part, { readonly type: 'tool-result' }>
 type SourcePart = Extract<Part, { readonly type: 'source' }>
+type KnowledgePart = Extract<Part, { readonly type: 'knowledge' }>
 
 const NO_PARTS: readonly Part[] = []
+const NO_PASSAGES = new Map()
 
 /**
  * The tool work of an answer, in part order: the provider's web searches, then each call with its result (from the
@@ -170,6 +174,7 @@ function UserMessage({ thread, message, actions }: { thread: Thread; message: Me
   const text = textOf(parts)
   const injected = injectedTextOf(parts)
   const images = imagesOf(parts)
+  const context = parts.find((p): p is KnowledgePart => p.type === 'knowledge')
   return (
     <article
       className={styles.userRow}
@@ -247,6 +252,7 @@ function UserMessage({ thread, message, actions }: { thread: Thread; message: Me
           </p>
         </details>
       )}
+      {!editing && context !== undefined && <ContextChip part={context} />}
       {!editing && (
         <div className={styles.actions}>
           <BranchNav thread={thread} message={message} onBranch={actions.onBranch} />
@@ -374,7 +380,11 @@ function AssistantMessage({
   const hasCalls = message.parts.some((p) => p.type === 'tool-call')
   const toolMessage = hasCalls ? thread.children(message.id).find((m) => m.role === 'tool') : undefined
   const results = useResolvedParts(toolMessage?.parts ?? NO_PARTS)
-  const text = textOf(parts)
+  // Citations of knowledge passages are kept only when the branch gave the model that passage.
+  const known = useKnownPassages(thread, message.id)
+  const raw = textOf(parts)
+  const cited = useMemo(() => citeText(raw, known), [raw, known])
+  const text = cited.text
   // Display regex rules (roleplay) change how the answer reads here, never what is stored, copied or sent.
   const display = useDisplayText(message.conv)
   const shown = display(text)
@@ -391,6 +401,7 @@ function AssistantMessage({
       <Reasoning text={reasoning} live={false} hidden={hadReasoning && reasoning === ''} />
       {shown !== '' && <Markdown source={shown} className={styles.answerContent} data={CONTENT} />}
       <ToolWork parts={parts} results={results} live={live} streaming={false} onApprove={actions.onApprove} />
+      <KnowledgeSources sources={cited.sources} />
       <AnswerNote message={message} />
       <div className={styles.answerFooter}>
         <UsageLine message={message} model={model} />
@@ -454,7 +465,8 @@ export function StreamingAnswer({ stream }: { stream: StreamState }) {
   const t = useT()
   const session = useSession()
   const model = session?.resolveModel(stream.model) ?? null
-  const text = textOf(stream.parts)
+  // Citations are numbered once the answer is committed; meanwhile their markers are not shown.
+  const text = citeText(textOf(stream.parts), NO_PASSAGES).text
   const reasoning = reasoningOf(stream.parts)
   const thinking = text === ''
   return (

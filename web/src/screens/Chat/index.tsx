@@ -32,6 +32,7 @@ import { BeamButton, BeamPanel, useBeamSelection } from '../../ui/compare/Beam.t
 import { Button, buttonClass } from '../../ui/components/Button.tsx'
 import { EmptyState } from '../../ui/components/EmptyState.tsx'
 import { IconButton } from '../../ui/components/IconButton.tsx'
+import { AttachButton } from '../../ui/knowledge/AttachButton.tsx'
 import { QuickRepliesBar, RoleplayButton, useRoleplay } from '../../ui/roleplay/RoleplayButton.tsx'
 
 /*
@@ -165,7 +166,10 @@ function ChatView({ id }: { id: Id | null }) {
     /** Tool names chosen for the new chat; null: every registered tool. */
     tools: readonly string[] | null
     webSearch: boolean
-  }>({ model: null, effort: null, system: null, tools: null, webSearch: false })
+    /** Knowledge bases attached to the new chat. */
+    knowledge: readonly Id[]
+  }>({ model: null, effort: null, system: null, tools: null, webSearch: false, knowledge: [] })
+  const [retrieving, setRetrieving] = useState(false)
   const registered = useRegisteredTools()
   const fallbackModel = defaultModel ?? choices[0]?.model.ref ?? null
   const modelRef = conversation?.model ?? (id === null ? (draft.model ?? fallbackModel) : null)
@@ -181,6 +185,7 @@ function ChatView({ id }: { id: Id | null }) {
         )
   const system = conversation?.system ?? draft.system ?? defaultSystem ?? ''
   const started = conversation?.startedAt !== undefined
+  const knowledgeIds = conversation !== undefined ? (conversation.knowledge ?? []) : draft.knowledge
 
   // The chat's tool set: the draft's until a conversation exists, then the conversation's own snapshot.
   const toolNames = useMemo(() => {
@@ -240,8 +245,35 @@ function ChatView({ id }: { id: Id | null }) {
     [toast, t],
   )
 
-  const onSend = async (typed: readonly Part[]): Promise<boolean> => {
-    let parts = typed
+  /**
+   * The parts of a user message with the best passages of the chat's knowledge bases before its text (a `knowledge`
+   * part: the context goes into the user turn, never into the frozen system prompt). Without a match, or when the
+   * bases cannot be searched now, the message goes as it is.
+   */
+  const withKnowledge = useCallback(
+    async (parts: readonly Part[], bases: readonly Id[]): Promise<readonly Part[]> => {
+      if (session === null || bases.length === 0) return parts
+      const query = parts
+        .flatMap((p) => (p.type === 'text' ? [p.text] : []))
+        .join('\n')
+        .trim()
+      if (query === '') return parts
+      setRetrieving(true)
+      try {
+        const part = await session.knowledge.context(bases, query)
+        if (part === null) return parts
+        const at = parts.findIndex((p) => p.type === 'text')
+        return at < 0 ? [...parts, part] : [...parts.slice(0, at), part, ...parts.slice(at)]
+      } catch {
+        return parts
+      } finally {
+        setRetrieving(false)
+      }
+    },
+    [session],
+  )
+
+  const onSend = async (input: readonly Part[]): Promise<boolean> => {
     if (session === null) return false
     if (modelRef === null || model === null) {
       toast(t('chat.sendFailedNoModel'))
@@ -257,6 +289,7 @@ function ChatView({ id }: { id: Id | null }) {
       toast(t('compare.beamBusy'))
       return false
     }
+    let parts = await withKnowledge(input, knowledgeIds)
     let target = id
     let created = false
     if (target === null) {
@@ -267,6 +300,7 @@ function ChatView({ id }: { id: Id | null }) {
         effort: draft.effort,
         tools,
         ...(system === null ? {} : { system }),
+        ...(draft.knowledge.length === 0 ? {} : { knowledge: draft.knowledge }),
       })
       roleplay.commitDraft(target)
       created = true
@@ -300,8 +334,10 @@ function ChatView({ id }: { id: Id | null }) {
     if (session === null || id === null || tree === null) return { busy: true }
     return {
       busy,
-      onEdit: async (messageId, parts) => {
+      onEdit: async (messageId, input) => {
         try {
+          // An edited message is a new message: it gets the passages of its own text.
+          const parts = await withKnowledge(input, session.workspace.conversations.get(id)?.knowledge ?? [])
           const parent = tree.get(messageId)?.parent ?? null
           await session.chat.edit(id, messageId, await roleplayRef.current.prepare(id, parts, parent))
         } catch (error) {
@@ -322,7 +358,7 @@ function ChatView({ id }: { id: Id | null }) {
         }
       },
     }
-  }, [session, id, tree, busy, explain])
+  }, [session, id, tree, busy, explain, withKnowledge])
 
   // Whether the model takes tools is the catalog's say; the user may correct it for a model the catalog does not know.
   const provider =
@@ -458,6 +494,11 @@ function ChatView({ id }: { id: Id | null }) {
           ))}
         {beam !== null && id !== null && <BeamPanel conversationId={id} state={beam} />}
         {stream !== null && stream.phase === 'model' && <StreamingAnswer stream={stream} />}
+        {retrieving && (
+          <p className={styles.caption} role="status" aria-live="polite">
+            {t('knowledge.retrieving')}
+          </p>
+        )}
         {stream !== null && stream.phase === 'tools' && (
           <p className={styles.caption} role="status" aria-live="polite">
             {stream.tools.some((c) => c.status === 'approval') ? t('tools.approvalPending') : t('tools.runningTools')}
@@ -503,6 +544,14 @@ function ChatView({ id }: { id: Id | null }) {
               />
               <BeamButton models={beamModels} onChange={setBeamModels} />
               <RoleplayButton roleplay={roleplay} started={started} />
+              <AttachButton
+                selected={knowledgeIds}
+                onChange={(bases) => {
+                  if (session === null) return
+                  if (id === null) setDraft((d) => ({ ...d, knowledge: bases }))
+                  else session.workspace.conversations.update(id, { knowledge: bases })
+                }}
+              />
             </>
           }
           streaming={busy}

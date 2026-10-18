@@ -2,6 +2,7 @@ import type { about } from './en/about.ts'
 import type { chat } from './en/chat.ts'
 import type { common } from './en/common.ts'
 import type { compare } from './en/compare.ts'
+import type { knowledge } from './en/knowledge.ts'
 import type { local } from './en/local.ts'
 import type { mcp } from './en/mcp.ts'
 import type { roleplay } from './en/roleplay.ts'
@@ -39,6 +40,7 @@ type Source = {
   readonly roleplay: typeof roleplay
   readonly compare: typeof compare
   readonly stats: typeof stats
+  readonly knowledge: typeof knowledge
 }
 export type Namespace = keyof Source
 const NAMESPACES: readonly Namespace[] = [
@@ -55,6 +57,7 @@ const NAMESPACES: readonly Namespace[] = [
   'roleplay',
   'compare',
   'stats',
+  'knowledge',
 ]
 export type Catalog = { readonly [N in Namespace]: Shape<Source[N]> }
 
@@ -74,7 +77,7 @@ const loaded = new Map<Locale, Catalog>()
 
 const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
   en: async () => {
-    const [common, shell, about, vault, chat, tools, local, sync, mcp, transfer, roleplay, compare, stats] =
+    const [common, shell, about, vault, chat, tools, local, sync, mcp, transfer, roleplay, compare, stats, knowledge] =
       await Promise.all([
         import('./en/common.ts'),
         import('./en/shell.ts'),
@@ -89,6 +92,7 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
         import('./en/roleplay.ts'),
         import('./en/compare.ts'),
         import('./en/stats.ts'),
+        import('./en/knowledge.ts'),
       ])
     return {
       common: common.common,
@@ -104,6 +108,7 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       roleplay: roleplay.roleplay,
       compare: compare.compare,
       stats: stats.stats,
+      knowledge: knowledge.knowledge,
     }
   },
   pseudo: async () => {

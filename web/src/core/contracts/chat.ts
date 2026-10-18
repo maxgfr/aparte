@@ -72,6 +72,8 @@ export interface RequestModule {
    *    becomes a user message whose only part is the text `<system-update>\n${text}\n</system-update>`.
    * 6. Without `capabilities.vision`, an image part becomes the text part `[image omitted: ${name ?? 'image'}]`;
    *    without `capabilities.pdf`, an `application/pdf` file part becomes `[document omitted: ${name}]`.
+   *    A `knowledge` part of a user message becomes the text part `knowledgeText(part)` (core/knowledge/context.ts):
+   *    the retrieved passages between their delimiters; anywhere else it is left out.
    * 7. A `role: 'tool'` message keeps only the `tool-result` parts that answer a `tool-call` of the planned message right
    *    before it (the first result of each call, in stored order); with nothing left it is left out.
    * 8. A `tool-call` of a planned assistant message that has no result there gets the fixed error result

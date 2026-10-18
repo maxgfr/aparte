@@ -18,6 +18,7 @@ import type { Capabilities, Effort } from '../contracts/ai.ts'
 import type { PlanInput, PlannedMessage, PromptPlan } from '../contracts/chat.ts'
 import { InvalidStateError } from '../contracts/crypto.ts'
 import type { Conversation, Message, Part, ProviderMeta, Settings } from '../contracts/workspace.ts'
+import { knowledgeText } from '../knowledge/context.ts'
 import { unansweredResult } from '../tools/loop.ts'
 
 /** Parts whose JSON is longer than this many bytes are stored as blobs (spec/DATA-MODEL.md section 4.3). */
@@ -55,6 +56,9 @@ function planPart(part: Part, message: Message, input: PlanInput, stripReasoning
       return part.mediaType === 'application/pdf' && !capabilities.pdf
         ? { type: 'text', text: `[document omitted: ${part.name}]` }
         : part
+    case 'knowledge':
+      // Retrieved passages travel in the user turn, as delimited data (core/knowledge/context.ts).
+      return message.role === 'user' ? { type: 'text', text: knowledgeText(part) } : null
     default:
       return part
   }

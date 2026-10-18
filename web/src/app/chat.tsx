@@ -23,6 +23,7 @@ import type {
 } from '../core/contracts/ai.ts'
 import type { ChatController, RequestModule, StreamState } from '../core/contracts/chat.ts'
 import type { CollectionName, CollectionTypes } from '../core/contracts/extras.ts'
+import type { KnowledgeService } from '../core/contracts/knowledge.ts'
 import type { RegisteredTool, ToolApproval, ToolRegistry } from '../core/contracts/tools.ts'
 import type { Vault } from '../core/contracts/vault.ts'
 import type {
@@ -30,6 +31,7 @@ import type {
   ConversationFilter,
   Entity,
   Id,
+  KnowledgeBase,
   Message,
   ModelRef,
   Part,
@@ -60,10 +62,13 @@ import { useVault } from './vault.tsx'
  * - The on-device engines (core/ai/local, app/local.ts) are stopped on lock: their workers terminate.
  * - Streams hold the vault lock and the PWA reload (the controller takes both, `chat-stream`), so neither an
  *   auto-lock nor an update cuts an answer.
- * - The tool registry holds the built-in tools (web/src/core/tools/builtins.ts) for the session only; approvals that
- *   outlive a call are stored encrypted in the workspace (`toolApprovals`).
  * - The MCP client (app/mcpHost.ts) adds the tools of the MCP servers to the same registry while the session is open;
  *   it is disposed with the session, before the workspace closes.
+ * - The tool registry holds the built-in tools (web/src/core/tools/builtins.ts) and `search_knowledge`
+ *   (web/src/core/knowledge/tool.ts) for the session only; approvals that outlive a call are stored encrypted in the
+ *   workspace (`toolApprovals`).
+ * - The knowledge service (app/knowledge.ts) holds decrypted document indexes for the session only; on lock it drops
+ *   them and its document workers terminate.
  */
 
 /** The core modules a session uses, loaded together after unlock. */
@@ -92,6 +97,8 @@ export interface ChatSession {
   readonly tools: ToolRegistry
   /** The MCP client, loaded once the vault has a server (or a screen asks for it). */
   readonly mcp: McpHost
+  /** The knowledge bases' ingestion and search (contracts/knowledge.ts). */
+  readonly knowledge: KnowledgeService
   readonly modules: ChatModules
   /** The bundled model catalog, null until its chunk has loaded (the session opens without waiting for it). */
   readonly catalog: Catalog | null
@@ -160,6 +167,8 @@ async function openSession(vault: Vault): Promise<{
     local,
     streams,
     beamModule,
+    knowledgeModule,
+    knowledgeToolModule,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -179,6 +188,8 @@ async function openSession(vault: Vault): Promise<{
     import('./local.ts'),
     import('../core/sync/streams.ts'),
     import('../core/compare/beam.ts'),
+    import('./knowledge.ts'),
+    import('../core/knowledge/tool.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
@@ -216,11 +227,18 @@ async function openSession(vault: Vault): Promise<{
     const name = model === null ? null : local.localModelName(model.kind, ref.id)
     return model === null || name === null ? model : { ...model, name }
   }
+  const knowledge = knowledgeModule.openKnowledge({ workspace, keys, blobs, clock })
   const tools = registryModule.createToolRegistry()
   for (const tool of builtinsModule.builtinTools({ clock, search, download: toolFetchModule.toolFetch })) {
     await tools.register(tool)
   }
   const mcp = createMcpHost({ workspace, registry: tools, store, rng })
+  await tools.register(
+    knowledgeToolModule.searchKnowledgeTool({
+      knowledge,
+      basesOf: (id) => workspace.conversations.get(id)?.knowledge ?? [],
+    }),
+  )
   const chat = controller.createChatController({
     workspace,
     holdLock: (reason: string) => vault.holdLock(reason),
@@ -299,6 +317,8 @@ async function openSession(vault: Vault): Promise<{
     } finally {
       // The model workers hold the conversation in memory (its prompt, its cache on the GPU): they go with the lock.
       local.releaseLocal()
+      knowledge.dispose()
+      knowledgeModule.releaseKnowledge()
       search.dispose()
       unbind()
       workspace.close()
@@ -321,6 +341,7 @@ async function openSession(vault: Vault): Promise<{
     search,
     tools,
     mcp,
+    knowledge,
     modules,
     catalog,
     resolveModel,
@@ -577,6 +598,27 @@ export function useKeyedProviders(): ReadonlySet<string> | null {
     }
   }, [keys])
   return ids
+}
+
+const EMPTY_BASES: readonly KnowledgeBase[] = []
+
+/** The knowledge bases (trashed ones on request), by name. */
+export function useKnowledgeBases(options?: { readonly trashed?: boolean }): readonly KnowledgeBase[] {
+  const session = useSession()
+  const ws = session?.workspace ?? null
+  const trashed = options?.trashed === true
+  const subscribe = useMemo(() => (ws === null ? null : (fn: () => void) => ws.subscribe('knowledge', fn)), [ws])
+  const read = useCallback(() => (ws === null ? EMPTY_BASES : ws.knowledge.list({ trashed })), [ws, trashed])
+  return useExternal(subscribe, read)
+}
+
+/** One knowledge base, or undefined. */
+export function useKnowledgeBase(id: Id | null): KnowledgeBase | undefined {
+  const session = useSession()
+  const ws = session?.workspace ?? null
+  const subscribe = useMemo(() => (ws === null ? null : (fn: () => void) => ws.subscribe('knowledge', fn)), [ws])
+  const read = useCallback(() => (ws === null || id === null ? undefined : ws.knowledge.get(id)), [ws, id])
+  return useExternal(subscribe, read)
 }
 
 const EMPTY_TOOLS: readonly RegisteredTool[] = []

@@ -31,6 +31,7 @@ const BUILTIN_NAMES: Readonly<Record<string, Key>> = {
   calculator: 'tools.name_calculator',
   search_conversations: 'tools.name_search_conversations',
   fetch_url: 'tools.name_fetch_url',
+  search_knowledge: 'knowledge.toolName',
 }
 
 const BUILTIN_HINTS: Readonly<Record<string, Key>> = {
@@ -38,6 +39,7 @@ const BUILTIN_HINTS: Readonly<Record<string, Key>> = {
   calculator: 'tools.hint_calculator',
   search_conversations: 'tools.hint_search_conversations',
   fetch_url: 'tools.hint_fetch_url',
+  search_knowledge: 'knowledge.toolHint',
 }
 
 /**

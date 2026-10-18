@@ -46,7 +46,7 @@ Top-level `Y.Map`s, each `id -> Y.Map` of one entity whose fields are `Any` valu
 | `providers` | [3.3](#33-provider) |
 | `mcp` | [3.5](#35-mcp-server) |
 | `skills` | `{id, name, description, source: object, files?: blob ref, enabled: boolean}` |
-| `knowledge` | `{id, name, documents: {blob: blob ref, name, mediaType}[]}` |
+| `knowledge` | [3.7](#37-knowledge-bases): `{id, name, documents: {blob: blob ref, name, mediaType, size?, index?: blob ref, chunks?, addedAt?}[], embedder: EmbedderRef \| null}` |
 | `settings` | not entities: `settingName -> Any`, synced preferences: `defaultModel: ModelRef \| null`, `defaultEffort: Effort \| null`, `defaultSystem: string`... |
 | `toolApprovals` | not entities: `approvalKey -> Any`, the tool approvals that outlive a call ([3.4](#34-tool-approvals)) |
 | `keyslots` | `slotId -> {label: string, createdAt}`: names the user gave the keyslots; the slots themselves are not in the document |
@@ -78,6 +78,7 @@ deleted, and for a conversation its messages are deleted from the shard. Ciphert
 | `pinned` | boolean | |
 | `archived` | boolean | hidden from the main list, still searchable; not the trash |
 | `startedAt?` | number | when the first message was appended; from then on `system` and `tools` never change |
+| `knowledge?` | string[] | the knowledge bases attached to the chat ([3.7](#37-knowledge-bases)); may change at any time, since their passages travel in user messages; absent: none |
 | `createdAt`, `updatedAt`, `deletedAt?`, `purgedAt?` | number | |
 
 `ToolSnapshot` is `{name, source: 'builtin' | 'mcp' | 'skill' | 'sandbox' | 'provider', origin?: string, fingerprint:
@@ -158,6 +159,34 @@ first message is a `system` message (section 5, rule 1). A Beam or Arena answer 
 answer merged from others keeps only its `text` and `source` parts, since it was produced over a request that is not
 the stored path.
 
+### 3.7 Knowledge bases
+
+A knowledge base names documents the user added; their content is only in blobs. Each entry of `documents` is
+`{blob, name, mediaType, size?, index?, chunks?, addedAt?}`: `blob` the original file (as added, of media type
+`application/pdf`, the Word or PowerPoint Open XML type, `text/html`, `text/markdown` or `text/plain`), `index` the
+blob of its search index, `chunks` the number of passages in it. `documents` is one value replaced as a whole (last
+writer wins): two devices adding a document at the same time may keep only one of them. Adding a document with the
+same `blob` replaces its entry.
+
+`embedder` says which model embeds the passages: `{kind: 'local', model}` (the pinned on-device sentence-embedding
+model, by repository), `{kind: 'provider', provider: providerId, model}` (that provider's embeddings API, with the key
+of the device that embeds), or `null` (keywords only).
+
+The index blob (media type `application/vnd.aparte.knowledge-index+json`) is UTF-8 JSON:
+
+```json
+{"v": 1, "format": "pdf", "embedder": "local:<repository>@<commit>", "dim": 384,
+ "chunks": [{"text": "...", "page": 3, "heading": "..."}], "vectors": "<base64url>"}
+```
+
+`format` is `pdf`, `docx`, `pptx`, `html`, `markdown` or `text`; `page` is the 1-based page or slide; `vectors` holds
+`chunks.length * dim` little-endian float32 values, one unit-length row per chunk, and `embedder` names the model they
+come from (`provider:<providerId>:<model>` for an API). Both are `null` (and `dim` is 0) for a document indexed for
+keywords only. Vectors of two different `embedder` values are never compared; a document whose `embedder` is not its
+base's current one is searched by keywords until it is indexed again.
+
+A passage is named `<the first 6 characters of the document's blob id>-<1-based chunk number>`: the id a model cites.
+
 ## 4. Conversation shard documents
 
 One top-level `Y.Map` named `messages`, `messageId -> Y.Map`:
@@ -214,6 +243,7 @@ hides it, and the request builder leaves it out under rule 7 of [section 5](#5-p
 | `artifact` | `artifactId: string`, `kind: 'html' \| 'svg' \| 'mermaid' \| 'react' \| 'code'`, `title: string`, `blob?: string`, `content?: string` |
 | `provider` | `provider: string`, `block: Any`: a provider block with no portable meaning (server tool use and results, compaction blocks), replayed verbatim to that provider and ignored by others. Anthropic's web search is kept in Anthropic's own wire shape: `{type: 'server_tool_use', id, name: 'web_search', input}` and `{type: 'web_search_tool_result', tool_use_id, content}` (`content` the list of `{type: 'web_search_result', url, title, page_age, encrypted_content}`, or `{type: 'web_search_tool_result_error', error_code}`) |
 | `ref` | `partType: string`, `blob: string`, `size: number`: a part too large to inline ([4.3](#43-large-parts)) |
+| `knowledge` | `query: string`, `passages: {id, base, document, blob, page?, heading?, text}[]`: the passages of the chat's knowledge bases retrieved for this user message ([3.7](#37-knowledge-bases)); sent in that user turn as one delimited text block (`web/src/core/knowledge/context.ts`), never in the system prompt, and left out of any other message |
 
 `ProviderMeta` is an object keyed by provider kind, `{anthropic?: Any, openai?: Any, ...}`, opaque to everything but
 that provider's adapter. For Anthropic it holds what replay needs byte for byte: a `reasoning` part keeps
@@ -229,8 +259,9 @@ size}`. Readers load the blob and substitute it before rendering or replay. Imag
 
 ### 4.4 Blob references
 
-A blob reference is the 26-character manifest id (FORMAT.md section 8.6) in a field named `blob`. A segment lists in
-its header `blobs` every manifest id its update adds; a writer knows them because it creates the parts. Blobs are
+A blob reference is the 26-character manifest id (FORMAT.md section 8.6) in a field named `blob` (and in the
+`index` of a knowledge base document, [3.7](#37-knowledge-bases)). A segment lists in its header `blobs` every
+manifest id its update adds; a writer knows them because it creates the parts. Blobs are
 content-addressed and shared: the same photo in two conversations is stored once. Image bytes are prepared once at
 attach time (resized, EXIF and other metadata removed) and the stored bytes are the ones sent to providers, so a
 replay sends identical bytes.

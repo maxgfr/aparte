@@ -45,7 +45,7 @@ const TABS: readonly Tab[] = [
     label: 'shell.navMore',
     icon: LayoutGrid,
     unlocked: true,
-    also: [paths.transfer, paths.characters, '/lorebooks', paths.arena, paths.stats],
+    also: [paths.transfer, paths.characters, '/lorebooks', paths.arena, paths.stats, paths.knowledge],
   },
   // On a phone with the vault open, About is a row of More: the tab bar keeps six places.
   { href: paths.about, label: 'shell.navAbout', icon: Info, width: 'wide-or-locked' },
