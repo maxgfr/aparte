@@ -166,11 +166,18 @@ export function privateHost(hostname: string): boolean {
   return false
 }
 
-/** The language and title of a Wikipedia article address (`https://fr.m.wikipedia.org/wiki/Orthodoxie`), or null. */
+/** Query parameters that ask a Wikipedia address for something else than the current article. */
+const WIKIPEDIA_NOT_ARTICLE = ['oldid', 'diff', 'action', 'curid', 'search', 'title']
+
+/**
+ * The language and title of a Wikipedia article address (`https://fr.m.wikipedia.org/wiki/Orthodoxie`), or null,
+ * also for an address asking for a revision, a diff, a history or a search.
+ */
 export function wikipediaArticle(url: URL): { readonly lang: string; readonly title: string } | null {
   const lang = /^([a-z]{2,3})(?:\.m)?\.wikipedia\.org$/i.exec(url.hostname)?.[1]
   const article = /^\/wiki\/(.+)$/.exec(url.pathname)?.[1]
-  if (lang === undefined || article === undefined) return null
+  if (lang === undefined || article === undefined || lang.toLowerCase() === 'www') return null
+  if (WIKIPEDIA_NOT_ARTICLE.some((key) => url.searchParams.has(key))) return null
   let title: string
   try {
     title = decodeURIComponent(article)

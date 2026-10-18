@@ -551,8 +551,19 @@ describe('the built-in tools', () => {
       })
     expect(await tool.execute({ url: 'https://en.wikipedia.org/wiki/Nope' }, ctx())).toMatchObject({ isError: true })
 
-    await tool.execute({ url: 'https://fr.wikipedia.org/w/index.php?search=orthodoxie' }, ctx())
-    expect(seen.at(-1)).toBe('https://fr.wikipedia.org/w/index.php?search=orthodoxie')
+    // A search, a revision or a diff is not the current article: those are fetched as they are.
+    for (const page of [
+      'https://fr.wikipedia.org/w/index.php?search=orthodoxie',
+      'https://fr.wikipedia.org/wiki/Sp%C3%A9cial:Recherche?search=orthodoxie',
+      'https://en.wikipedia.org/wiki/Nope?oldid=123',
+      'https://en.wikipedia.org/wiki/Nope?diff=prev',
+      'https://www.wikipedia.org/wiki/Nope',
+    ]) {
+      await tool.execute({ url: page }, ctx())
+      expect(seen.at(-1)).toBe(page)
+    }
+    await tool.execute({ url: 'https://en.wikipedia.org/wiki/Nope?wprov=sfla1' }, ctx())
+    expect(new URL(seen.at(-1) ?? '').pathname).toBe('/w/api.php')
   })
 
   test('fetch_url stops with the turn', async () => {
