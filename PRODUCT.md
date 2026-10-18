@@ -52,7 +52,11 @@ transparency panel together.
 - Providers are configured once per device with the user's own keys; on-device and local-network models need no key.
 - Optional capabilities the user turns on deliberately: MCP tools, skills, a JavaScript and Python sandbox, local
   document search, voice input and output.
-- The app is locked behind a passphrase and the Secret Key of the Emergency Kit; unlocking decrypts locally. Passkey
+- The first launch lands in a chat: the vault exists at once, encrypted on the device under a key the browser keeps
+  and will not export, and opens with no prompt. That is safe from a look at the stored data, not from someone at
+  the same browser or another site of the shared origin, and it cannot sync; the settings say so.
+- Protecting the vault with a passphrase and the Secret Key of the Emergency Kit is a choice in the settings; from
+  then on the app is locked behind them, locks itself when idle, and can sync. Unlocking decrypts locally. Passkey
   unlock is reserved to builds served from a dedicated origin and not offered yet.
 - Sync destinations (a Git repository the user owns, or other user-owned storage) are configured once and carry only
   ciphertext.

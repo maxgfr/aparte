@@ -88,8 +88,11 @@ carry a vault to a device with no shared destination. An archive holds at most 6
 
 ## Joining a vault from another device
 
-On the web, **I already have a vault** joins from a GitHub repository or an archive; then unlock with the passphrase
-and the Secret Key of the Emergency Kit. The CLI joins from a folder, Git, GitHub or S3 (see below).
+Sync needs a vault a passphrase protects: a vault no passphrase protects yet has no keyslot another device could
+open, so the sync screen leads to **Protect with a passphrase** in the settings first. On the web, **I already have a
+vault** (on the sync screen, or in the settings under Passphrase protection) joins from a GitHub repository or an
+archive, replacing the empty vault a new device starts with; then unlock with the passphrase and the Secret Key of the
+Emergency Kit. The CLI joins from a folder, Git, GitHub or S3 (see below).
 
 ## What a destination can and cannot do
 

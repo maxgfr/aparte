@@ -11,8 +11,8 @@ part of this model and are summarised below.
   synced as ciphertext.
 - **Secrets.** Model provider API keys, sync credentials (a GitHub token, S3 keys) and MCP OAuth tokens. They stay on
   the device that uses them, encrypted, and never enter the synced documents.
-- **The vault's keys.** The passphrase, the Secret Key of the Emergency Kit, the recovery key, and the master key they
-  unwrap.
+- **The vault's keys.** The passphrase, the Secret Key of the Emergency Kit, the recovery key, the device slot key of
+  a vault no passphrase protects yet, and the master key they unwrap.
 - **The integrity of the app itself.** The code that runs is the code that was built from this repository.
 
 ## Who is in the threat model
@@ -24,7 +24,8 @@ part of this model and are summarised below.
 | A model provider or an MCP server the user chose | read what is sent to it, answer anything | sends only what the conversation needs; its answers are untrusted (sanitised rendering, tool approvals, sandboxes) |
 | Model output, a fetched page, a tool result, an artifact (prompt injection) | make the model ask for anything | no tool with effects runs without approval; untrusted code runs only in sandbox frames; rendered output cannot load anything |
 | Another site of the shared origin `maxgfr.github.io` | everything a page of the same origin can do | see [Shared origin](#shared-origin): it finds ciphertext, cannot get its code served as Aparté, and cannot frame Aparté or keep a handle on an Aparté window while the service worker controls it |
-| Someone with a copy of the device's browser profile | read the IndexedDB database | ciphertext and keyslots; only the passphrase and Argon2id protect the vault ([FORMAT §14](../spec/FORMAT.md#14-known-limits)) |
+| Someone with a copy of the device's browser profile | read the IndexedDB database | ciphertext and keyslots; only the passphrase and Argon2id protect the vault ([FORMAT §14](../spec/FORMAT.md#14-known-limits)); a vault no passphrase protects yet opens with the profile copy ([Before a passphrase](#before-a-passphrase)) |
+| Someone who uses this browser | open the app | a vault a passphrase protects shows the lock screen and locks after 5 idle minutes; a vault no passphrase protects yet opens for them ([Before a passphrase](#before-a-passphrase)) |
 
 Out of the model: a compromised operating system, browser or browser extension; someone who has the passphrase (and the
 Secret Key, or the recovery key); a malicious build of the app (see [Verifying the deployed
@@ -39,15 +40,18 @@ phone, WebKit desktop and iPhone, Firefox) run on every pull request.
 ### Nothing is stored in plaintext
 
 - IndexedDB `aparte-v1` holds a `meta` store (the format marker, the vault id, the keyslots, a non-extractable
-  device key and the Secret Key wrapped by it) and three stores of AES-256-GCM envelopes under HMAC-derived names
-  ([FORMAT §11](../spec/FORMAT.md#11-local-storage)). `meta` refuses any other entry.
+  device key and the Secret Key wrapped by it; before a passphrase protects the vault, the device slot key, another
+  non-extractable key, and the master key wrapped by it instead of keyslots) and three stores of AES-256-GCM envelopes
+  under HMAC-derived names ([FORMAT §11](../spec/FORMAT.md#11-local-storage),
+  [§17](../spec/FORMAT.md#17-device-slot)). `meta` refuses any other entry.
 - IndexedDB `aparte-inbox-v1` holds what another app shared to Aparté while it was locked, sealed at once by the
   service worker to the device's inbox public key ([FORMAT §16](../spec/FORMAT.md#16-share-inbox)).
 - CacheStorage holds public code and model files only: the precache of the app (checked against the digests in the
   service worker), the sandbox runtimes (`aparte-runtime-v1`) and in-browser model files (`aparte-webllm/*`,
   `aparte-transformers`), each pinned by SHA-256 and checked again when read back.
 - localStorage holds the interface preferences listed in `web/src/app/prefs.ts` (theme, dictation and read-aloud
-  engines, push to talk, notifications, a pending Emergency Kit marker); sessionStorage holds one reload flag.
+  engines, push to talk, notifications, a pending Emergency Kit marker, a dismissed hint); sessionStorage holds one
+  reload flag.
 - Answers from providers, MCP servers and fetched pages are requested with `cache: 'no-store'`, so they stay out of
   the browser's HTTP cache (`web/src/security/net.ts`).
 
@@ -160,12 +164,47 @@ destructive tool; the research and skills unit tests.
 The master key is wrapped by keyslots: a passphrase (Argon2id, `m = 64 MiB`, `t = 3`, `p = 1`) combined with the
 16-byte Secret Key of the Emergency Kit, and a recovery key. Keyslots commit to their key before decrypting, so a
 wrong secret is told apart from a damaged slot. Keys are non-extractable `CryptoKey` objects; raw key bytes are zeroed
-after use; locking drops them (the vault locks after 5 minutes without activity, after a 30-second grace period). The
+after use; locking drops them (a vault a passphrase protects locks after 5 minutes without activity, after a
+30-second grace period). The
 pending Emergency Kit marker in localStorage only asks for a renewal: the vault renews the recovery key only for a
 proof it made itself, under a key derived from the master key, for a recovery slot it still holds.
 
 Enforced by: the crypto, keyslot and vault unit tests (RFC and Wycheproof vectors, bit flips, hostile parameters), the
 cross-implementation vectors (`scripts/check-vectors.sh`) and the vault e2e tests.
+
+### Before a passphrase
+
+The first launch makes a vault at once, so the user lands in a chat with no step before it. Its master key is wrapped
+by a device slot ([FORMAT §17](../spec/FORMAT.md#17-device-slot)): an AES-256-GCM key generated with
+`extractable: false` and stored in IndexedDB as the `CryptoKey` object. The app opens that vault at every launch with
+no prompt; it never auto-locks and offers no Lock button, since anyone at this browser would open it again. The
+settings, the About screen and a dismissible hint under the empty chat say that no passphrase protects it.
+
+What it gives: the database holds ciphertext, a key object and no key bytes, so reading the storage through the web
+platform (a storage inspector, a page of the origin, the plaintext canary of the e2e suite) finds no plaintext. What
+it does not give, stated in the settings:
+
+- **Anyone who uses this browser** opens the vault.
+- **Another site of the shared origin** can use the key, without ever exporting it, to unwrap the master key and read
+  everything (`web/e2e/shared-origin.spec.ts` checks this in the open).
+- **A full copy of the browser profile** opens it: the browser keeps the key's material in its own files to rebuild
+  the object.
+- **Sync, the backup and joining from another device** need keyslots, which a device vault does not have: the sync
+  screen and the backup say so and lead to the protection.
+
+"Protect with a passphrase" in the settings closes all of it. In one transaction it adds a passphrase slot (with a new
+Secret Key) and a recovery slot, shows the Emergency Kit, and deletes the device slot and its key; from then on the
+vault behaves as described above: the lock screen, the auto-lock, the Lock button. A device slot found next to a
+passphrase slot (planted by another page of the origin) is never used and is deleted at the next unlock, so a sibling
+site cannot make a protected vault open without its passphrase. "Remove passphrase protection" asks for the passphrase
+and swaps every keyslot for a new device slot in one transaction; it is refused while the device syncs. A device that
+joins a vault from its store replaces its device vault, deleting what that held, in one transaction; a vault a
+passphrase protects is never replaced.
+
+Enforced by: the device slot unit tests (`web/src/core/vault/device.test.ts`: opening, a missing, malformed, replaced
+or foreign slot or key, protecting, unprotecting, a planted slot, replacing), the `meta` rules of `core/store`,
+`web/e2e/device.spec.ts` (the first launch, the canary in device mode, the gating, protecting and unprotecting) and the
+two device slot tests of `web/e2e/shared-origin.spec.ts`.
 
 ## Shared origin
 
@@ -210,6 +249,9 @@ What does not hold, and cannot on a shared origin:
   `/aparte/` with `history.replaceState`.
 - **The Secret Key.** It can use the non-extractable device key to unwrap the stored Secret Key, so against it only
   the passphrase and Argon2id protect a copy of the keyslots.
+- **A vault no passphrase protects yet.** It can use the device slot key to unwrap the master key and read
+  everything, as anyone at this browser can open the app ([Before a passphrase](#before-a-passphrase)). Protecting
+  the vault with a passphrase deletes that key; a device slot it plants afterwards is ignored.
 - **The share inbox.** It can replace the inbox public key between a share and the next unlock, read what is shared to
   its key, and put the original key back; the planted key is then not detected ([FORMAT
   §16](../spec/FORMAT.md#16-share-inbox)). It can also POST forged shares to `<base>share`, which reach the share
@@ -219,8 +261,10 @@ What does not hold, and cannot on a shared origin:
   shared-origin build trusts.
 - **Local Network Access.** A permission to reach a model server on the local network is granted to the whole origin.
 
-For this reason passkey (WebAuthn PRF) unlock and "stay unlocked on this device" are not offered on the shared origin:
-another site of the origin could use a passkey made for it, or a key kept unlocked. A build with `DEDICATED_ORIGIN=1`
+For this reason passkey (WebAuthn PRF) unlock and "stay unlocked on this device" are not offered on the shared origin
+for a vault a passphrase protects: another site of the origin could use a passkey made for it, or a key kept
+unlocked. The device slot of a vault no passphrase protects yet is that kind of key, kept on purpose so the app can
+be used at once, and documented as such above. A build with `DEDICATED_ORIGIN=1`
 marks itself as running on an origin of its own (the About screen says so); the format defines a passkey keyslot for
 such builds, but the web app does not offer passkey unlock or "stay unlocked" yet. The remedy for everything in this
 list is to run the app on an origin of its own: [docs/self-hosting.md](self-hosting.md).

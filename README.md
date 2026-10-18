@@ -29,9 +29,12 @@ offline).
 
 ## Privacy model, in brief
 
-- Everything the app stores on the device is encrypted (AES-256-GCM under a master key wrapped by Argon2id from your
-  passphrase and the Secret Key of the Emergency Kit), except public code, public model files and interface
-  preferences.
+- Everything the app stores on the device is encrypted (AES-256-GCM under a master key), except public code, public
+  model files and interface preferences. On first launch the master key is wrapped by a non-extractable key the
+  browser keeps, so the chat is usable at once; that does not stop someone at the same browser, or another site of
+  the shared origin, from opening it. "Protect with a passphrase" in the settings wraps it instead by Argon2id from
+  your passphrase and the Secret Key of the Emergency Kit, turns on the lock screen and the auto-lock, and is needed
+  for sync.
 - A sync destination sees ciphertext, sizes and times only, and devices detect a destination that rolls back or
   withholds data. The format, `aparte/1`, is specified in [spec/FORMAT.md](spec/FORMAT.md) and implemented twice, in
   TypeScript and in Rust, against shared vectors.
@@ -45,8 +48,9 @@ offline).
 
 ## Install
 
-- **Web app:** open <https://maxgfr.github.io/aparte/>, create a vault and keep the Emergency Kit. To install it, use
-  the browser's install action (Add to Home Screen on iPhone).
+- **Web app:** open <https://maxgfr.github.io/aparte/> and start chatting. Protect the vault with a passphrase from
+  the settings (More, Passphrase protection) and keep the Emergency Kit before you rely on it or sync. To install it,
+  use the browser's install action (Add to Home Screen on iPhone).
 - **CLI:** `brew install maxgfr/tap/aparte` on macOS or Linux, or a binary from the
   [releases](https://github.com/maxgfr/aparte/releases), checked against `SHA256SUMS` and its build provenance
   (`gh attestation verify aparte-<target> --repo maxgfr/aparte`). See [docs/cli.md](docs/cli.md).

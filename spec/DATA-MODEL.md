@@ -403,6 +403,7 @@ Deleting it writes a version with `deleted: true` and no `value`. Each device ke
 | API keys without `syncKey`, OAuth tokens, sync credentials | local records | no |
 | `deviceId`, high-water marks, drafts, pending updates | local records | no |
 | Secret Key | `meta`, wrapped | no (pairing only) |
+| device slot of a vault no passphrase protects | `meta`, the master key wrapped by a non-extractable device key (FORMAT.md section 17) | no, never |
 | theme and other UI preferences | `localStorage` | no |
 | unlocked keys | memory, non-extractable `CryptoKey` | no; dropped at lock |
 

@@ -31,6 +31,7 @@ not allow rejects the input with the error named in [section 12](#12-errors); it
 14. [Known limits](#14-known-limits)
 15. [Vectors and worked examples](#15-vectors-and-worked-examples)
 16. [Share inbox](#16-share-inbox)
+17. [Device slot](#17-device-slot)
 
 ## 1. Conventions
 
@@ -949,3 +950,64 @@ with body `01 02 03 04 05` gives a 340-byte item (`P_len = padme(261) = 272`) wh
 `6c02d2952f6a560031a1708b68b7bbb36a3eda81d507363404cd78e54d9202fd`. The CLI never reads an inbox, so these values are
 checked by the web implementation's tests (`web/src/core/inbox/inbox.test.ts`) rather than by the cross-implementation
 vector files of [section 15](#15-vectors-and-worked-examples).
+
+## 17. Device slot
+
+This section is an addition: it changes no byte of sections 1 to 16. It defines how a vault opens on one device
+without a passphrase, so the web app can be used at once and protected with a passphrase later. The device slot is
+local to one device: it is never uploaded, never written to a store or an archive, and a reader of a store (the CLI
+included) never meets it. A vault opened by its device slot has no keyslot ([section 6](#6-keyslots)), so another
+device cannot open it, and it cannot sync until a passphrase protects it.
+
+### 17.1 Entries
+
+Two entries of the `meta` store ([11.1](#111-database)), beside those of [11.2](#112-meta-entries):
+
+| Key | Value |
+|---|---|
+| `device-slot-key` | non-extractable AES-256-GCM `CryptoKey` (`['encrypt', 'decrypt']`), generated on this device, used for this wrap only |
+| `device-slot` | bytes: `iv (12) || AES-GCM(device-slot-key, iv, MK, "aparte/1|device-slot|" || vault)`, 60 bytes |
+
+`vault` is the base32 `vaultId` of the `vault` entry. The key is stored as the `CryptoKey` object (structured clone
+keeps it non-extractable): no page can read its bytes, but any page of the origin can use it. `device-slot-key` is a
+key of its own, never `device-key`, so deleting it never touches a wrapped Secret Key.
+
+### 17.2 Opening
+
+A vault is protected by a passphrase when `meta` holds a keyslot of kind `passphrase` or `passkey`; otherwise it is a
+device vault. Only a device vault opens with its device slot: a device slot next to a passphrase or passkey slot is
+never used, and a writer deletes it at the next unlock. A reader opening the device slot:
+
+1. reads both entries; either one missing, `device-slot-key` that is not a `CryptoKey`, or `device-slot` that is not
+   60 bytes: `corrupt`;
+2. decrypts `device-slot` under `device-slot-key` with the AAD above; on failure: `tampered`;
+3. derives the subkeys from the 32 bytes it got ([5.2](#52-subkeys)).
+
+There is no `mkCheck`: the AES-GCM tag under a key that never leaves the device authenticates the slot. A device vault
+whose device slot does not open has no other way in on this device unless it holds a recovery slot.
+
+### 17.3 Creating, protecting and unprotecting
+
+- **Creating** a device vault draws, in this order, `MK` (32 bytes), `vaultId` (16 bytes) and `deviceId` (16 bytes),
+  generates `device-slot-key`, draws `iv` (12 bytes), and writes `fmt`, `vault`, `device-slot-key` and `device-slot`
+  in the creation transaction of [11.2](#112-meta-entries), with no keyslot.
+- **Protecting** opens the device slot and, in one readwrite transaction on `meta`, writes a passphrase slot (with a
+  new Secret Key), a recovery slot, `device-key` and `secret-key` when the device remembers the Secret Key (the
+  default, [11.2](#112-meta-entries)), and deletes `device-slot` and `device-slot-key`. The vault id and `MK` do not
+  change, so every record stays readable.
+- **Unprotecting** opens a passphrase slot and, in one readwrite transaction on `meta`, writes a new
+  `device-slot-key` and `device-slot`, and deletes every keyslot, `device-key` and `secret-key`.
+- **Replacing** a device vault (a device that joins a vault from its store, [10.4](#104-trust-on-first-use), or one
+  whose device slot no longer opens and starts over) is one readwrite transaction on every store of
+  [11.1](#111-database): it checks that `vault` and the keyslots are still those it read, empties `objects`, `local`
+  and `pending`, and writes the new `meta` entries. A vault a passphrase protects is never replaced this way.
+
+### 17.4 What it protects
+
+What a device vault stores is as encrypted as any other: `meta` holds the format marker, the vault id, a key object
+and ciphertext, and no stored value is `MK`, a record in clear or the bytes of a key, so reading the database through
+the web platform, as a page of the origin or a storage inspector does, finds no plaintext. That is all it protects. The
+browser keeps the material of `device-slot-key` in its own profile files to rebuild the object, so a full copy of the
+browser profile opens a device vault, as it would a vault left unlocked. Anyone who uses this browser opens it, and
+another page of the same origin can use `device-slot-key` to unwrap `MK` ([section 14](#14-known-limits), shared
+origin). Protecting the vault with a passphrase removes both entries and closes these gaps.
