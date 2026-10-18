@@ -5,8 +5,9 @@
  *   `sandbox=""`, where nothing runs; an SVG artifact is shown as an image; a Mermaid diagram is rendered by the
  *   pinned Mermaid (`securityLevel: 'strict'`), whose bundle the app transfers here, and shown as an image.
  * - After the user's Run click, the nested frame is made again with `sandbox="allow-scripts"`. Its document starts
- *   with a prelude that removes WebRTC from its realm and reports its height. The nested frame inherits this page's
- *   CSP (no connection, no host for any load, no frame): it reaches nothing outside itself.
+ *   with a prelude that removes WebRTC from its realm, removes any frame it nests and reports its height. The nested
+ *   frame inherits this page's CSP (no connection, no host for any load, no frame), which governs fetches and loads;
+ *   WebRTC is outside every CSP, hence the prelude (docs/security-model.md, "Sandboxes").
  * - Messages are taken from the parent and the app's origin only (core/sandbox/protocol.ts), and from the nested
  *   frame only as a height, clamped.
  */
@@ -30,8 +31,21 @@ const DOCUMENT_HEIGHT = 420
 /**
  * Runs first in an artifact that was allowed to run: WebRTC (which no CSP governs) is removed from its realm, and its
  * height is reported to this frame as it changes.
+ *
+ * A document the artifact nests would start with a realm of its own, WebRTC whole: `frame-src 'none'` stops frames
+ * that load a URL, not a `srcdoc` one. So every frame-like element is removed as soon as it is inserted, in the
+ * document or in a shadow root (a `srcdoc` document only loads in a later task, after the observer ran), and the APIs
+ * that would parse markup outside the observer's reach (`document.write`, `document.open`, `setHTMLUnsafe`,
+ * `parseHTMLUnsafe`, which also build declarative shadow roots) are removed. Markup that nests a document itself never
+ * runs (`NESTS_DOCUMENT`).
  */
-const PRELUDE = `<script>(()=>{for(const n of ["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver","RTCRtpTransceiver","RTCRtpScriptTransform","RTCDtlsTransport","RTCIceTransport","RTCSctpTransport","RTCCertificate","RTCDTMFSender","RTCEncodedAudioFrame","RTCEncodedVideoFrame"]){try{delete window[n]}catch(e){}try{Object.defineProperty(window,n,{value:undefined,writable:false,configurable:false})}catch(e){}}const p=()=>{try{parent.postMessage({aparteHeight:Math.ceil(document.documentElement.scrollHeight)},"*")}catch(e){}};addEventListener("load",p);try{new ResizeObserver(p).observe(document.documentElement)}catch(e){}})()</script>`
+const PRELUDE = `<script>(()=>{for(const n of ["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver","RTCRtpTransceiver","RTCRtpScriptTransform","RTCDtlsTransport","RTCIceTransport","RTCSctpTransport","RTCCertificate","RTCDTMFSender","RTCEncodedAudioFrame","RTCEncodedVideoFrame"]){try{delete window[n]}catch(e){}try{Object.defineProperty(window,n,{value:undefined,writable:false,configurable:false})}catch(e){}}const F="iframe,frame,frameset,object,embed,portal,fencedframe";const strip=r=>{for(const x of r)for(const n of x.addedNodes){if(!(n instanceof Element))continue;if(n.matches(F))n.remove();else for(const c of n.querySelectorAll(F))c.remove()}};const mo=new MutationObserver(strip);const watch=t=>mo.observe(t,{childList:true,subtree:true});watch(document);const attach=Element.prototype.attachShadow;Object.defineProperty(Element.prototype,"attachShadow",{value:function(o){const root=attach.call(this,o);watch(root);return root},writable:false,configurable:false});for(const [o,ns] of [[Document.prototype,["write","writeln","open"]],[Element.prototype,["setHTMLUnsafe"]],[ShadowRoot.prototype,["setHTMLUnsafe"]],[Document,["parseHTMLUnsafe"]]])for(const n of ns){try{Object.defineProperty(o,n,{value:undefined,writable:false,configurable:false})}catch(e){}}const p=()=>{try{parent.postMessage({aparteHeight:Math.ceil(document.documentElement.scrollHeight)},"*")}catch(e){}};addEventListener("load",p);try{new ResizeObserver(p).observe(document.documentElement)}catch(e){}})()</script>`
+
+/**
+ * Markup that nests a document of its own (a `srcdoc` frame, a declarative shadow root the observer cannot see into):
+ * such an artifact is shown, never run.
+ */
+const NESTS_DOCUMENT = /srcdoc|shadowroot/i
 
 function post(message: Record<string, unknown>): void {
   window.parent.postMessage({ p: PROTOCOL, ...message }, APP_ORIGIN)
@@ -130,6 +144,11 @@ async function render(message: RenderMessage): Promise<void> {
       if (current === message.id)
         post({ type: 'failed', id: message.id, message: error instanceof Error ? error.message : String(error) })
     }
+    return
+  }
+  if (message.run && NESTS_DOCUMENT.test(message.source)) {
+    show(document.createElement('div'))
+    post({ type: 'failed', id: message.id, message: 'This artifact nests a document of its own, so it does not run' })
     return
   }
   if (message.kind === 'svg' && !message.run) showImage(message.id, message.source)

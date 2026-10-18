@@ -230,3 +230,55 @@ test('a Python run that asks for too much memory is stopped at its cap', async (
   const outcome = await runInFrame(page, { language: 'python', code: 'b = bytearray(1500 * 1024 * 1024)\nlen(b)' })
   expect(outcome.status).toBe('memory')
 })
+
+/** Resolves with the `reached` messages posted to the app's window within `ms`. */
+function reachedWithin(page: import('@playwright/test').Page, ms: number): Promise<string[]> {
+  return page.evaluate(
+    (ms) =>
+      new Promise<string[]>((resolve) => {
+        const seen: string[] = []
+        window.addEventListener('message', (e) => {
+          const reached = (e.data as { reached?: unknown } | null)?.reached
+          if (typeof reached === 'string') seen.push(reached)
+        })
+        setTimeout(() => resolve(seen), ms)
+      }),
+    ms,
+  )
+}
+
+test('a run artifact cannot get WebRTC back through a document it nests', async ({ page }) => {
+  // No CSP governs WebRTC, and the prelude only removes it from the artifact's own realm: a nested `srcdoc` document
+  // (which no frame-src applies to) would start with it whole and could leak data through a STUN host name.
+  await page.goto('./')
+  await openSandbox(page, 'artifact')
+  const nestedScript = (name: string) =>
+    `'<scr' + 'ipt>top.postMessage({ reached: "${name}:" + typeof RTCPeerConnection }, "*")</scr' + 'ipt>'`
+  const reached = reachedWithin(page, 3000)
+  const out = await renderArtifact(page, {
+    kind: 'html',
+    source: `<body><p>nested</p><script>
+const a = document.createElement('iframe'); a['src' + 'doc'] = ${nestedScript('created')}; document.body.append(a)
+const b = document.createElement('div'); b.innerHTML = '<iframe ' + 'src' + 'doc="' + ${nestedScript('parsed')}.replaceAll('"', '&quot;') + '"></iframe>'; document.body.append(b)
+const host = document.createElement('div'); const root = host.attachShadow({ mode: 'closed' }); const c = document.createElement('iframe'); c.setAttribute('src' + 'doc', ${nestedScript('shadow')}); root.append(c); document.body.append(host)
+top.postMessage({ reached: 'artifact:' + typeof RTCPeerConnection }, '*')
+</script>`,
+    run: true,
+  })
+  expect(out.type).toBe('rendered')
+  // The artifact itself ran, without WebRTC; nothing it nested ever ran.
+  expect(await reached).toEqual(['artifact:undefined'])
+})
+
+test('a run artifact whose markup nests a document does not run', async ({ page }) => {
+  await page.goto('./')
+  await openSandbox(page, 'artifact')
+  const reached = reachedWithin(page, 2500)
+  const out = await renderArtifact(page, {
+    kind: 'html',
+    source: `<p>x</p><iframe srcdoc="<script>top.postMessage({ reached: 'markup' }, '*')</script>"></iframe><script>top.postMessage({ reached: 'artifact' }, '*')</script>`,
+    run: true,
+  })
+  expect(out.type).toBe('failed')
+  expect(await reached).toEqual([])
+})
