@@ -152,3 +152,14 @@ test('an expected violation that does not happen is a failure', async ({ baseURL
   own.expectViolation('require-trusted-types-for')
   expect(own.problems()).toEqual(['Expected violation did not happen: require-trusted-types-for'])
 })
+
+test('an expected console error that does not happen is a failure; one that does is not reported', async ({
+  baseURL,
+}) => {
+  const own = new Gates(new URL(baseURL ?? '').origin, [], [])
+  own.expectConsoleError(/frame-ancestors/)
+  expect(own.problems()).toEqual(['Expected console error did not happen: /frame-ancestors/'])
+  own.consoleErrors.push("http://localhost/evil/: Refused to load because of frame-ancestors 'none'")
+  own.consoleErrors.push('http://localhost/evil/: something else')
+  expect(own.problems()).toEqual(['Console error: http://localhost/evil/: something else'])
+})

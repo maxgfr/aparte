@@ -147,6 +147,8 @@ export class Gates {
   /** Every origin contacted, with whether it was the app's own, for the test's report. */
   readonly contacted = new Map<string, 'app' | 'foreign' | 'allowed' | 'blocked'>()
   private readonly expected: ExpectedViolation[] = []
+  /** Console errors a test provokes on purpose without a violation event (a refusal the browser only logs). */
+  private readonly expectedConsole: RegExp[] = []
   /** Exact URLs a test serves itself to play another site (an attacker framing the app). */
   private readonly foreign = new Set<string>()
   /** Origins a test plays as an endpoint the user typed (a local model server, a custom base URL). */
@@ -165,6 +167,15 @@ export class Gates {
    */
   expectViolation(directive: string, console?: RegExp): void {
     this.expected.push({ directive, console })
+  }
+
+  /**
+   * Declares a console error this test provokes on purpose that comes with no `securitypolicyviolation` event: a
+   * frame refused by `frame-ancestors` is reported to the framing page's console only. Errors matching `pattern` are
+   * then not failures, and the test fails unless at least one occurred.
+   */
+  expectConsoleError(pattern: RegExp): void {
+    this.expectedConsole.push(pattern)
   }
 
   /**
@@ -263,7 +274,9 @@ export class Gates {
   /** Everything that breaks a gate, one line each; empty when the test is clean. */
   problems(): string[] {
     const unexpected = this.violations.filter((v) => !this.expected.some((x) => x.directive === v.directive))
-    const consoleErrors = this.consoleErrors.filter((m) => !this.expected.some((x) => x.console?.test(m)))
+    const consoleErrors = this.consoleErrors.filter(
+      (m) => !this.expected.some((x) => x.console?.test(m)) && !this.expectedConsole.some((re) => re.test(m)),
+    )
     return [
       ...unexpected.map(
         (v) =>
@@ -273,6 +286,9 @@ export class Gates {
       ...this.expected
         .filter((x) => !this.violations.some((v) => v.directive === x.directive))
         .map((x) => `Expected violation did not happen: ${x.directive}`),
+      ...this.expectedConsole
+        .filter((re) => !this.consoleErrors.some((m) => re.test(m)))
+        .map((re) => `Expected console error did not happen: ${re}`),
       ...this.blocked.map(
         (u) => `Request outside the network allowlist (purposes: ${this.purposes.join(', ') || 'none'}): ${u}`,
       ),
