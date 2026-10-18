@@ -4,6 +4,10 @@ import { defineConfig, devices } from '@playwright/test'
 const port = Number(process.env.E2E_PORT ?? 4173)
 const base = process.env.VITE_BASE ?? '/aparte/'
 const origin = `http://localhost:${port}`
+// Firefox runs Web Audio only through a sound server (PulseAudio on Linux). On a machine without one, such as CI,
+// E2E_PULSE_SERVER names a null-sink server for Firefox alone: Chromium's headless audio service stalls on PulseAudio
+// and WebKit needs none.
+const pulse = process.env.E2E_PULSE_SERVER
 
 // The production build bakes its origin into the Content-Security-Policy (scripts load from `<origin><base>` only),
 // so the build under test is made for the preview origin. E2E_NO_BUILD=1 serves a `dist` built beforehand, which must
@@ -34,6 +38,12 @@ export default defineConfig({
     { name: 'chromium-phone', use: { ...devices['Pixel 7'] } },
     { name: 'webkit-desktop', use: { ...devices['Desktop Safari'] } },
     { name: 'webkit-iphone', use: { ...devices['iPhone 15'] } },
-    { name: 'firefox-desktop', use: { ...devices['Desktop Firefox'] } },
+    {
+      name: 'firefox-desktop',
+      use: {
+        ...devices['Desktop Firefox'],
+        ...(pulse ? { launchOptions: { env: { ...process.env, PULSE_SERVER: pulse } } } : {}),
+      },
+    },
   ],
 })

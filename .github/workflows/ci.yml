@@ -52,9 +52,26 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium firefox webkit
+      # Firefox runs Web Audio only through a sound server, and the runner has none: a PulseAudio null sink on a
+      # private socket stands in, so dictation records the specs' stand-in microphone as on a real machine. The
+      # Playwright config hands E2E_PULSE_SERVER to Firefox only (Chromium's headless audio stalls on PulseAudio).
+      - name: Start a sound server
+        env:
+          E2E_PULSE_SERVER: unix:/tmp/aparte-e2e-pulse/native
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends pulseaudio
+          socket="${E2E_PULSE_SERVER#unix:}"
+          mkdir -p "${socket%/*}"
+          pulseaudio --daemonize=yes --exit-idle-time=-1 -n \
+            --load="module-native-protocol-unix socket=$socket auth-anonymous=1" \
+            --load="module-null-sink sink_name=e2e"
+          PULSE_SERVER="$E2E_PULSE_SERVER" pactl info
       # The suite runs against the production build, CSP and service worker included.
       - run: bun run build
       - run: bun run test:e2e
+        env:
+          E2E_PULSE_SERVER: unix:/tmp/aparte-e2e-pulse/native
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

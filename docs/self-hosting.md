@@ -99,6 +99,10 @@ bunx playwright install chromium firefox webkit
 E2E_PORT=4530 bunx playwright test        # builds for http://localhost:4530/aparte/ and serves it
 ```
 
+Firefox runs Web Audio only through a sound server. On a Linux machine without one, the dictation spec needs a
+PulseAudio null sink: start it as the `web-e2e` job of `.github/workflows/ci.yml` does and name its socket in
+`E2E_PULSE_SERVER` (for example `unix:/tmp/aparte-e2e-pulse/native`), which the Playwright config hands to Firefox.
+
 ## Verifying a deployment
 
 `scripts/verify-deploy.sh` checks that a live copy is exactly a build of this repository. From the repository root:
