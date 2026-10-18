@@ -197,3 +197,40 @@ export function writeSessionFlag(
     return false
   }
 }
+
+/** The part of Storage that clearing needs: the keys it holds, to find Aparté's own. */
+export type ClearableStorage = Pick<Storage, 'key' | 'removeItem' | 'length'>
+
+/** localStorage or sessionStorage when the page may use it, else null. */
+function webArea(which: 'local' | 'session'): ClearableStorage | null {
+  try {
+    if (which === 'local') return typeof localStorage === 'undefined' ? null : localStorage
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage
+  } catch {
+    return null
+  }
+}
+
+/** Every key this app writes is under this namespace, in localStorage and sessionStorage alike. */
+const NAMESPACE = 'aparte:'
+
+/**
+ * Removes every preference and session flag of Aparté (the keys under `aparte:`), for a device being erased. Other
+ * keys stay: the origin is shared, and another site's are not Aparté's to delete.
+ */
+export function clearPrefs(areas: readonly (ClearableStorage | null)[] = [webArea('local'), webArea('session')]): void {
+  for (const area of areas) {
+    if (area === null) continue
+    try {
+      const mine: string[] = []
+      for (let i = 0; i < area.length; i++) {
+        const key = area.key(i)
+        if (key?.startsWith(NAMESPACE)) mine.push(key)
+      }
+      for (const key of mine) area.removeItem(key)
+    } catch {
+      // A storage that refuses to be read holds nothing this page could clear.
+    }
+  }
+  notify()
+}

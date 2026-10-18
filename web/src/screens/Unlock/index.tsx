@@ -7,6 +7,7 @@ import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
 import { Button } from '../../ui/components/Button.tsx'
 import { Field } from '../../ui/components/Field.tsx'
+import { EraseSheet } from '../../ui/shell/EraseSheet.tsx'
 import { errorCode, nextPaint } from '../Protect/busy.ts'
 import styles from './LockFrame.module.css'
 import { LockFrame } from './LockFrame.tsx'
@@ -29,6 +30,7 @@ export default function Unlock() {
   const rememberId = useId()
   const [problem, setProblem] = useState<Problem | null>(null)
   const [busy, setBusy] = useState(false)
+  const [erasing, setErasing] = useState(false)
   const passphraseId = useId()
   const secretKeyId = useId()
 
@@ -146,7 +148,11 @@ export default function Unlock() {
         <Button variant="plain" onClick={() => navigate(paths.recover)} disabled={busy}>
           {t('vault.forgot')}
         </Button>
+        <Button variant="plain" onClick={() => setErasing(true)} disabled={busy}>
+          {t('vault.eraseLost')}
+        </Button>
       </div>
+      <EraseSheet open={erasing} onClose={() => setErasing(false)} lost />
     </LockFrame>
   )
 }

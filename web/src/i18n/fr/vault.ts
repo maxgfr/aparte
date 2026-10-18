@@ -110,6 +110,23 @@ export const vault = {
   backToUnlock: 'Retour au déverrouillage',
   recovered: 'Déverrouillé. Votre nouvelle phrase de passe est définie.',
 
+  eraseLost: 'Phrase de passe et clé de récupération perdues ?',
+  eraseTitle: 'Effacer toutes les données de cet appareil',
+  eraseLostLead:
+    'Sans votre phrase de passe ni votre clé de récupération, ce coffre ne pourra jamais être déchiffré : ni par vous, ni par Aparté, ni par personne.',
+  eraseWhat:
+    'L’effacement supprime tout ce qu’Aparté conserve sur cet appareil : le coffre, ses conversations et ses clés, la boîte de réception des partages et les préférences. L’application repart ensuite de zéro, vide.',
+  eraseSynced:
+    'Ce que cet appareil a déjà synchronisé reste dans votre destination de synchronisation, sous forme chiffrée que personne ne peut lire. Supprimez-le là-bas si vous voulez qu’il disparaisse, par exemple en supprimant le dépôt GitHub.',
+  eraseModels: 'Supprimer aussi les modèles et environnements téléchargés sur l’appareil',
+  eraseWord: 'effacer',
+  eraseConfirmLabel: 'Saisissez « {word} » pour confirmer',
+  eraseAction: 'Tout effacer',
+  erasing: 'Effacement de cet appareil…',
+  eraseFailedTitle: 'L’effacement n’est pas allé au bout',
+  eraseFailedBody:
+    'Le navigateur a refusé de supprimer une partie des données. Rechargez l’application, puis réessayez.',
+
   homeUnlocked:
     'Votre coffre est ouvert sur cet appareil. Il se verrouille automatiquement après quelques minutes sans activité.',
   homeDevice:

@@ -103,6 +103,22 @@ export const vault = {
   backToUnlock: 'Back to unlock',
   recovered: 'Unlocked. Your new passphrase is set.',
 
+  eraseLost: 'Lost your passphrase and recovery key?',
+  eraseTitle: 'Erase all data on this device',
+  eraseLostLead:
+    'Without your passphrase or your recovery key, this vault can never be decrypted: not by you, not by Aparté, not by anyone.',
+  eraseWhat:
+    'Erasing removes everything Aparté keeps on this device: the vault, its conversations and keys, the share inbox and the preferences. The app then starts over, empty.',
+  eraseSynced:
+    'What this device already synced stays in your sync destination, as ciphertext nobody can read. Delete it there if you want it gone, for example by deleting the GitHub repository.',
+  eraseModels: 'Also delete the downloaded on-device models and runtimes',
+  eraseWord: 'erase',
+  eraseConfirmLabel: 'Type “{word}” to confirm',
+  eraseAction: 'Erase everything',
+  erasing: 'Erasing this device…',
+  eraseFailedTitle: 'The erase did not finish',
+  eraseFailedBody: 'The browser refused to delete part of the data. Reload the app, then try again.',
+
   homeUnlocked: 'Your vault is open on this device. It locks itself after a few minutes without activity.',
   homeDevice: 'Your chats are encrypted on this device and open without a prompt. No passphrase protects them yet.',
   hintBody: 'Anyone who opens this browser can read these chats. Add a passphrase when you want them locked.',

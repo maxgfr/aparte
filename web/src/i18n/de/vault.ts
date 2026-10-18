@@ -111,6 +111,23 @@ export const vault = {
   backToUnlock: 'Zurück zum Entsperren',
   recovered: 'Entsperrt. Ihre neue Passphrase ist gesetzt.',
 
+  eraseLost: 'Passphrase und Wiederherstellungsschlüssel verloren?',
+  eraseTitle: 'Alle Daten auf diesem Gerät löschen',
+  eraseLostLead:
+    'Ohne Ihre Passphrase oder Ihren Wiederherstellungsschlüssel lässt sich dieser Tresor nie mehr entschlüsseln: nicht von Ihnen, nicht von Aparté, von niemandem.',
+  eraseWhat:
+    'Das Löschen entfernt alles, was Aparté auf diesem Gerät speichert: den Tresor, seine Chats und Schlüssel, den Eingang für Geteiltes und die Einstellungen. Die App beginnt danach leer von vorn.',
+  eraseSynced:
+    'Was dieses Gerät bereits synchronisiert hat, bleibt in Ihrem Sync-Ziel, verschlüsselt und für niemanden lesbar. Löschen Sie es dort, wenn es verschwinden soll, zum Beispiel indem Sie das GitHub-Repository löschen.',
+  eraseModels: 'Auch die heruntergeladenen Modelle und Laufzeitumgebungen auf dem Gerät löschen',
+  eraseWord: 'löschen',
+  eraseConfirmLabel: 'Geben Sie „{word}“ zur Bestätigung ein',
+  eraseAction: 'Alles löschen',
+  erasing: 'Dieses Gerät wird gelöscht…',
+  eraseFailedTitle: 'Das Löschen wurde nicht abgeschlossen',
+  eraseFailedBody:
+    'Der Browser hat sich geweigert, einen Teil der Daten zu löschen. Laden Sie die App neu und versuchen Sie es erneut.',
+
   homeUnlocked: 'Ihr Tresor ist auf diesem Gerät geöffnet. Er sperrt sich nach einigen Minuten ohne Aktivität selbst.',
   homeDevice:
     'Ihre Chats sind auf diesem Gerät verschlüsselt und öffnen sich ohne Abfrage. Noch schützt sie keine Passphrase.',

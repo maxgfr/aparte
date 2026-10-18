@@ -20,7 +20,7 @@ import { EmptyState } from '../ui/components/EmptyState.tsx'
 import { clearCopiedSecret } from './clipboard.ts'
 import { navigate, parseHash } from './hashLocation.ts'
 import { lazyChunk, ScreenBoundary } from './lazyChunk.tsx'
-import { readPref, writePref } from './prefs.ts'
+import { clearPrefs, readPref, writePref } from './prefs.ts'
 import { paths } from './routes.ts'
 
 /*
@@ -49,6 +49,9 @@ import { paths } from './routes.ts'
  * - A `device` vault never shows the lock screen, never auto-locks and offers no Lock button: anyone who opens this
  *   browser opens it, so a lock would protect nothing. When its device slot no longer opens, the gate says so and
  *   offers the recovery key (if the vault has one) or a new, empty vault.
+ * - Erasing the device (core/erase) locks every page first: this one forces its lock and tells the others, which
+ *   force theirs, so no key stays in memory and every database connection lets go; once the data is gone, every page
+ *   starts over at the app's bare address, as on a first launch.
  */
 
 /**
@@ -80,6 +83,13 @@ interface VaultValue {
   reset(): Promise<void>
   /** Tells the other pages of the app that the vault on this device changed (a vault joined over this one). */
   announceChange(): void
+  /** An erase of this device is running (here or in another page), or failed here: the gate shows it. */
+  readonly erasing: 'running' | 'failed' | null
+  /**
+   * Erases everything Aparté keeps on this device (core/erase, prefs.ts `clearPrefs`), in every page of the app, then
+   * starts over as on a first launch. `models` also deletes the downloaded on-device models and runtimes.
+   */
+  erase(options: { readonly models: boolean }): Promise<void>
   /** Unlocks, and shows the Emergency Kit again when the last one was never confirmed. */
   unlock(credential: UnlockCredential): Promise<void>
   /** Recovers with the recovery key; the new passphrase replaces the previous ones on this device. */
@@ -115,8 +125,15 @@ type Notice =
   | { readonly type: 'changed' }
   /** A pending kit was renewed: a kit still on screen elsewhere holds a recovery key that no longer opens the vault. */
   | { readonly type: 'kit' }
+  /** A page is erasing this device: every page drops its keys and lets go of the databases. */
+  | { readonly type: 'erase' }
+  /** The erase is done: every page starts over. */
+  | { readonly type: 'erased' }
 
-const NOTICES: readonly Notice['type'][] = ['lock', 'changed', 'kit']
+const NOTICES: readonly Notice['type'][] = ['lock', 'changed', 'kit', 'erase', 'erased']
+
+/** The app's bare address: a fresh start lands in a new chat. */
+const startAddress = () => new URL(import.meta.env.BASE_URL, location.origin).href
 
 /** The channel between the pages of the app; a no-op where BroadcastChannel is missing. */
 function noticeChannel(onNotice: (notice: Notice) => void) {
@@ -247,6 +264,8 @@ function OpenVault({
   const [renewingKit, setRenewingKit] = useState(false)
   const [lastLock, setLastLock] = useState<LockReason | null>(null)
   const [deviceFailed, setDeviceFailed] = useState(false)
+  const [erasing, setErasing] = useState<'running' | 'failed' | null>(null)
+  const erasingRef = useRef(false)
   /** Posts to the other pages; set while the channel is open. */
   const post = useRef<(notice: Notice) => void>(() => {})
   const creatingDevice = useRef(false)
@@ -255,7 +274,7 @@ function OpenVault({
   // No vault on this device yet: one is made at once, opened by the device slot. A page that loses the race to another
   // page reads that page's vault instead.
   useEffect(() => {
-    if (status.state !== 'absent' || creatingDevice.current) return
+    if (status.state !== 'absent' || creatingDevice.current || erasing !== null) return
     creatingDevice.current = true
     vault.createDevice().then(
       () => {
@@ -269,11 +288,12 @@ function OpenVault({
         if (!(error instanceof InvalidStateError)) onFailed()
       },
     )
-  }, [status.state, vault, store, onFailed])
+  }, [status.state, vault, store, onFailed, erasing])
 
   // A `device` vault opens without a prompt, at load and after any lock.
   useEffect(() => {
-    if (status.state !== 'locked' || status.protection !== 'device' || deviceFailed || openingDevice.current) return
+    if (status.state !== 'locked' || status.protection !== 'device' || deviceFailed || erasing !== null) return
+    if (openingDevice.current) return
     openingDevice.current = true
     vault.unlock({ kind: 'device' }).then(
       () => {
@@ -287,7 +307,7 @@ function OpenVault({
         if (!(error instanceof InvalidStateError)) setDeviceFailed(true)
       },
     )
-  }, [status.state, status.protection, deviceFailed, vault, store])
+  }, [status.state, status.protection, deviceFailed, erasing, vault, store])
 
   // A launch at the bare address of a `device` vault lands in a new chat.
   useEffect(() => {
@@ -314,8 +334,15 @@ function OpenVault({
       // A `device` vault does not lock: the next unlock would need nothing.
       if (notice.type === 'lock') {
         if (vault.status().protection === 'passphrase') vault.lock().then(store.refresh, store.refresh)
-      } else if (notice.type === 'changed') vault.refresh().then(store.refresh, store.refresh)
-      else setKit((shown) => (shown?.recoveryKey ? null : shown))
+      } else if (notice.type === 'changed') {
+        if (!erasingRef.current) vault.refresh().then(store.refresh, store.refresh)
+      } else if (notice.type === 'erase') {
+        erasingRef.current = true
+        setErasing('running')
+        void vault.lock({ force: true }).catch(() => undefined)
+      } else if (notice.type === 'erased') {
+        location.replace(startAddress())
+      } else setKit((shown) => (shown?.recoveryKey ? null : shown))
     })
     post.current = notices.post
     return () => {
@@ -401,6 +428,26 @@ function OpenVault({
 
   const announceChange = useCallback(() => post.current({ type: 'changed' }), [])
 
+  const erase = useCallback(
+    async (options: { readonly models: boolean }) => {
+      erasingRef.current = true
+      setErasing('running')
+      post.current({ type: 'erase' })
+      try {
+        await vault.lock({ force: true })
+        const { eraseDevice } = await import('../core/erase/erase.ts')
+        await eraseDevice({ indexedDB, caches: typeof caches === 'undefined' ? null : caches }, options)
+        clearPrefs()
+      } catch {
+        setErasing('failed')
+        return
+      }
+      post.current({ type: 'erased' })
+      location.replace(startAddress())
+    },
+    [vault],
+  )
+
   const unlock = useCallback(
     async (credential: UnlockCredential) => {
       const vaultId = vault.status().vaultId
@@ -477,6 +524,8 @@ function OpenVault({
       unprotect,
       reset,
       announceChange,
+      erasing,
+      erase,
       unlock,
       recover,
       lock,
@@ -493,6 +542,8 @@ function OpenVault({
       unprotect,
       reset,
       announceChange,
+      erasing,
+      erase,
       unlock,
       recover,
       lock,
@@ -536,6 +587,28 @@ function useAutoLock(vault: Vault, status: VaultStatus) {
   }, [open, vault])
 }
 
+/** While the device is erased, and if the browser refused: nothing of the app shows, only what happens. */
+function Erasing({ failed }: { readonly failed: boolean }) {
+  const t = useT()
+  return (
+    <main>
+      <div role={failed ? 'alert' : 'status'}>
+        <EmptyState
+          title={t(failed ? 'vault.eraseFailedTitle' : 'vault.erasing')}
+          body={failed ? t('vault.eraseFailedBody') : undefined}
+          action={
+            failed ? (
+              <Button variant="primary" onClick={() => location.replace(startAddress())}>
+                {t('common.reload')}
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
+    </main>
+  )
+}
+
 function StorageFailed() {
   const t = useT()
   return (
@@ -566,9 +639,10 @@ const DeviceFailed = lazyChunk(() => import('../screens/Unlock/DeviceFailed.tsx'
  * is being made or a `device` vault opens, nothing shows; when its device slot does not open, the reason does.
  */
 export function VaultGate({ children }: { readonly children: ReactNode }) {
-  const { status, kit, renewingKit, deviceFailed } = useVault()
+  const { status, kit, renewingKit, deviceFailed, erasing } = useVault()
   const [location] = useLocation()
   let gate: ReactNode = null
+  if (erasing !== null) return <Erasing failed={erasing === 'failed'} />
   if (status.state === 'absent') return null
   if (status.state === 'locked' || status.state === 'unlocking') {
     if (location === paths.recover) gate = <Recovery />

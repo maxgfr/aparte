@@ -1,0 +1,31 @@
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  max-width: 36rem;
+}
+
+.prose {
+  display: grid;
+  gap: var(--space-3);
+  color: var(--ink-2);
+}
+
+.lead {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-2);
+}
+
+.option input {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  accent-color: var(--accent);
+}

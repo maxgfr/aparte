@@ -206,6 +206,22 @@ or foreign slot or key, protecting, unprotecting, a planted slot, replacing), th
 `web/e2e/device.spec.ts` (the first launch, the canary in device mode, the gating, protecting and unprotecting) and the
 two device slot tests of `web/e2e/shared-origin.spec.ts`.
 
+### Erasing this device
+
+Without the passphrase and the recovery key, a vault a passphrase protects can never be decrypted, by anyone. The lock
+screen offers "Lost your passphrase and recovery key?" and the settings "Erase all data on this device": once the user
+types the confirmation word of their language, every page of the app forces its lock (a BroadcastChannel notice), so
+no key stays in memory and every connection to the databases closes; then the IndexedDB databases `aparte-v1`,
+`aparte-inbox-v1` and any other named `aparte-*`, the caches named `aparte-*` (the downloaded models and sandbox
+runtimes only when the user ticks the box) and every localStorage and sessionStorage key under `aparte:` are deleted,
+and every page starts over as on a first launch. The app precache stays, so the app still opens offline. Nothing
+else of the shared origin is touched. What the device already synced stays at the sync destination as ciphertext; the
+user deletes it there.
+
+Enforced by: the unit tests of `web/src/core/erase` and of `clearPrefs` in `web/src/app/prefs.ts`, and
+`web/e2e/erase.spec.ts` (from the lock screen and the settings, a second tab, a storage dump after the erase, a key and
+a database of another site that survive, a wrong confirmation word).
+
 ## Shared origin
 
 `https://maxgfr.github.io/aparte/` shares its origin with every other GitHub Pages site of the same account. A page of

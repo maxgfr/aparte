@@ -1,14 +1,17 @@
-import { ArrowLeftRight, BarChart3, BookOpen, Info, KeyRound, Puzzle, Swords, Theater } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, BookOpen, Info, KeyRound, Puzzle, Swords, Theater, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { paths } from '../../app/routes.ts'
 import { useVault } from '../../app/vault.tsx'
 import { useT } from '../../i18n/react.tsx'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
+import { EraseSheet } from '../../ui/shell/EraseSheet.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
 
 /** The screens that do not fit the tab bar, in groups. */
 export default function MoreScreen() {
   const t = useT()
   const { status } = useVault()
+  const [erasing, setErasing] = useState(false)
   const icon = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as const
   return (
     <Screen title={t('shell.moreTitle')}>
@@ -62,7 +65,9 @@ export default function MoreScreen() {
           subtitle={t(status.protection === 'passphrase' ? 'vault.protectionPassphrase' : 'vault.protectionDevice')}
         />
         <ListRow href={paths.about} leading={<Info {...icon} />} title={t('shell.moreAbout')} />
+        <ListRow onClick={() => setErasing(true)} leading={<Trash2 {...icon} />} title={t('vault.eraseTitle')} />
       </ListGroup>
+      <EraseSheet open={erasing} onClose={() => setErasing(false)} />
     </Screen>
   )
 }

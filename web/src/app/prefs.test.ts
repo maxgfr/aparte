@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type PrefStorage, readPref, subscribePrefs, writePref } from './prefs.ts'
+import { clearPrefs, type PrefStorage, readPref, subscribePrefs, writePref } from './prefs.ts'
 
 function memory(): PrefStorage & { data: Map<string, string> } {
   const data = new Map<string, string>()
@@ -109,5 +109,32 @@ describe('prefs', () => {
     stop()
     writePref('theme', 'light', memory())
     expect(calls).toBe(1)
+  })
+})
+
+describe('clearing', () => {
+  /** A Storage-shaped area over a Map, with key(i) and length. */
+  function area(entries: Record<string, string>) {
+    const data = new Map(Object.entries(entries))
+    return {
+      data,
+      get length() {
+        return data.size
+      },
+      key: (i: number) => [...data.keys()][i] ?? null,
+      removeItem: (k: string) => void data.delete(k),
+    }
+  }
+
+  test('removes every key of Aparté in both areas, and only those', () => {
+    const local = area({ 'aparte:theme': 'dark', 'aparte:kit-pending': 'x', 'other-site:token': 'keep', theme: 'keep' })
+    const session = area({ 'aparte:chunk-reload': '1', 'other:flag': 'keep' })
+    let heard = 0
+    const off = subscribePrefs(() => heard++)
+    clearPrefs([local, session, null])
+    off()
+    expect([...local.data.keys()].sort()).toEqual(['other-site:token', 'theme'])
+    expect([...session.data.keys()]).toEqual(['other:flag'])
+    expect(heard).toBe(1)
   })
 })
