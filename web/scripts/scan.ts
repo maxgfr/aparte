@@ -83,10 +83,26 @@ export const SOURCE_RULES: readonly SourceRule[] = [
     allow: ['src/security/net.ts', 'src/sw.ts'],
   },
   {
+    // A reference handed elsewhere (a library's `fetch` option) bypasses request() as surely as a call. `typeof` is a
+    // type annotation, not a reference.
+    id: 'fetch-reference',
+    pattern: /(?<!typeof\s+)\b(?:globalThis|self|window)\s*(?:\.\s*fetch\b(?!\s*\()|\[\s*['"`]fetch['"`]\s*\])/g,
+    message: 'the global fetch is used only by request() (src/security/net.ts); hand a library that wrapper instead',
+    allow: ['src/security/net.ts', 'src/sw.ts'],
+  },
+  {
+    // WebRTC is governed by no CSP directive: a peer connection (or the STUN host name it resolves) leaves the page.
     id: 'network-api',
-    pattern: /\bnew\s+(?:XMLHttpRequest|WebSocket|EventSource|WebTransport)\b|\bsendBeacon\s*\(/g,
+    pattern:
+      /\bnew\s+(?:(?:globalThis|self|window)\s*\.\s*)?(?:XMLHttpRequest|WebSocket|EventSource|WebTransport|(?:webkit)?RTCPeerConnection)\b|\b(?:sendBeacon|fetchLater)\s*\(/g,
     message: 'network access goes only through src/security/net.ts',
     allow: ['src/security/net.ts'],
+  },
+  {
+    id: 'import-scripts',
+    pattern: /\bimportScripts\s*\(/g,
+    message: 'a classic worker loads code only from the pinned bytes the sandbox frames hand it',
+    allow: ['src/sandbox/frame/js-worker.ts', 'src/sandbox/frame/py-worker.ts'],
   },
   {
     id: 'service-worker-register',

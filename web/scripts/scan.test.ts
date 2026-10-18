@@ -116,6 +116,17 @@ describe('scanSource', () => {
     ['network-api', "new WebSocket('wss://x')"],
     ['network-api', 'new EventSource(u)'],
     ['network-api', 'navigator.sendBeacon(u, b)'],
+    ['network-api', 'new window.WebSocket(u)'],
+    ['network-api', 'new self . EventSource(u)'],
+    ['network-api', 'new globalThis.XMLHttpRequest()'],
+    ['network-api', 'new RTCPeerConnection({ iceServers })'],
+    ['network-api', 'new webkitRTCPeerConnection(c)'],
+    ['network-api', 'fetchLater(u, { activateAfter: 0 })'],
+    ['fetch-reference', 'const send = globalThis.fetch'],
+    ['fetch-reference', "const send = self['fetch']"],
+    ['fetch-reference', 'lib({ fetch: window.fetch })'],
+    ['import-scripts', "importScripts('https://cdn.example/x.js')"],
+    ['import-scripts', 'self.importScripts(u)'],
     ['service-worker-register', "navigator.serviceWorker.register('/sw.js')"],
     ['web-storage', "localStorage.setItem('k', v)"],
     ['web-storage', 'const s = window.sessionStorage'],
@@ -141,6 +152,9 @@ describe('scanSource', () => {
     ['el.textContent = x'],
     ['await request(url, { purpose: "app" })'],
     ['createWorker(url)'],
+    ['const f: typeof globalThis.fetch = guarded'],
+    ['type Fetch = typeof window.fetch'],
+    ["const names = ['RTCPeerConnection', 'importScripts']"],
   ])('passes %s', (code) => {
     expect(rules('src/app/x.ts', code)).toEqual([])
   })
@@ -153,6 +167,8 @@ describe('scanSource', () => {
     expect(rules('src/app/prefs.ts', 'localStorage.getItem(k)')).toEqual([])
     expect(rules('src/security/tt.ts', "tt.createPolicy('aparte', r)")).toEqual([])
     expect(rules('src/ui/render/Sanitized.tsx', '<div dangerouslySetInnerHTML={h} />')).toEqual([])
+    expect(rules('src/security/net.ts', 'const transport = globalThis.fetch')).toEqual([])
+    expect(rules('src/sandbox/frame/js-worker.ts', 'const load = scope.importScripts.bind(scope)')).toEqual([])
     // An allowance is per construct: the sanitiser may not fetch, net.ts may not touch innerHTML.
     expect(rules('src/ui/render/Sanitized.tsx', 'fetch(u)')).toEqual(['fetch'])
     expect(rules('src/security/net.ts', 'el.innerHTML = x')).toEqual(['inner-html'])
