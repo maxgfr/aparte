@@ -17,8 +17,9 @@ function directives(policy: string): Map<string, string[]> {
   return out
 }
 
+/** The start screen, named in the hash: the bare address of a vault no passphrase protects opens a new chat. */
 async function openWelcome(page: Page) {
-  await page.goto('./')
+  await page.goto('./#/')
   await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
 }
 

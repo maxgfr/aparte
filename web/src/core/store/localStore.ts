@@ -31,6 +31,7 @@ import type {
   LocalMeta,
   LocalPurpose,
   LocalStore,
+  MetaKeyslot,
   MetaValues,
   ObjectMirror,
   OpenLocalDbOptions,
@@ -54,6 +55,8 @@ const KEYSLOT_PREFIX = 'keyslot:'
 const SLOT_ID = /^[a-z2-7]{26}$/
 const MAX_ID_BYTES = 1024
 const SECRET_KEY_BYTES = 44
+/** iv (12) || the 32-byte master key || the 16-byte tag (spec/FORMAT.md section 17.1). */
+const DEVICE_SLOT_BYTES = 60
 const MIN_ENVELOPE = 100
 
 /** The open connection behind each LocalDb handed out by openLocalDb. */
@@ -143,14 +146,20 @@ function checkMetaValue(key: keyof MetaValues, value: unknown): void {
       if (typeof value !== 'string') throw new InvalidInputError(`meta ${key} must be a string`)
       return
     case 'device-key':
+    case 'device-slot-key':
       // Only a key the platform refuses to export may rest in plaintext storage.
       if (!(value instanceof CryptoKey) || value.extractable || value.algorithm.name !== 'AES-GCM') {
-        throw new InvalidInputError('The device key must be a non-extractable AES-GCM CryptoKey')
+        throw new InvalidInputError('A device key must be a non-extractable AES-GCM CryptoKey')
       }
       return
     case 'secret-key':
       if (!(value instanceof Uint8Array) || value.length !== SECRET_KEY_BYTES) {
         throw new InvalidInputError('The wrapped Secret Key must be 44 bytes')
+      }
+      return
+    case 'device-slot':
+      if (!(value instanceof Uint8Array) || value.length !== DEVICE_SLOT_BYTES) {
+        throw new InvalidInputError('The device slot must be 60 bytes')
       }
       return
     default:
@@ -162,13 +171,39 @@ function checkSlotId(slot: string): void {
   if (!SLOT_ID.test(slot)) throw new InvalidInputError('A slot id is 26 base32 characters')
 }
 
+/** The rows `entries` and `keyslots` stand for, checked, with byte values copied. */
+function metaRows(entries: Partial<MetaValues>, keyslots: readonly MetaKeyslot[]): [string, unknown][] {
+  const rows: [string, unknown][] = []
+  for (const [key, value] of Object.entries(entries) as [keyof MetaValues, unknown][]) {
+    if (value === undefined) continue
+    checkMetaValue(key, value)
+    rows.push([key, value instanceof Uint8Array ? new Uint8Array(value) : value])
+  }
+  for (const { slot, bytes } of keyslots) {
+    checkSlotId(slot)
+    rows.push([KEYSLOT_PREFIX + slot, B.fromUtf8(bytes)])
+  }
+  return rows
+}
+
+/** Whether `keys` (every key of `meta`) name exactly the keyslots `expected`. */
+function sameKeyslots(keys: readonly IDBValidKey[], expected: readonly string[]): boolean {
+  const held = keys
+    .map(String)
+    .filter((k) => k.startsWith(KEYSLOT_PREFIX))
+    .map((k) => k.slice(KEYSLOT_PREFIX.length))
+    .sort()
+  const want = [...new Set(expected)].sort()
+  return held.length === want.length && held.every((slot, i) => slot === want[i])
+}
+
 /** The plaintext `meta` store; keyslot files are kept as their text, as section 11.2 specifies. */
 export function createLocalMeta(db: LocalDb): LocalMeta {
   return {
     async get<K extends keyof MetaValues>(key: K): Promise<MetaValues[K] | undefined> {
       const value: unknown = await open(db).get('meta', key)
       if (value === undefined) return undefined
-      if (key === 'secret-key') return toBytes(value) as MetaValues[K]
+      if (key === 'secret-key' || key === 'device-slot') return toBytes(value) as MetaValues[K]
       return value as MetaValues[K]
     },
     async put<K extends keyof MetaValues>(key: K, value: MetaValues[K]): Promise<void> {
@@ -199,27 +234,33 @@ export function createLocalMeta(db: LocalDb): LocalMeta {
       checkSlotId(slot)
       await write(db, ['meta'], (tx) => tx.delete('meta', KEYSLOT_PREFIX + slot))
     },
-    async initVault({ entries, keyslots }): Promise<boolean> {
-      const rows: [string, unknown][] = []
-      for (const [key, value] of Object.entries(entries) as [keyof MetaValues, unknown][]) {
-        if (value === undefined) continue
-        checkMetaValue(key, value)
-        rows.push([key, value instanceof Uint8Array ? new Uint8Array(value) : value])
-      }
-      for (const { slot, bytes } of keyslots) {
-        checkSlotId(slot)
-        rows.push([KEYSLOT_PREFIX + slot, B.fromUtf8(bytes)])
-      }
-      // The check and the writes share one readwrite transaction: two pages creating at once cannot both pass it.
-      const tx = open(db).transaction('meta', 'readwrite', { durability: 'strict' })
-      const existing: unknown = await tx.store.get('vault')
-      if (existing !== undefined) {
+    async change({ put = {}, keyslots = [], remove = [], removeKeyslots = [] }): Promise<void> {
+      const rows = metaRows(put, keyslots)
+      for (const slot of removeKeyslots) checkSlotId(slot)
+      await write(db, ['meta'], (tx) => {
+        for (const key of remove) tx.delete('meta', key)
+        for (const slot of removeKeyslots) tx.delete('meta', KEYSLOT_PREFIX + slot)
+        for (const [key, value] of rows) tx.put('meta', key, value)
+      })
+    },
+    async initVault({ entries, keyslots, replace }): Promise<boolean> {
+      const rows = metaRows(entries, keyslots)
+      // The check and the writes share one readwrite transaction: two pages creating at once cannot both pass it. A
+      // replacement takes every store, so the records of the vault it replaces go in the same step.
+      const stores: StoreName[] = replace ? [...STORES] : ['meta']
+      const tx = open(db).transaction(stores, 'readwrite', { durability: 'strict' })
+      const meta = tx.objectStore('meta')
+      const existing: unknown = await meta.get('vault')
+      const allowed = replace
+        ? existing === replace.vault && sameKeyslots(await meta.getAllKeys(), replace.keyslots)
+        : existing === undefined
+      if (!allowed) {
         tx.abort()
         await tx.done.catch(() => undefined)
         return false
       }
-      const requests: Promise<unknown>[] = [tx.store.clear()]
-      for (const [key, value] of rows) requests.push(tx.store.put(value, key))
+      const requests: Promise<unknown>[] = stores.map((name) => tx.objectStore(name).clear())
+      for (const [key, value] of rows) requests.push(meta.put(value, key))
       const results = await Promise.allSettled([...requests, tx.done])
       const failed = results.find((r) => r.status === 'rejected')
       if (failed) throw (failed as PromiseRejectedResult).reason

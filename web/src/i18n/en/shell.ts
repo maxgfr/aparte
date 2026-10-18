@@ -18,6 +18,7 @@ export const shell = {
   moreStats: 'Usage',
   moreStatsHint: 'Tokens and cost per provider and model, computed on this device.',
   moreApp: 'Aparté',
+  moreProtection: 'Passphrase protection',
   moreAbout: 'About this build',
   updateReady: 'A new version of Aparté is ready.',
   updateApply: 'Update',
@@ -28,7 +29,6 @@ export const shell = {
     'Aparté is a chat with the AI models you choose, running entirely in this browser: conversations are encrypted on this device and synced end to end, with no server of ours in between.',
   welcomePreview:
     'Your devices sync end to end through storage you own: a GitHub repository, a bucket, a folder or an archive.',
-  welcomeCreateVault: 'Create your encrypted vault',
   welcomeComingNext: 'Coming next',
   welcomeLearnMore: 'About this build',
   notFoundTitle: 'Nothing here',

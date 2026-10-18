@@ -1,4 +1,4 @@
-import { LockKeyhole, SquarePen } from 'lucide-react'
+import { SquarePen } from 'lucide-react'
 import { Link } from 'wouter'
 import { paths } from '../../app/routes.ts'
 import { useVault } from '../../app/vault.tsx'
@@ -8,46 +8,34 @@ import { Screen } from '../../ui/shell/Screen.tsx'
 import styles from './Welcome.module.css'
 
 /**
- * The start screen: what Aparté is and, on a device without a vault, the first step (creating it).
- * With the vault open it says so and leads to a new chat and to the model providers.
+ * The start screen: what Aparté is, whether a passphrase protects the vault, and the way to a new chat and to the
+ * model providers. A device with no vault never shows it empty: the vault is made before anything renders.
  */
 export default function Welcome() {
   const t = useT()
   const { status } = useVault()
-  const absent = status.state === 'absent'
+  const device = status.protection === 'device'
   return (
     <Screen title={t('shell.welcomeTitle')}>
       <div className={styles.intro}>
         <p className={styles.lead}>{t('shell.welcomeLead')}</p>
         <p className={styles.preview}>{t('shell.welcomePreview')}</p>
-        {!absent && (
-          <p className={styles.preview} role="status">
-            {status.state === 'locking' ? t('vault.lockDeferred') : t('vault.homeUnlocked')}
-          </p>
-        )}
+        <p className={styles.preview} role="status">
+          {status.state === 'locking' ? t('vault.lockDeferred') : t(device ? 'vault.homeDevice' : 'vault.homeUnlocked')}
+        </p>
       </div>
       <div className={styles.actions}>
-        {!absent && (
-          <>
-            <Link href={paths.chat} className={buttonClass({ variant: 'primary', size: 'large' })}>
-              <SquarePen size={18} strokeWidth={2} aria-hidden="true" />
-              {t('chat.navNewChat')}
-            </Link>
-            <Link href={paths.providers} className={buttonClass({ variant: 'secondary' })}>
-              {t('chat.navProviders')}
-            </Link>
-          </>
-        )}
-        {absent && (
-          <>
-            <Link href={paths.createVault} className={buttonClass({ variant: 'primary', size: 'large' })}>
-              <LockKeyhole size={18} strokeWidth={2} aria-hidden="true" />
-              {t('shell.welcomeCreateVault')}
-            </Link>
-            <Link href={paths.syncJoin} className={buttonClass({ variant: 'secondary' })}>
-              {t('sync.welcomeJoin')}
-            </Link>
-          </>
+        <Link href={paths.chat} className={buttonClass({ variant: 'primary', size: 'large' })}>
+          <SquarePen size={18} strokeWidth={2} aria-hidden="true" />
+          {t('chat.navNewChat')}
+        </Link>
+        <Link href={paths.providers} className={buttonClass({ variant: 'secondary' })}>
+          {t('chat.navProviders')}
+        </Link>
+        {device && (
+          <Link href={paths.protection} className={buttonClass({ variant: 'secondary' })}>
+            {t('vault.protectAction')}
+          </Link>
         )}
         <Link href={paths.about} className={buttonClass({ variant: 'plain' })}>
           {t('shell.welcomeLearnMore')}

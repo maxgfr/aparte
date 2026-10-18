@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 import { type FormEvent, useEffect, useId, useState } from 'react'
-import { Redirect } from 'wouter'
+import { Link, Redirect } from 'wouter'
 import { useSessionState } from '../../app/chat.tsx'
 import { paths } from '../../app/routes.ts'
 import { type DestinationView, useSync } from '../../app/sync.tsx'
@@ -11,7 +11,7 @@ import type { AlarmKind, DestState, DestStatus, SyncAlarm } from '../../core/con
 import { formatBytes, formatDate, formatDuration, formatRelative } from '../../i18n/format.ts'
 import type { Key } from '../../i18n/index.ts'
 import { useLocale, useT } from '../../i18n/react.tsx'
-import { Button } from '../../ui/components/Button.tsx'
+import { Button, buttonClass } from '../../ui/components/Button.tsx'
 import { Field } from '../../ui/components/Field.tsx'
 import { Segmented } from '../../ui/components/Segmented.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
@@ -411,12 +411,39 @@ function AddDestination() {
   )
 }
 
+/**
+ * A `device` vault cannot sync: another device has no way to open it (spec/FORMAT.md section 17). The screen says so
+ * and leads to the passphrase protection, and to joining the vault another device already syncs.
+ */
+function NeedsPassphrase() {
+  const t = useT()
+  return (
+    <Screen title={t('sync.title')}>
+      <section className={styles.section} aria-labelledby="sync-needs-passphrase" data-testid="sync-needs-passphrase">
+        <h2 id="sync-needs-passphrase" className={styles.sectionTitle}>
+          {t('sync.needsPassphraseTitle')}
+        </h2>
+        <p className={styles.lead}>{t('sync.needsPassphraseBody')}</p>
+        <div className={styles.row}>
+          <Link href={paths.protect} className={buttonClass({ variant: 'primary' })}>
+            {t('vault.protectAction')}
+          </Link>
+          <Link href={paths.syncJoin} className={buttonClass({ variant: 'secondary' })}>
+            {t('sync.welcomeJoin')}
+          </Link>
+        </div>
+      </section>
+    </Screen>
+  )
+}
+
 export default function Sync() {
   const t = useT()
   const { status: vault } = useVault()
   const session = useSessionState()
   const sync = useSync()
   if (vault.state === 'absent') return <Redirect to={paths.welcome} replace />
+  if (vault.protection === 'device') return <NeedsPassphrase />
   if (session.status !== 'open' || !sync.ready) {
     return (
       <Screen title={t('sync.title')}>

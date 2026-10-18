@@ -11,6 +11,8 @@ export const about = {
   modeProduction: 'Production',
   modeDevelopment: 'Développement',
   protectionTitle: 'Protections',
+  vaultProtection: 'Coffre',
+  vaultProtectionHint: 'Ce qui ouvre le coffre sur cet appareil.',
   trustedTypes: 'Trusted Types',
   trustedTypesEnforced: 'Appliquées',
   trustedTypesAvailable: 'Disponibles, non appliquées',

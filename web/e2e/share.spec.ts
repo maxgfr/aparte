@@ -10,8 +10,8 @@ import { accessible, expect, test } from './gates.ts'
  * The share target (spec/FORMAT.md section 16), simulated as the operating system does it: a multipart POST to
  * `<base>share` that the service worker answers. While the vault is locked, the share is sealed to the inbox key as
  * it arrives: the plaintext canary (in the text and inside the photo's bytes) must appear nowhere on the device. Once
- * unlocked, the share opens and becomes the draft of a new chat. Without a vault, the share is refused and the worker
- * creates no database. Chromium only: it is the engine that implements the Web Share Target.
+ * unlocked, the share opens and becomes the draft of a new chat. Without a vault (site data deleted under an installed
+ * worker), the share is refused and the worker creates no database. Chromium only: it is the engine that implements the Web Share Target.
  */
 
 const canary = (what: string) => `canary-${what}-${randomUUID()}`
@@ -149,6 +149,21 @@ test('a share another page sends while the app is open is announced, never acted
 test('without a vault, a share is refused and the worker creates nothing', async ({ page }) => {
   await page.goto('./')
   await waitForController(page)
+  // The app makes a vault as it opens; a device holds none only once its site data is gone (cleared by the user, or
+  // deleted by another page of the origin) while the worker stays installed. The open page lets go of both databases.
+  await page.evaluate(() =>
+    Promise.all(
+      ['aparte-inbox-v1', 'aparte-v1'].map(
+        (name) =>
+          new Promise<void>((resolve, reject) => {
+            const r = indexedDB.deleteDatabase(name)
+            r.onsuccess = () => resolve()
+            r.onerror = () => reject(r.error)
+          }),
+      ),
+    ),
+  )
+  expect(await inboxCount(page)).toBeNull()
   expect(await share(page, `Nowhere ${canary('no-vault')}`, canary('no-vault-photo'))).toBe(200)
   expect(await inboxCount(page)).toBeNull()
   await page.goto('./#/share?received=no-key')

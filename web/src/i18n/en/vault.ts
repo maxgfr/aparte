@@ -1,12 +1,31 @@
-/** The vault: creating it, the Emergency Kit, unlocking, recovery and locking. */
+/** The vault: its protection, the Emergency Kit, unlocking, recovery and locking. */
 export const vault = {
   storageFailedTitle: 'Encrypted storage is unavailable',
   storageFailedBody:
     'Aparté could not open its storage in this browser, so nothing can be kept on this device. A private window may block it: try a regular one, then reload.',
 
-  createTitle: 'Create your vault',
-  createLead:
-    'Everything Aparté keeps is encrypted on this device with a key that only your passphrase opens. There is no account and no reset link.',
+  protectionTitle: 'Passphrase protection',
+  protectionDevice: 'Not protected by a passphrase',
+  protectionPassphrase: 'Protected by a passphrase',
+  protectionDeviceBody:
+    'Your chats are encrypted on this device under a key that the browser keeps and refuses to export, so a copy of the disk or a backup holds only ciphertext. But anyone who opens this browser opens Aparté, and another site served from the same origin could use that key to read your data.',
+  protectionDeviceFix:
+    'A passphrase closes both gaps: the vault then locks after a few minutes without activity and opens only with your passphrase. Sync and moving the vault to another device need it.',
+  protectionPassphraseBody:
+    'Only your passphrase opens the vault, with the Secret Key of your Emergency Kit on a new device. It locks itself after five minutes without activity.',
+  protectAction: 'Protect with a passphrase',
+  unprotectTitle: 'Remove passphrase protection',
+  unprotectBody:
+    'The vault then opens on this device without a prompt and stops locking itself: anyone who uses this browser, and another site of the same origin, could read it. Your passphrase, Secret Key and recovery key stop opening it here.',
+  unprotectSyncFirst: 'This device syncs. Remove its sync destinations first: sync needs passphrase protection.',
+  unprotect: 'Remove protection',
+  unprotecting: 'Removing protection…',
+  unprotectFailed: 'The protection could not be removed. Nothing was changed: try again.',
+  unprotected: 'Passphrase protection removed. The vault opens on this device without a prompt.',
+
+  protectTitle: 'Protect with a passphrase',
+  protectLead:
+    'With your passphrase and the Secret Key of the Emergency Kit that follows, the vault locks after a few minutes without activity and opens only for you, on this device and on your others. There is no account and no reset link.',
   choiceLabel: 'Passphrase',
   choiceGenerated: 'Generate one',
   choiceCustom: 'Use my own',
@@ -31,9 +50,9 @@ export const vault = {
   strength3: 'Strong',
   strength4: 'Very strong',
   strengthTooWeak: 'Too easy to guess: add words or make it less predictable.',
-  create: 'Create vault',
-  creating: 'Creating your vault. This takes a few seconds…',
-  createFailed: 'The vault could not be created. Nothing was saved: try again.',
+  protect: 'Protect the vault',
+  protecting: 'Protecting your vault. This takes a few seconds…',
+  protectFailed: 'The passphrase could not be set. Nothing was changed: try again.',
 
   kitTitle: 'Your Emergency Kit',
   kitLead:
@@ -85,6 +104,15 @@ export const vault = {
   recovered: 'Unlocked. Your new passphrase is set.',
 
   homeUnlocked: 'Your vault is open on this device. It locks itself after a few minutes without activity.',
+  homeDevice: 'Your chats are encrypted on this device and open without a prompt. No passphrase protects them yet.',
+  hintBody: 'Anyone who opens this browser can read these chats. Add a passphrase when you want them locked.',
+  hintDismiss: 'Dismiss',
+
+  deviceFailedLead:
+    'This device can no longer open its vault: the key it kept for it is missing or damaged, for example after site data was partly cleared. No passphrase protects this vault, so there is no other way in on this device.',
+  deviceFailedConfirm: 'I understand that what this device held is deleted',
+  deviceFailedReset: 'Start over with an empty vault',
+  deviceFailedResetFailed: 'The vault could not be replaced. Nothing was changed: reload and try again.',
   lock: 'Lock',
   lockDeferred: 'Locking once the current work finishes…',
 } as const

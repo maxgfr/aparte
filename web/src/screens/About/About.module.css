@@ -8,8 +8,14 @@
 
 .value[data-state="enforced"],
 .value[data-state="active"],
-.value[data-state="persisted"] {
+.value[data-state="persisted"],
+.value[data-state="passphrase"] {
   color: var(--success);
+  font-weight: 600;
+}
+
+.value[data-state="device"] {
+  color: var(--warning);
   font-weight: 600;
 }
 

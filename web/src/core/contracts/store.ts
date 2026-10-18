@@ -4,7 +4,9 @@
  *
  * Invariants:
  * - Nothing readable is stored. `meta` holds only the format marker, the vault id, keyslot files, the device key (a
- *   non-extractable CryptoKey) and the wrapped Secret Key. `objects` holds envelopes exactly as on the remote.
+ *   non-extractable CryptoKey) and the wrapped Secret Key, and for a vault no passphrase protects the device slot key
+ *   (another non-extractable CryptoKey) and the master key it wraps. `objects` holds envelopes exactly as on the
+ *   remote.
  *   `local` and `pending` hold kind-6 envelopes under HMAC-derived names; no key or value carries a purpose, an id, a
  *   ULID or a timestamp in clear.
  * - A LocalStore is bound to the subkeys of one unlocked vault. Once disposed (the vault locked), every call rejects
@@ -34,6 +36,19 @@ export interface MetaValues {
   readonly 'device-key': CryptoKey
   /** iv (12) || AES-GCM(device-key, iv, SK, "aparte/1|device-secret-key|" || vault): 44 bytes. */
   readonly 'secret-key': Bytes
+  /**
+   * Non-extractable AES-256-GCM key generated on this device; wraps the master key of a vault that no passphrase
+   * protects (spec/FORMAT.md section 17). Never synced.
+   */
+  readonly 'device-slot-key': CryptoKey
+  /** iv (12) || AES-GCM(device-slot-key, iv, MK, "aparte/1|device-slot|" || vault): 60 bytes. Never synced. */
+  readonly 'device-slot': Bytes
+}
+
+/** A keyslot file as `meta` holds it, by base32 slotId. */
+export interface MetaKeyslot {
+  readonly slot: string
+  readonly bytes: Uint8Array
 }
 
 /** The plaintext `meta` store. Usable while locked: it is what unlocking reads. */
@@ -46,13 +61,29 @@ export interface LocalMeta {
   putKeyslot(slot: string, bytes: Uint8Array): Promise<void>
   deleteKeyslot(slot: string): Promise<void>
   /**
+   * Writes `put` and `keyslots` and removes `remove` and `removeKeyslots`, in one transaction: all of it lands or none
+   * of it does, so swapping one way into the vault for another never leaves a device with neither.
+   */
+  change(input: {
+    readonly put?: Partial<MetaValues>
+    readonly keyslots?: readonly MetaKeyslot[]
+    readonly remove?: readonly (keyof MetaValues)[]
+    readonly removeKeyslots?: readonly string[]
+  }): Promise<void>
+  /**
    * Makes a vault exist, in one transaction: unless `vault` is already set, removes every entry (the leftovers of an
    * interrupted creation) and writes `entries` and `keyslots`. Returns false, having written nothing, when `vault` is
    * already set: another page of this device created a vault first.
+   *
+   * With `replace`, the vault it describes is replaced instead: the transaction goes ahead only while `vault` is
+   * `replace.vault` and the keyslots are exactly `replace.keyslots` (otherwise another page changed the vault since
+   * it was read, and false is returned with nothing written), and it also empties `objects`, `local` and `pending`.
    */
   initVault(input: {
-    readonly entries: Pick<MetaValues, 'fmt' | 'vault'> & Partial<Pick<MetaValues, 'device-key' | 'secret-key'>>
-    readonly keyslots: readonly { readonly slot: string; readonly bytes: Uint8Array }[]
+    readonly entries: Pick<MetaValues, 'fmt' | 'vault'> &
+      Partial<Pick<MetaValues, 'device-key' | 'secret-key' | 'device-slot-key' | 'device-slot'>>
+    readonly keyslots: readonly MetaKeyslot[]
+    readonly replace?: { readonly vault: string; readonly keyslots: readonly string[] }
   }): Promise<boolean>
   /** Removes every entry, for a device that leaves the vault. */
   clear(): Promise<void>

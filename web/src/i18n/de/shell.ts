@@ -21,6 +21,7 @@ export const shell = {
   moreStats: 'Nutzung',
   moreStatsHint: 'Token und Kosten pro Anbieter und Modell, auf diesem Gerät berechnet.',
   moreApp: 'Aparté',
+  moreProtection: 'Schutz durch Passphrase',
   moreAbout: 'Über diese Version',
   updateReady: 'Eine neue Version von Aparté ist bereit.',
   updateApply: 'Aktualisieren',
@@ -31,7 +32,6 @@ export const shell = {
     'Aparté ist ein Chat mit den KI-Modellen Ihrer Wahl, der vollständig in diesem Browser läuft: Ihre Chats werden auf diesem Gerät verschlüsselt und Ende-zu-Ende synchronisiert, ohne einen Server von uns dazwischen.',
   welcomePreview:
     'Ihre Geräte synchronisieren Ende-zu-Ende über Speicher, der Ihnen gehört: ein GitHub-Repository, ein Bucket, ein Ordner oder ein Archiv.',
-  welcomeCreateVault: 'Verschlüsselten Tresor erstellen',
   welcomeComingNext: 'Als Nächstes',
   welcomeLearnMore: 'Über diese Version',
   notFoundTitle: 'Hier gibt es nichts',

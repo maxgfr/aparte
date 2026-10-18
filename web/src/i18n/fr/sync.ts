@@ -109,6 +109,11 @@ export const sync = {
 
   // Joining a vault from its store
   welcomeJoin: 'J’ai déjà un coffre',
+  needsPassphraseTitle: 'La synchronisation exige une phrase de passe',
+  needsPassphraseBody:
+    'Un autre appareil ouvre ce coffre avec votre phrase de passe et la clé secrète de votre kit d’urgence. Ce coffre n’a encore ni l’une ni l’autre : il ne s’ouvre que sur cet appareil.',
+  joinReplaces:
+    'Le coffre que vous rejoignez remplace celui de cet appareil : les conversations qu’il contient maintenant sont supprimées.',
   joinTitle: 'Utiliser votre coffre sur cet appareil',
   joinLead:
     'Connectez-vous au stockage avec lequel votre autre appareil se synchronise. Ses emplacements de clé s’ouvrent avec votre phrase de passe et la clé secrète de votre kit d’urgence.',

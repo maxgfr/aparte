@@ -12,21 +12,28 @@ import { GitHubForm } from './GitHubForm.tsx'
 import styles from './Sync.module.css'
 
 /*
- * A device without a vault takes one from the store another device syncs to: it reads the keyslots there (the only
+ * A device takes the vault another device syncs, from that device's store: it reads the keyslots there (the only
  * plaintext a store holds), holds the vault locked, and the lock screen then asks for the passphrase and the Secret
- * Key. The destination is kept in memory until that unlock, which stores it encrypted and syncs everything.
+ * Key. The vault replaces the `device` vault this device started with, and what that one held. The destination is
+ * kept in memory until that unlock, which stores it encrypted and syncs everything.
  */
 
 type Source = 'github' | 'archive'
 
 export default function Join() {
   const t = useT()
-  const { vault, status } = useVault()
+  const { vault, status, announceChange } = useVault()
   const [source, setSource] = useState<Source>('github')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileId = useId()
-  if (status.state !== 'absent') return <Redirect to={paths.welcome} replace />
+  // A vault a passphrase protects is never replaced from here.
+  if (status.protection === 'passphrase') return <Redirect to={paths.welcome} replace />
+
+  const join = async (source: Parameters<typeof joinFromStore>[1]) => {
+    await joinFromStore(vault, source)
+    announceChange()
+  }
 
   const explain = (cause: unknown): string => {
     if (cause instanceof RemoteError && cause.kind === 'not-found') return t('sync.joinNone')
@@ -40,7 +47,7 @@ export default function Join() {
     setBusy(true)
     setError(null)
     try {
-      await joinFromStore(vault, { kind: 'archive', bytes: new Uint8Array(await file.arrayBuffer()) })
+      await join({ kind: 'archive', bytes: new Uint8Array(await file.arrayBuffer()) })
     } catch (cause) {
       setError(explain(cause))
     } finally {
@@ -49,8 +56,9 @@ export default function Join() {
   }
 
   return (
-    <Screen title={t('sync.joinTitle')} subtitle={t('sync.joinLead')} back={paths.welcome}>
+    <Screen title={t('sync.joinTitle')} subtitle={t('sync.joinLead')} back={paths.sync}>
       <div className={styles.stack}>
+        <p className={styles.warning}>{t('sync.joinReplaces')}</p>
         <Segmented
           label={t('sync.joinTitle')}
           hideLabel
@@ -69,7 +77,7 @@ export default function Join() {
             submitLabel={t('sync.joinFind')}
             onSubmit={async (input) => {
               try {
-                await joinFromStore(vault, { kind: 'github', config: input })
+                await join({ kind: 'github', config: input })
                 return null
               } catch (cause) {
                 return explain(cause)

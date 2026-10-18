@@ -10,7 +10,7 @@ import { useT } from '../../i18n/react.tsx'
 import { Button } from '../../ui/components/Button.tsx'
 import { Field } from '../../ui/components/Field.tsx'
 import { Segmented } from '../../ui/components/Segmented.tsx'
-import styles from './Onboarding.module.css'
+import styles from './Protect.module.css'
 
 type Mode = 'generated' | 'custom'
 

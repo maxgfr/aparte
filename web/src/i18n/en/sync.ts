@@ -99,6 +99,10 @@ export const sync = {
 
   // Joining a vault from its store
   welcomeJoin: 'I already have a vault',
+  needsPassphraseTitle: 'Sync needs a passphrase',
+  needsPassphraseBody:
+    'Another device opens this vault with your passphrase and the Secret Key of your Emergency Kit. This vault has neither yet, so it opens only on this device.',
+  joinReplaces: 'The vault you join replaces the one on this device: the chats this device holds now are deleted.',
   joinTitle: 'Use your vault on this device',
   joinLead:
     'Connect to the storage your other device syncs to. Its keyslots open with your passphrase and the Secret Key of your Emergency Kit.',

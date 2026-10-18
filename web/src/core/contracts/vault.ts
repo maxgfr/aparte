@@ -1,13 +1,24 @@
 /*
  * Contract of the vault (F3): creation, unlocking, locking, auto-lock, passphrase change and recovery over the
- * keyslots of spec/FORMAT.md section 6. Implemented by web/src/core/vault/vault.ts.
+ * keyslots of spec/FORMAT.md section 6, and the device slot of section 17. Implemented by
+ * web/src/core/vault/vault.ts.
  *
  * State machine:
  *
- *   absent --create--> unlocked
+ *   absent --create / createDevice--> unlocked
  *   locked --unlock--> unlocking --ok--> unlocked
  *                                \--fail--> locked
  *   unlocked --lock / auto-lock--> locking --holds released, cleanups run--> locked
+ *
+ * Protection, orthogonal to the state:
+ *
+ *   device     --protect-->   passphrase
+ *   passphrase --unprotect--> device
+ *
+ * A `device` vault opens with the device slot alone, a key this device keeps and the browser refuses to export: no
+ * prompt, and no auto-lock. A `passphrase` vault opens with a keyslot only: whenever `meta` holds a passphrase (or
+ * passkey) slot the device slot is ignored, so an entry another page of the origin plants cannot open a vault the user
+ * protected.
  *
  * Invariants:
  * - Keys exist only in the `unlocked` and `locking` states, as non-extractable CryptoKeys in memory. Entering `locked`
@@ -21,13 +32,17 @@
  *   period cancels the pending lock.
  * - The master key exists in clear only inside one operation (create, unlock, changePassphrase, addRecoveryKey,
  *   recover) and is zeroed before it returns. Operations that create a slot therefore take a current credential.
- * - A new slot is persisted before any slot is removed, so a crash never leaves a vault without a slot.
+ * - A new slot is persisted before any slot is removed, so a crash never leaves a vault without a slot. Protecting and
+ *   unprotecting swap the slots in one transaction.
  */
 
 import type { Argon2Fn, Argon2Params, Bytes, KeyslotKind, Rng, Subkeys } from './crypto.ts'
 import type { LocalDb, LocalStore } from './store.ts'
 
 export type VaultState = 'absent' | 'locked' | 'unlocking' | 'unlocked' | 'locking'
+
+/** What opens the vault: the device slot alone, or a passphrase (spec/FORMAT.md section 17). */
+export type Protection = 'device' | 'passphrase'
 
 export interface SlotInfo {
   /** base32 slotId. */
@@ -51,12 +66,19 @@ export type VaultEvent =
   | { readonly type: 'locked'; readonly reason: LockReason }
   /** An auto-lock or lock request is waiting for these holds. */
   | { readonly type: 'lock-deferred'; readonly holds: readonly string[] }
+  /** The keyslots or the protection changed, here or (after `refresh`) in another page. */
+  | { readonly type: 'changed' }
 
 export interface VaultStatus {
   readonly state: VaultState
   /** base32 vaultId; null while absent. */
   readonly vaultId: string | null
   readonly slots: readonly SlotInfo[]
+  /**
+   * `passphrase` when a passphrase (or passkey) slot opens the vault, otherwise `device`; null while absent. A
+   * `device` vault never auto-locks.
+   */
+  readonly protection: Protection | null
   /** Reasons of the active holds. */
   readonly holds: readonly string[]
   readonly autoLock: AutoLockPolicy
@@ -81,6 +103,8 @@ export type UnlockCredential =
       readonly rememberSecretKey?: boolean
     }
   | { readonly kind: 'recovery'; readonly recoveryKey: string }
+  /** The device slot of a vault that no passphrase protects. */
+  | { readonly kind: 'device' }
 
 export interface CreateVaultInput {
   readonly passphrase: string
@@ -157,13 +181,32 @@ export interface Vault {
    */
   create(input: CreateVaultInput): Promise<CreatedVault>
   /**
+   * absent -> unlocked: a new master key, vault id and device id, opened by a device slot alone (protection
+   * `device`, spec/FORMAT.md section 17). InvalidStateError, with nothing written, when the device already holds a
+   * vault; the vault is then `locked`.
+   */
+  createDevice(): Promise<void>
+  /**
    * absent -> locked: this device takes a vault that exists elsewhere, from the keyslot files its sync store holds
    * (spec/FORMAT.md section 10.4). Every file must parse, carry its own name and belong to `vault`, and one at least
    * must not be a recovery slot (InvalidInputError, or the parse error, with nothing written). Only `fmt`, `vault`
    * and the keyslots are written, in one transaction; unlocking then needs the passphrase and the Secret Key of the
    * Emergency Kit. InvalidStateError when the device already holds a vault.
+   *
+   * With `replaceDevice`, a `device` vault this device holds (unlocked or locked) is replaced: its keys are dropped,
+   * the cleanups run, and everything it stored is deleted in the same transaction that writes the joined vault. Still
+   * InvalidStateError for a vault a passphrase protects, which is never replaced.
    */
-  join(input: { readonly vault: string; readonly keyslots: readonly KeyslotFile[] }): Promise<void>
+  join(
+    input: { readonly vault: string; readonly keyslots: readonly KeyslotFile[] },
+    options?: { readonly replaceDevice?: boolean },
+  ): Promise<void>
+  /**
+   * locked -> unlocked, for a `device` vault whose device slot no longer opens (CorruptError or TamperedError from
+   * `unlock`): replaces it with a new, empty `device` vault, deleting everything this device held of the old one.
+   * InvalidStateError in any other state or for a vault a passphrase protects.
+   */
+  reset(): Promise<void>
   /**
    * Adds the keyslot files of this vault that another device created (read from the sync store) and this device does
    * not have; files of another vault or that do not parse are skipped. Returns the slots added.
@@ -171,7 +214,9 @@ export interface Vault {
   importKeyslots(files: readonly KeyslotFile[]): Promise<readonly string[]>
   /**
    * locked -> unlocked. WrongSecretError (state back to locked) when no slot opens; InvalidInputError for a malformed
-   * text or a missing Secret Key; InvalidStateError in any state but locked.
+   * text or a missing Secret Key; InvalidStateError in any state but locked. With the `device` credential:
+   * InvalidStateError when a passphrase protects the vault, CorruptError when the device slot or its key is missing
+   * or malformed, TamperedError when it does not unwrap.
    */
   unlock(credential: UnlockCredential): Promise<void>
   /**
@@ -201,6 +246,20 @@ export interface Vault {
     readonly current: UnlockCredential
     readonly next: string
   }): Promise<{ readonly added: string; readonly previous: string }>
+  /**
+   * device -> passphrase: opens the device slot and, in one transaction, writes a passphrase slot (with a new Secret
+   * Key unless `secretKey` is false), a recovery slot (unless `recoveryKey` is false), the device-wrapped Secret Key
+   * (unless `rememberSecretKey` is false), and deletes the device slot and its key. The vault stays unlocked, and the
+   * auto-lock starts. Returns the kit as `create` does. Needs `unlocked`; InvalidStateError when a passphrase already
+   * protects the vault.
+   */
+  protect(input: CreateVaultInput): Promise<CreatedVault>
+  /**
+   * passphrase -> device: opens a slot with `current` (a passphrase) and, in one transaction, writes a new device slot
+   * and its key and deletes every keyslot and the device-wrapped Secret Key. The vault stays unlocked and stops
+   * auto-locking. Needs `unlocked`; InvalidStateError for a `device` vault, InvalidInputError for another credential.
+   */
+  unprotect(current: UnlockCredential): Promise<void>
   /** Adds a recovery slot after opening a slot with `current`; the text is shown once. */
   addRecoveryKey(current: UnlockCredential): Promise<{ readonly slot: string; readonly recoveryKey: string }>
   /**

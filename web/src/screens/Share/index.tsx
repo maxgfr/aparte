@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useSearch } from 'wouter'
+import { useLocation, useSearch } from 'wouter'
 import { useSessionState } from '../../app/chat.tsx'
 import { draftText, useInbox } from '../../app/inbox.tsx'
 import { paths } from '../../app/routes.ts'
@@ -10,7 +10,7 @@ import { formatRelative } from '../../i18n/format.ts'
 import type { Key } from '../../i18n/index.ts'
 import { useLocale, useT } from '../../i18n/react.tsx'
 import chat from '../../ui/chat/Chat.module.css'
-import { Button, buttonClass } from '../../ui/components/Button.tsx'
+import { Button } from '../../ui/components/Button.tsx'
 import { EmptyState } from '../../ui/components/EmptyState.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
 import styles from './Share.module.css'
@@ -125,9 +125,6 @@ export default function ShareScreen() {
         <p className={chat.warningText} role="status">
           {t('media.receivedNoKey')}
         </p>
-        <Link href={paths.createVault} className={buttonClass({ variant: 'primary' })}>
-          {t('shell.welcomeCreateVault')}
-        </Link>
       </Screen>
     )
   }

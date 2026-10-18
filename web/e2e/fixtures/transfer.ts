@@ -3,9 +3,7 @@ import type { Download, Locator, Page } from '@playwright/test'
 import { chat } from '../../src/i18n/en/chat.ts'
 import { shell } from '../../src/i18n/en/shell.ts'
 import { transfer } from '../../src/i18n/en/transfer.ts'
-import { vault } from '../../src/i18n/en/vault.ts'
 import { expect } from '../gates.ts'
-import { ARGON2_WAIT } from './chat-ui.ts'
 
 /*
  * The Import and export screen and the conversation export sheet, as the transfer specs drive them. Controls are
@@ -36,19 +34,7 @@ export async function openTransfer(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: transfer.title })).toBeVisible()
 }
 
-/** Creates a vault with the generated passphrase, reads the Secret Key off the kit, confirms it. */
-export async function createVaultWithKit(page: Page): Promise<{ passphrase: string; secretKey: string }> {
-  await page.goto('./')
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
-  const passphrase = await page.getByLabel(vault.generatedLabel, { exact: true }).inputValue()
-  await page.getByRole('button', { name: vault.create }).click()
-  await expect(page.getByRole('heading', { level: 1, name: vault.kitTitle })).toBeVisible(ARGON2_WAIT)
-  const secretKey = ((await page.locator('[data-key="secret-key"]').textContent()) ?? '').trim()
-  await page.getByLabel(vault.kitConfirm).check()
-  await page.getByRole('button', { name: vault.kitContinue }).click()
-  await expect(page.getByRole('navigation').getByRole('link', { name: chat.navChats }).first()).toBeVisible(ARGON2_WAIT)
-  return { passphrase, secretKey }
-}
+export { createVaultWithKit } from './chat-ui.ts'
 
 /** The export dialog of the open chat's conversation. */
 export async function openExport(page: Page): Promise<Locator> {

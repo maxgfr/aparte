@@ -17,7 +17,9 @@ export const transfer = {
   backupImported: 'Backup zusammengeführt. Was darin war und diesem Tresor fehlte, ist wieder da.',
   backupFailed: 'Das Backup ist nicht gelungen: {message}',
   backupNewDevice:
-    'Auf einem Gerät ohne Tresor wählen Sie auf dem Startbildschirm „Ich habe bereits einen Tresor“ und danach diese Datei.',
+    'Wählen Sie auf einem anderen Gerät „Ich habe bereits einen Tresor“ auf dem Sync-Bildschirm und dann diese Datei.',
+  backupNeedsPassphrase:
+    'Ein Backup öffnet sich mit Ihrer Passphrase und dem geheimen Schlüssel aus Ihrem Notfallkit: Schützen Sie den Tresor zuerst mit einer Passphrase.',
 
   // A backup opened with the app (file_handlers)
   launchTitle: 'Eine Backup-Datei wurde geöffnet',

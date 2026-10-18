@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import { common } from '../src/i18n/en/common.ts'
 import { shell } from '../src/i18n/en/shell.ts'
 import { vault } from '../src/i18n/en/vault.ts'
+import { openApp, openProtect } from './fixtures/chat-ui.ts'
 import { expect, test } from './gates.ts'
 
 /*
@@ -16,14 +17,12 @@ const welcomeHeading = (page: Page) => page.getByRole('heading', { level: 1, nam
 const lockHeading = (page: Page) => page.getByRole('heading', { level: 1, name: common.appName, exact: true })
 const kitHeading = (page: Page) => page.getByRole('heading', { level: 1, name: vault.kitTitle })
 
-/** Creates the vault with the generated passphrase, the kit left on screen. */
+/** Opens the app and protects its vault from the settings with the generated passphrase, the kit left on screen. */
 async function createVault(page: Page) {
-  await page.goto('./')
-  await expect(welcomeHeading(page)).toBeVisible()
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
-  await expect(page.getByRole('heading', { level: 1, name: vault.createTitle })).toBeVisible()
+  await openApp(page)
+  await openProtect(page)
   const passphrase = await page.getByLabel(vault.generatedLabel, { exact: true }).inputValue()
-  await page.getByRole('button', { name: vault.create }).click()
+  await page.getByRole('button', { name: vault.protect }).click()
   await expect(kitHeading(page)).toBeVisible(ARGON2_WAIT)
   const secretKey = (await page.locator('[data-key="secret-key"]').textContent()) ?? ''
   const recoveryKey = (await page.locator('[data-key="recovery-key"]').textContent()) ?? ''
@@ -47,23 +46,22 @@ test('a second tab still on the welcome screen cannot destroy the vault the firs
 }) => {
   test.setTimeout(240_000)
   const second = await context.newPage()
-  // The first tab tells the others that a vault now exists, at a moment no test controls: the second tab is a page
-  // that does not hear it (a browser without BroadcastChannel, which the app does without), so that it is still on
-  // the welcome screen when the user acts there, as a tab the notice reaches late is.
+  // The first tab tells the others that the vault is now protected, at a moment no test controls: the second tab is a
+  // page that does not hear it (a browser without BroadcastChannel, which the app does without), so that it still
+  // shows the vault unprotected when the user acts there, as a tab the notice reaches late does.
   await second.addInitScript(() => Reflect.deleteProperty(globalThis, 'BroadcastChannel'))
-  await second.goto('./')
+  await second.goto('./#/')
   await expect(welcomeHeading(second)).toBeVisible()
 
   const { passphrase } = await createVault(page)
   await confirmKit(page)
 
-  // The second tab loaded before the vault existed and still offers to create one. Whatever the user does there,
-  // the vault of the first tab, with its kit already written down, must survive.
-  await second.getByRole('link', { name: shell.welcomeCreateVault }).click()
-  await expect(second.getByRole('heading', { level: 1, name: vault.createTitle })).toBeVisible()
-  await second.getByRole('button', { name: vault.create }).click()
-  // The attempt ends with the kit of a vault it made, or with the vault on this device shown locked.
-  await expect(kitHeading(second).or(lockHeading(second))).toBeVisible(ARGON2_WAIT)
+  // The second tab opened the vault before it had a passphrase and still offers to protect it. Whatever the user does
+  // there, the passphrase of the first tab, with its kit already written down, must survive.
+  await openProtect(second)
+  await second.getByRole('button', { name: vault.protect }).click()
+  // The attempt ends with the kit of a protection it made, or refused with nothing changed.
+  await expect(kitHeading(second).or(second.getByText(vault.protectFailed))).toBeVisible(ARGON2_WAIT)
 
   await page.reload()
   await expect(lockHeading(page)).toBeVisible()
@@ -167,12 +165,12 @@ test('the copied passphrase does not stay on the clipboard', async ({ page, cont
   test.setTimeout(240_000)
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.clock.install()
-  await page.goto('./')
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
+  await openApp(page)
+  await openProtect(page)
   const passphrase = await page.getByLabel(vault.generatedLabel, { exact: true }).inputValue()
   await page.getByRole('button', { name: vault.copy }).click()
   await expect(page.getByText(vault.copied)).toBeVisible()
-  await page.getByRole('button', { name: vault.create }).click()
+  await page.getByRole('button', { name: vault.protect }).click()
   await expect(kitHeading(page)).toBeVisible(ARGON2_WAIT)
   await confirmKit(page)
   await page.getByRole('button', { name: vault.lock, exact: true }).click()

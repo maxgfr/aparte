@@ -7,9 +7,29 @@ export const vault = {
   storageFailedBody:
     'Aparté konnte seinen Speicher in diesem Browser nicht öffnen, daher kann auf diesem Gerät nichts gespeichert werden. Ein privates Fenster kann ihn blockieren: Versuchen Sie ein normales Fenster und laden Sie dann neu.',
 
-  createTitle: 'Tresor erstellen',
-  createLead:
-    'Alles, was Aparté speichert, wird auf diesem Gerät mit einem Schlüssel verschlüsselt, den nur Ihre Passphrase öffnet. Es gibt kein Konto und keinen Link zum Zurücksetzen.',
+  protectionTitle: 'Schutz durch Passphrase',
+  protectionDevice: 'Nicht durch eine Passphrase geschützt',
+  protectionPassphrase: 'Durch eine Passphrase geschützt',
+  protectionDeviceBody:
+    'Ihre Chats sind auf diesem Gerät mit einem Schlüssel verschlüsselt, den der Browser aufbewahrt und nicht exportieren lässt: Eine Kopie der Festplatte oder ein Backup enthält also nur verschlüsselte Daten. Aber wer diesen Browser öffnet, öffnet Aparté, und eine andere Website desselben Ursprungs könnte diesen Schlüssel verwenden, um Ihre Daten zu lesen.',
+  protectionDeviceFix:
+    'Eine Passphrase schließt beide Lücken: Der Tresor sperrt sich dann nach einigen Minuten ohne Aktivität und öffnet sich nur mit Ihrer Passphrase. Die Synchronisierung und der Umzug des Tresors auf ein anderes Gerät setzen sie voraus.',
+  protectionPassphraseBody:
+    'Nur Ihre Passphrase öffnet den Tresor, auf einem neuen Gerät zusammen mit dem geheimen Schlüssel aus Ihrem Notfallkit. Er sperrt sich nach fünf Minuten ohne Aktivität selbst.',
+  protectAction: 'Mit einer Passphrase schützen',
+  unprotectTitle: 'Schutz durch Passphrase entfernen',
+  unprotectBody:
+    'Der Tresor öffnet sich dann auf diesem Gerät ohne Abfrage und sperrt sich nicht mehr: Wer diesen Browser benutzt, und eine andere Website desselben Ursprungs, könnte ihn lesen. Ihre Passphrase, Ihr geheimer Schlüssel und Ihr Wiederherstellungsschlüssel öffnen ihn hier nicht mehr.',
+  unprotectSyncFirst:
+    'Dieses Gerät synchronisiert. Entfernen Sie zuerst seine Sync-Ziele: Die Synchronisierung setzt den Schutz durch Passphrase voraus.',
+  unprotect: 'Schutz entfernen',
+  unprotecting: 'Schutz wird entfernt…',
+  unprotectFailed: 'Der Schutz konnte nicht entfernt werden. Nichts wurde geändert: Versuchen Sie es erneut.',
+  unprotected: 'Schutz durch Passphrase entfernt. Der Tresor öffnet sich auf diesem Gerät ohne Abfrage.',
+
+  protectTitle: 'Mit einer Passphrase schützen',
+  protectLead:
+    'Mit Ihrer Passphrase und dem geheimen Schlüssel aus dem folgenden Notfallkit sperrt sich der Tresor nach einigen Minuten ohne Aktivität und öffnet sich nur für Sie, auf diesem Gerät wie auf Ihren anderen. Es gibt kein Konto und keinen Link zum Zurücksetzen.',
   choiceLabel: 'Passphrase',
   choiceGenerated: 'Eine erzeugen',
   choiceCustom: 'Eigene verwenden',
@@ -35,9 +55,9 @@ export const vault = {
   strength3: 'Stark',
   strength4: 'Sehr stark',
   strengthTooWeak: 'Zu leicht zu erraten: Fügen Sie Wörter hinzu oder machen Sie sie weniger vorhersehbar.',
-  create: 'Tresor erstellen',
-  creating: 'Ihr Tresor wird erstellt. Das dauert einige Sekunden…',
-  createFailed: 'Der Tresor konnte nicht erstellt werden. Nichts wurde gespeichert: Versuchen Sie es erneut.',
+  protect: 'Tresor schützen',
+  protecting: 'Ihr Tresor wird geschützt. Das dauert einige Sekunden…',
+  protectFailed: 'Die Passphrase konnte nicht gesetzt werden. Nichts wurde geändert: Versuchen Sie es erneut.',
 
   kitTitle: 'Ihr Notfallkit',
   kitLead:
@@ -92,6 +112,18 @@ export const vault = {
   recovered: 'Entsperrt. Ihre neue Passphrase ist gesetzt.',
 
   homeUnlocked: 'Ihr Tresor ist auf diesem Gerät geöffnet. Er sperrt sich nach einigen Minuten ohne Aktivität selbst.',
+  homeDevice:
+    'Ihre Chats sind auf diesem Gerät verschlüsselt und öffnen sich ohne Abfrage. Noch schützt sie keine Passphrase.',
+  hintBody:
+    'Wer diesen Browser öffnet, kann diese Chats lesen. Fügen Sie eine Passphrase hinzu, wenn Sie sie sperren möchten.',
+  hintDismiss: 'Ausblenden',
+
+  deviceFailedLead:
+    'Dieses Gerät kann seinen Tresor nicht mehr öffnen: Der dafür aufbewahrte Schlüssel fehlt oder ist beschädigt, zum Beispiel nachdem Websitedaten teilweise gelöscht wurden. Keine Passphrase schützt diesen Tresor, daher gibt es auf diesem Gerät keinen anderen Zugang.',
+  deviceFailedConfirm: 'Mir ist klar, dass gelöscht wird, was dieses Gerät enthielt',
+  deviceFailedReset: 'Mit einem leeren Tresor neu beginnen',
+  deviceFailedResetFailed:
+    'Der Tresor konnte nicht ersetzt werden. Nichts wurde geändert: Laden Sie neu und versuchen Sie es erneut.',
   lock: 'Sperren',
   lockDeferred: 'Wird gesperrt, sobald die laufende Arbeit abgeschlossen ist…',
 } as const satisfies Shape<typeof source>

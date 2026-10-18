@@ -45,7 +45,16 @@ const TABS: readonly Tab[] = [
     label: 'shell.navMore',
     icon: LayoutGrid,
     unlocked: true,
-    also: [paths.transfer, paths.characters, '/lorebooks', paths.arena, paths.stats, paths.knowledge],
+    also: [
+      paths.transfer,
+      paths.characters,
+      '/lorebooks',
+      paths.arena,
+      paths.stats,
+      paths.knowledge,
+      paths.protection,
+      sectionOf(paths.protect),
+    ],
   },
   // On a phone with the vault open, About is a row of More: the tab bar keeps six places.
   { href: paths.about, label: 'shell.navAbout', icon: Info, width: 'wide-or-locked' },
@@ -144,7 +153,9 @@ export function Shell({ children }: { readonly children: ReactNode }) {
   const main = useFocusMainOnNavigation(location)
   const section = sectionOf(location)
   const { status, lock } = useVault()
-  const canLock = status.state === 'unlocked' || status.state === 'locking'
+  const open = status.state === 'unlocked' || status.state === 'locking'
+  // Anyone who opens this browser opens a `device` vault: there is nothing for a lock to protect.
+  const canLock = open && status.protection === 'passphrase'
   const session = useSession()
   const wide = useWide()
   useKeyboardInset()
@@ -159,7 +170,7 @@ export function Shell({ children }: { readonly children: ReactNode }) {
       <nav className={styles.nav} data-tabbar="" aria-label={t('shell.navMain')}>
         <p className={styles.brand}>{t('common.appName')}</p>
         <ul className={styles.tabs}>
-          {TABS.filter((tab) => isShown(tab, wide, canLock)).map((tab) => {
+          {TABS.filter((tab) => isShown(tab, wide, open)).map((tab) => {
             const Icon = tab.icon
             const active = isCurrent(tab, location, section)
             return (

@@ -1,7 +1,7 @@
 /*
  * Device-local interface preferences: the only module that touches localStorage. What it may hold is listed in
  * PREFS below and is never sensitive (a theme, an interface language, a layout choice, the fact that an Emergency Kit still waits to be
- * confirmed): no secret, no key, no conversation, no provider or account detail. Anything that matters goes into the encrypted vault instead. Every read is validated, so a value
+ * confirmed, a hint the user dismissed): no secret, no key, no conversation, no provider or account detail. Anything that matters goes into the encrypted vault instead. Every read is validated, so a value
  * written by an older build or edited by hand falls back to the default rather than reaching the UI.
  */
 
@@ -66,6 +66,8 @@ interface Prefs {
    * the default set. Which public search services this device sends queries to, never a query itself.
    */
   researchSources: string
+  /** The user dismissed the hint that no passphrase protects the vault (ui/shell/ProtectHint.tsx). */
+  protectHintDismissed: boolean
 }
 
 export type PrefName = keyof Prefs
@@ -90,6 +92,7 @@ const PREFS: { readonly [N in PrefName]: PrefSpec<Prefs[N]> } = {
     fallback: '',
     parse: (raw) => (RESEARCH_SOURCES.test(raw) ? raw : undefined),
   },
+  protectHintDismissed: { key: 'aparte:protect-hint-dismissed', fallback: false, parse: flag },
 }
 
 /** The subset of Storage used here, so tests pass an in-memory one. */

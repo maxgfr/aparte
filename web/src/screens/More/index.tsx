@@ -1,5 +1,6 @@
-import { ArrowLeftRight, BarChart3, BookOpen, Info, Puzzle, Swords, Theater } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, BookOpen, Info, KeyRound, Puzzle, Swords, Theater } from 'lucide-react'
 import { paths } from '../../app/routes.ts'
+import { useVault } from '../../app/vault.tsx'
 import { useT } from '../../i18n/react.tsx'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
@@ -7,6 +8,7 @@ import { Screen } from '../../ui/shell/Screen.tsx'
 /** The screens that do not fit the tab bar, in groups. */
 export default function MoreScreen() {
   const t = useT()
+  const { status } = useVault()
   const icon = { size: 20, strokeWidth: 1.75, 'aria-hidden': true } as const
   return (
     <Screen title={t('shell.moreTitle')}>
@@ -53,6 +55,12 @@ export default function MoreScreen() {
         />
       </ListGroup>
       <ListGroup title={t('shell.moreApp')}>
+        <ListRow
+          href={paths.protection}
+          leading={<KeyRound {...icon} />}
+          title={t('shell.moreProtection')}
+          subtitle={t(status.protection === 'passphrase' ? 'vault.protectionPassphrase' : 'vault.protectionDevice')}
+        />
         <ListRow href={paths.about} leading={<Info {...icon} />} title={t('shell.moreAbout')} />
       </ListGroup>
     </Screen>

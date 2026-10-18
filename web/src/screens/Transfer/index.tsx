@@ -4,6 +4,7 @@ import { useConversations, useSession } from '../../app/chat.tsx'
 import { paths } from '../../app/routes.ts'
 import { useSync } from '../../app/sync.tsx'
 import { useToast } from '../../app/toast.tsx'
+import { useVault } from '../../app/vault.tsx'
 import { cryptoRng } from '../../core/crypto/rng.ts'
 import type { ImportSource, ParsedImport } from '../../core/transfer/index.ts'
 import type { Key } from '../../i18n/index.ts'
@@ -15,9 +16,10 @@ import styles from '../../ui/transfer/Transfer.module.css'
 
 /*
  * Import and export. The backup is the sync archive (core/sync/providers/zip.ts) under an `.aparte` name: the store as
- * it is, encrypted, keyslots and photos included, so it carries the vault whole and a device without a vault joins
- * from it (screens/Sync/Join.tsx). Imports read another app's export (core/transfer) and write it as conversations;
- * nothing of the file is stored but the conversations it holds, encrypted like any other.
+ * it is, encrypted, keyslots and photos included, so it carries the vault whole and another device joins from it
+ * (screens/Sync/Join.tsx); a vault no passphrase protects has no keyslot, so its backup waits for the protection.
+ * Imports read another app's export (core/transfer) and write it as conversations; nothing of the file is stored but
+ * the conversations it holds, encrypted like any other.
  *
  * Opened with an `.aparte` file (the manifest's file_handlers, `?launch`), the screen offers to merge it.
  */
@@ -56,6 +58,26 @@ function useLaunchedFile(): [File | null, () => void] {
     }
   }, [])
   return [file, () => setFile(null)]
+}
+
+/**
+ * A `device` vault has no keyslot another device could open (spec/FORMAT.md section 17): its backup would open
+ * nowhere else, so the section leads to the passphrase protection instead.
+ */
+function BackupNeedsPassphrase() {
+  const t = useT()
+  const id = useId()
+  return (
+    <section className={styles.section} aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className={styles.sectionTitle}>
+        {t('transfer.backupTitle')}
+      </h2>
+      <p className={styles.lead}>{t('transfer.backupNeedsPassphrase')}</p>
+      <Link href={paths.protect} className={buttonClass({ variant: 'primary' })}>
+        {t('vault.protectAction')}
+      </Link>
+    </section>
+  )
 }
 
 function Backup() {
@@ -314,6 +336,7 @@ function ExportAll() {
 export default function TransferScreen() {
   const t = useT()
   const session = useSession()
+  const { status } = useVault()
   return (
     <Screen title={t('transfer.title')} subtitle={t('transfer.lead')} back={paths.more}>
       {session === null ? (
@@ -322,7 +345,7 @@ export default function TransferScreen() {
         </p>
       ) : (
         <div className={styles.stack}>
-          <Backup />
+          {status.protection === 'passphrase' ? <Backup /> : <BackupNeedsPassphrase />}
           <ImportFromApp />
           <ExportAll />
         </div>

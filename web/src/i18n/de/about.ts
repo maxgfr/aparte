@@ -11,6 +11,8 @@ export const about = {
   modeProduction: 'Produktion',
   modeDevelopment: 'Entwicklung',
   protectionTitle: 'Schutzmaßnahmen',
+  vaultProtection: 'Tresor',
+  vaultProtectionHint: 'Was den Tresor auf diesem Gerät öffnet.',
   trustedTypes: 'Trusted Types',
   trustedTypesEnforced: 'Erzwungen',
   trustedTypesAvailable: 'Verfügbar, nicht erzwungen',

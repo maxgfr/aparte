@@ -7,7 +7,7 @@ import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
 import { Button } from '../../ui/components/Button.tsx'
 import { Field } from '../../ui/components/Field.tsx'
-import { errorCode, nextPaint } from '../Onboarding/busy.ts'
+import { errorCode, nextPaint } from '../Protect/busy.ts'
 import styles from './LockFrame.module.css'
 import { LockFrame } from './LockFrame.tsx'
 

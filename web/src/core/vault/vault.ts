@@ -1,6 +1,6 @@
 /*
- * The vault state machine of web/src/core/contracts/vault.ts over the keyslots of spec/FORMAT.md section 6 and the
- * device store of section 11.
+ * The vault state machine of web/src/core/contracts/vault.ts over the keyslots of spec/FORMAT.md section 6, the
+ * device store of section 11 and the device slot of section 17.
  *
  * Invariants:
  * - The subkeys and the record store exist only while `unlocked`, and while `locking` until the last hold is released
@@ -14,6 +14,9 @@
  *   earlier slot in place.
  * - Several pages of one device (tabs, the installed app) each hold a Vault over the same database. Every operation
  *   that opens a slot re-reads the keyslots first, so a slot another page added or removed is seen at once.
+ * - The device slot opens the vault only while `meta` holds no passphrase or passkey slot: a device slot next to one
+ *   (planted by another page of the origin, or left by a recovery) is never used, and is deleted at the next unlock.
+ *   A `device` vault never schedules the auto-lock.
  */
 
 import {
@@ -43,6 +46,7 @@ import type {
   CreateVaultInput,
   KeyslotFile,
   LockReason,
+  Protection,
   RenewedKit,
   SlotInfo,
   UnlockCredential,
@@ -85,7 +89,8 @@ interface Slot {
 /** The result of opening one slot; the caller zeroes both byte strings. */
 interface Opened {
   readonly mk: Bytes
-  readonly slot: Slot
+  /** The keyslot that opened, or null for the device slot. */
+  readonly slot: Slot | null
   /** The Secret Key the opened slot combined with the passphrase, or null. */
   readonly secretKey: Bytes | null
 }
@@ -103,6 +108,14 @@ function checkPolicy(policy: AutoLockPolicy): AutoLockPolicy {
 
 /** AAD of the device-wrapped Secret Key (spec/FORMAT.md section 11.2). */
 const deviceSecretAad = (vault: string): Bytes => B.utf8(`aparte/1|device-secret-key|${vault}`)
+
+/** AAD of the device slot (spec/FORMAT.md section 17.1). */
+const deviceSlotAad = (vault: string): Bytes => B.utf8(`aparte/1|device-slot|${vault}`)
+/** iv || MK || tag. */
+const DEVICE_SLOT_BYTES = IV_BYTES + MK_BYTES + 16
+
+/** The `meta` entries of the device slot. */
+const DEVICE_SLOT_ENTRIES = ['device-slot', 'device-slot-key'] as const
 
 /**
  * The pending-kit proof (CreatedVault.kitProof): web-only, kept in localStorage beside the marker, never in a store.
@@ -203,6 +216,7 @@ class VaultImpl implements Vault {
           secretKey: keyslot.kind === 'passphrase' && keyslot.kdf.secretKey,
         }),
       ),
+      protection: this.protection(),
       holds: [...this.holds.values()],
       autoLock: this.policy,
       secretKeyOnDevice: this.secretKeyStored,
@@ -327,8 +341,85 @@ class VaultImpl implements Vault {
     }
   }
 
-  async join(input: { readonly vault: string; readonly keyslots: readonly KeyslotFile[] }): Promise<void> {
+  async createDevice(): Promise<void> {
     if (this.state !== 'absent' || this.creating) throw new InvalidStateError('A vault already exists on this device')
+    this.creating = true
+    try {
+      const made = await this.makeDeviceVault(null)
+      if (!made) {
+        // The vault another page made is read here as locked; it can be opened as soon as that is reported.
+        this.creating = false
+        await this.refresh()
+        throw new InvalidStateError('A vault already exists on this device')
+      }
+    } finally {
+      this.creating = false
+    }
+  }
+
+  async reset(): Promise<void> {
+    if (this.state !== 'locked' || this.creating) throw new InvalidStateError('The vault is not locked')
+    this.creating = true
+    try {
+      await this.reloadSlots()
+      if (this.protection() !== 'device') throw new InvalidStateError('A passphrase protects this vault')
+      const made = await this.makeDeviceVault({ vault: this.requireVaultText(), keyslots: [...this.slots.keys()] })
+      if (!made) {
+        this.creating = false
+        await this.refresh()
+        throw new InvalidStateError('The vault changed on this device meanwhile')
+      }
+    } finally {
+      this.creating = false
+    }
+  }
+
+  /**
+   * Writes a new `device` vault (a fresh master key, vault id and device id, and the device slot) in one transaction,
+   * over nothing or in place of the vault `replace` describes, and enters `unlocked`. False, with nothing written, when
+   * the transaction found the database other than expected.
+   */
+  private async makeDeviceVault(
+    replace: { readonly vault: string; readonly keyslots: readonly string[] } | null,
+  ): Promise<boolean> {
+    const { rng } = this.deps
+    const mk = rng.bytes(MK_BYTES)
+    const vaultId = rng.bytes(ID_BYTES)
+    const deviceId = rng.bytes(ID_BYTES)
+    try {
+      const vaultText = B.base32Encode(vaultId)
+      const subkeys = await K.deriveSubkeys(mk, vaultId)
+      const sealed = await this.sealDeviceSlot(mk, vaultText)
+      const made = await this.meta.initVault({
+        entries: { fmt: FMT, vault: vaultText, ...sealed },
+        keyslots: [],
+        ...(replace ? { replace } : {}),
+      })
+      if (!made) return false
+      const store = createLocalStore({ db: this.deps.db, subkeys, rng })
+      await store.put('device', 'id', deviceId)
+      this.vaultId = vaultId
+      this.vaultText = vaultText
+      this.slots.clear()
+      this.secretKeyStored = false
+      this.secretKeyDamaged = false
+      this.enterUnlocked(subkeys, store)
+      return true
+    } finally {
+      mk.fill(0)
+      deviceId.fill(0)
+    }
+  }
+
+  async join(
+    input: { readonly vault: string; readonly keyslots: readonly KeyslotFile[] },
+    options?: { readonly replaceDevice?: boolean },
+  ): Promise<void> {
+    if (this.creating) throw new InvalidStateError('A vault already exists on this device')
+    const replacing = this.state !== 'absent'
+    if (replacing && (options?.replaceDevice !== true || (this.state !== 'unlocked' && this.state !== 'locked'))) {
+      throw new InvalidStateError('A vault already exists on this device')
+    }
     this.creating = true
     try {
       let vaultId: Bytes
@@ -348,13 +439,18 @@ class VaultImpl implements Vault {
       if (!slots.some((s) => s.keyslot.kind !== 'recovery')) {
         throw new InvalidInputError('The vault has no slot that a passphrase opens')
       }
-      const made = await this.meta.initVault({
-        entries: { fmt: FMT, vault: input.vault },
-        keyslots: slots.map(({ id, bytes }) => ({ slot: id, bytes })),
-      })
-      if (!made) {
-        await this.refresh()
-        throw new InvalidStateError('A vault already exists on this device')
+      const entries = { fmt: FMT, vault: input.vault }
+      const keyslots = slots.map(({ id, bytes }) => ({ slot: id, bytes }))
+      let replaced: 'open' | 'locked' | null = null
+      if (replacing) {
+        replaced = await this.replaceDeviceVault(entries, keyslots)
+      } else {
+        const made = await this.meta.initVault({ entries, keyslots })
+        if (!made) {
+          this.creating = false
+          await this.refresh()
+          throw new InvalidStateError('A vault already exists on this device')
+        }
       }
       this.vaultId = vaultId
       this.vaultText = input.vault
@@ -363,9 +459,43 @@ class VaultImpl implements Vault {
       this.secretKeyStored = false
       this.secretKeyDamaged = false
       this.setState('locked')
+      if (replaced === 'open') this.emit({ type: 'locked', reason: 'forced' })
+      if (replaced !== null) this.emit({ type: 'changed' })
     } finally {
       this.creating = false
     }
+  }
+
+  /**
+   * The replacing half of `join`: drops the keys of the `device` vault held now, writes the joined vault over it (and
+   * deletes its records) in one transaction, then runs the lock cleanups. The state stays `locking` meanwhile, so no
+   * page treats the vault as locked and opens the device slot again. Returns whether the replaced vault was open; on
+   * failure the state is `locked`, on the vault this device holds then.
+   */
+  private async replaceDeviceVault(
+    entries: { readonly fmt: string; readonly vault: string },
+    keyslots: readonly { readonly slot: string; readonly bytes: Uint8Array }[],
+  ): Promise<'open' | 'locked'> {
+    await this.reloadSlots()
+    if (this.protection() !== 'device') throw new InvalidStateError('A passphrase protects this vault')
+    const replace = { vault: this.requireVaultText(), keyslots: [...this.slots.keys()] }
+    const wasOpen = this.state === 'unlocked'
+    if (wasOpen) this.dropKeys()
+    let made = false
+    try {
+      made = await this.meta.initVault({ entries, keyslots, replace })
+    } catch (error) {
+      if (wasOpen) await this.runCleanups()
+      this.setState('locked')
+      throw error
+    }
+    if (wasOpen) await this.runCleanups()
+    if (!made) {
+      this.setState('locked')
+      await this.refresh()
+      throw new InvalidStateError('The vault changed on this device meanwhile')
+    }
+    return wasOpen ? 'open' : 'locked'
   }
 
   importKeyslots(files: readonly KeyslotFile[]): Promise<readonly string[]> {
@@ -433,12 +563,19 @@ class VaultImpl implements Vault {
       this.vaultId = await checkVault(this.meta, vault)
       this.vaultText = vault
     } else if (vault !== this.vaultText) {
-      return
+      // Another page replaced a `device` vault (joining a vault from its store, or starting over): the keys held here
+      // belong to a vault that no longer exists on this device.
+      if (this.state === 'unlocking') return
+      const id = await checkVault(this.meta, vault)
+      if (this.state === 'unlocked' || this.state === 'locking') await this.finalizeLock('forced')
+      this.vaultId = id
+      this.vaultText = vault
     }
     await this.reloadSlots()
     this.secretKeyStored = await hasStoredSecretKey(this.meta)
     this.secretKeyDamaged = false
     if (this.state === 'absent') this.setState('locked')
+    this.emit({ type: 'changed' })
   }
 
   recover(input: {
@@ -486,6 +623,7 @@ class VaultImpl implements Vault {
             if (slot.keyslot.kind === 'passphrase' && slot.id !== added) await this.dropSlot(slot.id)
           }
         }
+        await this.dropStaleDeviceSlot()
         const secretKey = generated ? await SK.formatSecretKey(sk) : null
         await this.finishUnlock(await K.deriveSubkeys(opened.mk, this.requireVaultId()))
         return { added, secretKey }
@@ -524,7 +662,96 @@ class VaultImpl implements Vault {
             { rng: this.deps.rng, argon2: this.deps.argon2 },
           ),
         )
-        return { added, previous: opened.slot.id }
+        const previous = opened.slot?.id
+        if (previous === undefined) throw new InvalidInputError('Changing the passphrase needs the current passphrase')
+        return { added, previous }
+      } finally {
+        opened.mk.fill(0)
+        opened.secretKey?.fill(0)
+      }
+    })
+  }
+
+  protect(input: CreateVaultInput): Promise<CreatedVault> {
+    return this.exclusive(async () => {
+      this.requireUnlocked()
+      await this.reloadSlots()
+      if (this.protection() !== 'device') throw new InvalidStateError('A passphrase already protects this vault')
+      KS.normalizePassphrase(input.passphrase).fill(0)
+      const withSecretKey = input.secretKey ?? true
+      const remember = withSecretKey && (input.rememberSecretKey ?? true)
+      const { rng } = this.deps
+      const vaultId = this.requireVaultId()
+      const vaultText = this.requireVaultText()
+      const mk = await this.openDeviceSlot()
+      const sk = withSecretKey ? SK.generateSecretKey(rng) : null
+      const rk = (input.recoveryKey ?? true) ? RK.generateRecoveryKey(rng) : null
+      try {
+        const keyslots = [
+          await KS.createKeyslot(
+            {
+              kind: 'passphrase',
+              mk,
+              vaultId,
+              passphrase: input.passphrase,
+              secretKey: sk,
+              argon2: this.deps.argon2Params,
+            },
+            { rng, argon2: this.deps.argon2 },
+          ),
+        ]
+        if (rk) keyslots.push(await KS.createKeyslot({ kind: 'recovery', mk, vaultId, recoveryKey: rk }, { rng }))
+        const slots = keyslots.map((keyslot) => ({ id: keyslot.slot, keyslot, bytes: KS.serializeKeyslot(keyslot) }))
+        const recoverySlot = keyslots.find((k) => k.kind === 'recovery')?.slot
+        const created: CreatedVault = {
+          vaultId: vaultText,
+          secretKey: sk ? await SK.formatSecretKey(sk) : null,
+          recoveryKey: rk ? RK.formatRecoveryKey(rk) : null,
+          kitProof: recoverySlot ? await makeKitProof(this.requireKeys(), vaultText, recoverySlot, rng) : null,
+        }
+        const device = remember && sk ? await this.wrapSecretKey(sk, vaultText, await newDeviceKey()) : {}
+        // One transaction: the passphrase slot exists from the moment the device slot is gone.
+        await this.meta.change({
+          put: device,
+          keyslots: slots.map(({ id, bytes }) => ({ slot: id, bytes })),
+          remove: [...DEVICE_SLOT_ENTRIES, ...(remember ? [] : (['device-key', 'secret-key'] as const))],
+        })
+        for (const slot of slots) this.slots.set(slot.id, slot)
+        this.secretKeyStored = remember
+        this.secretKeyDamaged = false
+        this.protectionChanged()
+        this.emit({ type: 'changed' })
+        return created
+      } finally {
+        mk.fill(0)
+        sk?.fill(0)
+        rk?.fill(0)
+      }
+    })
+  }
+
+  unprotect(current: UnlockCredential): Promise<void> {
+    return this.exclusive(async () => {
+      this.requireUnlocked()
+      await this.reloadSlots()
+      if (this.protection() !== 'passphrase') throw new InvalidStateError('No passphrase protects this vault')
+      if (current.kind !== 'passphrase') {
+        throw new InvalidInputError('Removing the passphrase needs the current passphrase')
+      }
+      const opened = await this.openWith(current)
+      try {
+        const sealed = await this.sealDeviceSlot(opened.mk, this.requireVaultText())
+        // One transaction: the device slot exists from the moment the last keyslot is gone.
+        await this.meta.change({
+          put: sealed,
+          remove: ['device-key', 'secret-key'],
+          removeKeyslots: [...this.slots.keys()],
+        })
+        this.slots.clear()
+        this.secretKeyStored = false
+        this.secretKeyDamaged = false
+        this.protectionChanged()
+        this.emit({ type: 'changed' })
       } finally {
         opened.mk.fill(0)
         opened.secretKey?.fill(0)
@@ -610,7 +837,7 @@ class VaultImpl implements Vault {
 
   touch(): void {
     this.lastActivity = this.deps.clock.now()
-    if (this.state !== 'unlocked') return
+    if (this.state !== 'unlocked' || this.protection() === 'device') return
     if (this.idlePending) {
       this.idlePending = false
       this.clearGrace()
@@ -646,6 +873,64 @@ class VaultImpl implements Vault {
     if (this.state === state) return
     this.state = state
     this.emit({ type: 'state', state })
+  }
+
+  /** `passphrase` when a passphrase or passkey slot exists, else `device`; null while absent. */
+  private protection(): Protection | null {
+    if (this.vaultText === null) return null
+    for (const slot of this.slots.values()) if (slot.keyslot.kind !== 'recovery') return 'passphrase'
+    return 'device'
+  }
+
+  /** Starts or stops the auto-lock after the protection changed while unlocked. */
+  private protectionChanged(): void {
+    if (this.state !== 'unlocked') return
+    if (this.protection() === 'device') {
+      this.clearTimers()
+      this.idlePending = false
+    } else if (!this.idlePending) {
+      this.lastActivity = this.deps.clock.now()
+      this.scheduleIdle()
+    }
+  }
+
+  /** The `meta` entries of a device slot for `mk`, under a new non-extractable key (spec/FORMAT.md section 17.1). */
+  private async sealDeviceSlot(
+    mk: Uint8Array,
+    vault: string,
+  ): Promise<{ readonly 'device-slot-key': CryptoKey; readonly 'device-slot': Bytes }> {
+    const key = await newDeviceKey()
+    const iv = this.deps.rng.bytes(IV_BYTES)
+    const sealed = await K.aesGcmEncrypt(key, iv, mk, deviceSlotAad(vault))
+    return { 'device-slot-key': key, 'device-slot': B.concat(iv, sealed) }
+  }
+
+  /**
+   * The master key the device slot wraps (spec/FORMAT.md section 17.2). CorruptError when the slot or its key is
+   * missing or malformed, TamperedError when it does not unwrap.
+   */
+  private async openDeviceSlot(): Promise<Bytes> {
+    const vault = this.requireVaultText()
+    let sealed: Bytes | undefined
+    try {
+      sealed = await this.meta.get('device-slot')
+    } catch (cause) {
+      if (!(cause instanceof AparteError)) throw cause
+      throw new CorruptError('The device slot is malformed', { cause })
+    }
+    const key: unknown = await this.meta.get('device-slot-key')
+    if (sealed === undefined || key === undefined) throw new CorruptError('This device holds no device slot')
+    if (sealed.length !== DEVICE_SLOT_BYTES || !(key instanceof CryptoKey)) {
+      throw new CorruptError('The device slot is malformed')
+    }
+    return K.aesGcmDecrypt(key, sealed.subarray(0, IV_BYTES), sealed.subarray(IV_BYTES), deviceSlotAad(vault))
+  }
+
+  /** Deletes a device slot left next to a passphrase slot: it never opens this vault again. */
+  private async dropStaleDeviceSlot(): Promise<void> {
+    if (this.protection() !== 'passphrase') return
+    const [slot, key] = await Promise.all([this.meta.get('device-slot'), this.meta.get('device-slot-key')])
+    if (slot !== undefined || key !== undefined) await this.meta.change({ remove: [...DEVICE_SLOT_ENTRIES] })
   }
 
   private sortedSlots(): Slot[] {
@@ -693,8 +978,11 @@ class VaultImpl implements Vault {
   /** Reads the keyslots again: another page of this device may have added or removed one. */
   private async reloadSlots(): Promise<void> {
     const slots = await loadSlots(this.meta, this.requireVaultText())
+    const before = this.protection()
     this.slots.clear()
     for (const slot of slots) this.slots.set(slot.id, slot)
+    // Another page protected the vault, or removed its protection.
+    if (this.protection() !== before) this.protectionChanged()
   }
 
   /**
@@ -702,12 +990,15 @@ class VaultImpl implements Vault {
    * the master key still in hand, stores again a Secret Key typed in over a damaged copy, and enters `unlocked`.
    */
   private unlockWith<T>(credential: UnlockCredential, then: (opened: Opened) => Promise<T>): Promise<T> {
-    if (this.state !== 'locked') return Promise.reject(new InvalidStateError('The vault is not locked'))
+    if (this.state !== 'locked' || this.creating) {
+      return Promise.reject(new InvalidStateError('The vault is not locked'))
+    }
     return this.runUnlocking(async () => {
       await this.reloadSlots()
       const opened = await this.openWith(credential)
       try {
         const result = await then(opened)
+        await this.dropStaleDeviceSlot()
         const typed = opened.secretKey && credential.kind === 'passphrase' && credential.secretKey
         if (typed && (this.secretKeyDamaged || credential.rememberSecretKey === true)) {
           await this.rememberSecretKey(opened.secretKey as Bytes, this.requireVaultText(), this.secretKeyDamaged)
@@ -780,6 +1071,10 @@ class VaultImpl implements Vault {
    */
   private async openWith(credential: UnlockCredential): Promise<Opened> {
     const vaultId = this.requireVaultId()
+    if (credential.kind === 'device') {
+      if (this.protection() !== 'device') throw new InvalidStateError('A passphrase protects this vault')
+      return { mk: await this.openDeviceSlot(), slot: null, secretKey: null }
+    }
     const options = { vaultId, argon2: this.deps.argon2 }
     const slots = this.sortedSlots().filter((s) => s.keyslot.kind === credential.kind)
 
@@ -940,24 +1235,9 @@ class VaultImpl implements Vault {
    */
   private finalizeLock(reason: LockReason): Promise<void> {
     if (this.finalizing) return this.finalizing
-    this.setState('locking')
-    this.clearTimers()
-    this.idlePending = false
-    const store = this.store
-    this.store = null
-    this.keys = null
-    store?.dispose()
-    this.holds.clear()
-    const request = this.lockRequest
-    this.lockRequest = null
+    const request = this.dropKeys()
     const run = (async () => {
-      for (const cleanup of [...this.cleanups]) {
-        try {
-          await cleanup()
-        } catch (error) {
-          report(error)
-        }
-      }
+      await this.runCleanups()
       this.setState('locked')
       this.emit({ type: 'locked', reason })
       request?.resolve()
@@ -968,10 +1248,37 @@ class VaultImpl implements Vault {
     return this.finalizing
   }
 
+  /** Enters `locking` and drops the keys, the record store and the holds at once; returns the pending lock request. */
+  private dropKeys(): VaultImpl['lockRequest'] {
+    this.setState('locking')
+    this.clearTimers()
+    this.idlePending = false
+    const store = this.store
+    this.store = null
+    this.keys = null
+    store?.dispose()
+    this.holds.clear()
+    const request = this.lockRequest
+    this.lockRequest = null
+    return request
+  }
+
+  /** Runs every lock cleanup; one that throws is reported and does not stop the others. */
+  private async runCleanups(): Promise<void> {
+    for (const cleanup of [...this.cleanups]) {
+      try {
+        await cleanup()
+      } catch (error) {
+        report(error)
+      }
+    }
+  }
+
   private scheduleIdle(): void {
     this.clearIdle()
     const { idleMs } = this.policy
-    if (idleMs === null || this.state !== 'unlocked') return
+    // Anyone who opens this browser opens a `device` vault without a prompt: locking it would protect nothing.
+    if (idleMs === null || this.state !== 'unlocked' || this.protection() === 'device') return
     const due = this.lastActivity + idleMs - this.deps.clock.now()
     this.idleTimer = this.deps.timers.set(() => this.idleElapsed(), Math.max(0, due))
   }
@@ -980,7 +1287,7 @@ class VaultImpl implements Vault {
   private idleElapsed(): void {
     this.idleTimer = null
     const { idleMs } = this.policy
-    if (idleMs === null || this.state !== 'unlocked' || this.idlePending) return
+    if (idleMs === null || this.state !== 'unlocked' || this.idlePending || this.protection() === 'device') return
     if (this.deps.clock.now() - this.lastActivity < idleMs) {
       this.scheduleIdle()
       return

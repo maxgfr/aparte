@@ -17,7 +17,9 @@ export const transfer = {
   backupImported: 'Sauvegarde fusionnée. Tout ce qu’elle contenait et qui manquait à ce coffre a été rétabli.',
   backupFailed: 'La sauvegarde n’a pas abouti : {message}',
   backupNewDevice:
-    'Sur un appareil sans coffre, choisissez « J’ai déjà un coffre » sur l’écran de démarrage, puis ce fichier.',
+    'Sur un autre appareil, choisissez « J’ai déjà un coffre » sur l’écran Synchronisation, puis ce fichier.',
+  backupNeedsPassphrase:
+    'Une sauvegarde s’ouvre avec votre phrase de passe et la clé secrète de votre kit d’urgence : protégez d’abord le coffre par une phrase de passe.',
 
   // A backup opened with the app (file_handlers)
   launchTitle: 'Un fichier de sauvegarde a été ouvert',

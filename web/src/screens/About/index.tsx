@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { BUILD, REPOSITORY } from '../../app/buildInfo.ts'
 import { type LocalePref, writePref } from '../../app/prefs.ts'
+import { paths } from '../../app/routes.ts'
 import { useTheme } from '../../app/theme.ts'
 import { useToast } from '../../app/toast.tsx'
 import { usePref } from '../../app/usePref.ts'
+import { useVault } from '../../app/vault.tsx'
 import { detectLocale, type Key, LOCALE_NAMES, LOCALES } from '../../i18n/index.ts'
 import { useSetLocale, useT } from '../../i18n/react.tsx'
 import { type NetPurpose, networkLog } from '../../security/net.ts'
@@ -87,6 +89,8 @@ export default function About() {
   const tt = useMemo(trustedTypesState, [])
   const worker = useSyncExternalStore(subscribeWorker, workerState, () => 'unsupported' as const)
   const storage = useStorageState()
+  const { status } = useVault()
+  const protection = status.protection === 'passphrase' ? 'passphrase' : 'device'
   // The transparency panel: what web/src/security/net.ts recorded in this page, origin and purpose only.
   const contacted = useSyncExternalStore(networkLog.subscribe, networkLog.snapshot, () => NO_REQUESTS)
   const origin = location.origin
@@ -107,6 +111,17 @@ export default function About() {
       </ListGroup>
 
       <ListGroup title={t('about.protectionTitle')}>
+        <ListRow
+          wrap
+          href={paths.protection}
+          title={t('about.vaultProtection')}
+          subtitle={t('about.vaultProtectionHint')}
+          trailing={
+            <span className={styles.value} data-state={protection} data-testid="about-vault">
+              {t(protection === 'passphrase' ? 'vault.protectionPassphrase' : 'vault.protectionDevice')}
+            </span>
+          }
+        />
         <ListRow
           wrap
           title={t('about.trustedTypes')}

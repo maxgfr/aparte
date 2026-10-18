@@ -4,7 +4,6 @@ import type { Page } from '@playwright/test'
 import { COMMIT_AUTHOR, COMMIT_MESSAGE } from '../src/core/sync/providers/github.ts'
 import { chat } from '../src/i18n/en/chat.ts'
 import { common } from '../src/i18n/en/common.ts'
-import { shell } from '../src/i18n/en/shell.ts'
 import { sync } from '../src/i18n/en/sync.ts'
 import { vault } from '../src/i18n/en/vault.ts'
 import {
@@ -12,7 +11,9 @@ import {
   ARGON2_WAIT,
   addProvider,
   attachPhoto,
+  createVaultWithKit,
   newChat,
+  openApp,
   send,
   settled,
   userMessages,
@@ -26,8 +27,9 @@ import { accessible } from './gates.ts'
 
 /*
  * End-to-end encrypted sync between two devices (two browser contexts) through a GitHub repository the test plays
- * (fixtures/github.ts): device A writes a conversation with a photo and syncs; device B, with no vault, joins from the
- * repository with the passphrase and the Secret Key, sees the conversation and the photo, renames it; A sees the new
+ * (fixtures/github.ts): device A writes a conversation with a photo, protects its vault with a passphrase from the
+ * settings and syncs; device B, opened for the first time, joins from the repository with the passphrase and the
+ * Secret Key in place of the vault it started with, sees the conversation and the photo, renames it; A sees the new
  * title. The repository and both devices' storage hold no plaintext: no message, no title, no key, no token, no GPS.
  */
 
@@ -48,19 +50,13 @@ async function go(page: Page, name: string): Promise<void> {
     .click()
 }
 
-/** Creates a vault with the generated passphrase, reads the Secret Key off the kit, confirms it. */
-async function createVaultWithKit(page: Page): Promise<{ passphrase: string; secretKey: string }> {
-  await page.goto('./')
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
-  const passphrase = await page.getByLabel(vault.generatedLabel, { exact: true }).inputValue()
-  await page.getByRole('button', { name: vault.create }).click()
-  await expect(page.getByRole('heading', { level: 1, name: vault.kitTitle })).toBeVisible(ARGON2_WAIT)
-  const secretKey = ((await page.locator('[data-key="secret-key"]').textContent()) ?? '').trim()
-  expect(secretKey).toMatch(/^A1(-[A-Z2-7]{5}){6}$/)
-  await page.getByLabel(vault.kitConfirm).check()
-  await page.getByRole('button', { name: vault.kitContinue }).click()
-  await expect(page.getByRole('navigation').getByRole('link', { name: chat.navChats }).first()).toBeVisible(ARGON2_WAIT)
-  return { passphrase, secretKey }
+/** Device B: the app opened for the first time, then "I already have a vault" from the sync screen. */
+async function openJoin(page: Page): Promise<void> {
+  await openApp(page)
+  await go(page, sync.navSync)
+  await expect(page.getByRole('heading', { level: 2, name: sync.needsPassphraseTitle })).toBeVisible()
+  await page.getByRole('link', { name: sync.welcomeJoin }).click()
+  await expect(page.getByRole('heading', { level: 1, name: sync.joinTitle })).toBeVisible()
 }
 
 async function fillGitHub(page: Page, github: GitHubMock): Promise<void> {
@@ -142,9 +138,7 @@ test('two devices sync a conversation and its photo through a GitHub repository'
   await gates.watch(contextB)
   await github.install(contextB)
   const b = await contextB.newPage()
-  await b.goto('./')
-  await b.getByRole('link', { name: sync.welcomeJoin }).click()
-  await expect(b.getByRole('heading', { level: 1, name: sync.joinTitle })).toBeVisible()
+  await openJoin(b)
   await accessible(b, 'join a vault')
   await fillGitHub(b, github)
   await b.getByRole('button', { name: sync.joinFind, exact: true }).click()
@@ -225,8 +219,7 @@ test('an exported archive carries the vault to a new device, and stays unreadabl
   const contextB = await browser.newContext({ baseURL, serviceWorkers: 'block' })
   await gates.watch(contextB)
   const b = await contextB.newPage()
-  await b.goto('./')
-  await b.getByRole('link', { name: sync.welcomeJoin }).click()
+  await openJoin(b)
   await b.getByRole('radio', { name: sync.joinArchive, exact: true }).check()
   await b
     .getByLabel(sync.joinArchivePick, { exact: true })

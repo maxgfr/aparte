@@ -12,19 +12,25 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { useLocation } from 'wouter'
+import { InvalidStateError } from '../core/contracts/crypto.ts'
 import type { CreateVaultInput, LockReason, UnlockCredential, Vault, VaultStatus } from '../core/contracts/vault.ts'
 import { useT } from '../i18n/react.tsx'
 import { Button } from '../ui/components/Button.tsx'
 import { EmptyState } from '../ui/components/EmptyState.tsx'
 import { clearCopiedSecret } from './clipboard.ts'
+import { navigate, parseHash } from './hashLocation.ts'
 import { lazyChunk, ScreenBoundary } from './lazyChunk.tsx'
 import { readPref, writePref } from './prefs.ts'
 import { paths } from './routes.ts'
 
 /*
  * The vault of this device, for the interface: one Vault per page (web/src/core/vault/vault.ts), its status as React
- * state, the Emergency Kit of a vault just created or recovered, the auto-lock wired to user activity and page
- * visibility, and the gate that shows the lock screen instead of the app whenever the vault is locked.
+ * state, the Emergency Kit of a vault just protected or recovered, the auto-lock wired to user activity and page
+ * visibility, and the gate that shows the lock screen instead of the app whenever a passphrase vault is locked.
+ *
+ * A device with no vault gets one at once, opened by a key this device keeps (protection `device`, spec/FORMAT.md
+ * section 17), and the app opens it at every launch with no prompt: the first launch lands in a chat. Protecting it
+ * with a passphrase is a choice in the settings (screens/Protection), after which the vault locks as before.
  *
  * Invariants:
  * - Nothing of the app renders while the vault is locked or unlocking: the gate replaces the whole shell, so no
@@ -40,6 +46,9 @@ import { paths } from './routes.ts'
  *   is read again by the others.
  * - The vault modules (and Argon2 with them) load in a chunk of their own, so the first paint never waits on them
  *   beyond the time IndexedDB takes to say whether a vault exists.
+ * - A `device` vault never shows the lock screen, never auto-locks and offers no Lock button: anyone who opens this
+ *   browser opens it, so a lock would protect nothing. When its device slot no longer opens, the gate says so and
+ *   offers the recovery key (if the vault has one) or a new, empty vault.
  */
 
 /**
@@ -61,7 +70,16 @@ interface VaultValue {
   readonly lastLock: LockReason | null
   /** A pending kit is being renewed after an unlock: nothing of the app may show yet. */
   readonly renewingKit: boolean
-  create(input: CreateVaultInput): Promise<void>
+  /** The device slot of this `device` vault did not open: the gate shows why instead of the app. */
+  readonly deviceFailed: boolean
+  /** Protects the `device` vault with a passphrase; the Emergency Kit follows. */
+  protect(input: CreateVaultInput): Promise<void>
+  /** Removes the passphrase protection after checking the passphrase: the vault opens with the device slot again. */
+  unprotect(passphrase: string): Promise<void>
+  /** Replaces a `device` vault whose device slot no longer opens with a new, empty one. */
+  reset(): Promise<void>
+  /** Tells the other pages of the app that the vault on this device changed (a vault joined over this one). */
+  announceChange(): void
   /** Unlocks, and shows the Emergency Kit again when the last one was never confirmed. */
   unlock(credential: UnlockCredential): Promise<void>
   /** Recovers with the recovery key; the new passphrase replaces the previous ones on this device. */
@@ -128,6 +146,12 @@ function pendingKit(
 }
 
 let opening: Promise<Vault> | null = null
+
+/**
+ * Whether this page opened at the bare address of the app, with no screen in the hash (the installed app's start,
+ * a typed address): a `device` vault then lands in a new chat rather than on the start screen. Read once, at load.
+ */
+let launchPending = typeof location !== 'undefined' && (location.hash === '' || location.hash === '#')
 
 /**
  * Opens this device's vault once per page, whatever React mounts twice (StrictMode). A failure is kept so every
@@ -197,20 +221,80 @@ export function VaultProvider({ children }: { readonly children: ReactNode }) {
       store?.dispose()
     }
   }, [])
+  const onFailed = useCallback(() => setFailed(true), [])
   if (failed) return <StorageFailed />
   // Until IndexedDB answers there is nothing that may be shown: the vault may be locked.
   if (opened === null) return null
-  return <OpenVault opened={opened}>{children}</OpenVault>
+  return (
+    <OpenVault opened={opened} onFailed={onFailed}>
+      {children}
+    </OpenVault>
+  )
 }
 
-function OpenVault({ opened, children }: { readonly opened: Opened; readonly children: ReactNode }) {
+function OpenVault({
+  opened,
+  onFailed,
+  children,
+}: {
+  readonly opened: Opened
+  readonly onFailed: () => void
+  readonly children: ReactNode
+}) {
   const { vault, store } = opened
   const status = useSyncExternalStore(store.subscribe, store.get, store.get)
   const [kit, setKit] = useState<PendingKit | null>(null)
   const [renewingKit, setRenewingKit] = useState(false)
   const [lastLock, setLastLock] = useState<LockReason | null>(null)
+  const [deviceFailed, setDeviceFailed] = useState(false)
   /** Posts to the other pages; set while the channel is open. */
   const post = useRef<(notice: Notice) => void>(() => {})
+  const creatingDevice = useRef(false)
+  const openingDevice = useRef(false)
+
+  // No vault on this device yet: one is made at once, opened by the device slot. A page that loses the race to another
+  // page reads that page's vault instead.
+  useEffect(() => {
+    if (status.state !== 'absent' || creatingDevice.current) return
+    creatingDevice.current = true
+    vault.createDevice().then(
+      () => {
+        creatingDevice.current = false
+        post.current({ type: 'changed' })
+        store.refresh()
+      },
+      (error: unknown) => {
+        creatingDevice.current = false
+        store.refresh()
+        if (!(error instanceof InvalidStateError)) onFailed()
+      },
+    )
+  }, [status.state, vault, store, onFailed])
+
+  // A `device` vault opens without a prompt, at load and after any lock.
+  useEffect(() => {
+    if (status.state !== 'locked' || status.protection !== 'device' || deviceFailed || openingDevice.current) return
+    openingDevice.current = true
+    vault.unlock({ kind: 'device' }).then(
+      () => {
+        openingDevice.current = false
+        store.refresh()
+      },
+      (error: unknown) => {
+        openingDevice.current = false
+        store.refresh()
+        // Refused while another operation holds the vault (a join replacing it): the status that follows decides.
+        if (!(error instanceof InvalidStateError)) setDeviceFailed(true)
+      },
+    )
+  }, [status.state, status.protection, deviceFailed, vault, store])
+
+  // A launch at the bare address of a `device` vault lands in a new chat.
+  useEffect(() => {
+    if (!launchPending || status.state !== 'unlocked') return
+    launchPending = false
+    if (status.protection === 'device' && parseHash(location.hash).path === '/') navigate(paths.chat, { replace: true })
+  }, [status.state, status.protection])
 
   useEffect(
     () =>
@@ -227,8 +311,10 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
 
   useEffect(() => {
     const notices = noticeChannel((notice) => {
-      if (notice.type === 'lock') vault.lock().then(store.refresh, store.refresh)
-      else if (notice.type === 'changed') vault.refresh().then(store.refresh, store.refresh)
+      // A `device` vault does not lock: the next unlock would need nothing.
+      if (notice.type === 'lock') {
+        if (vault.status().protection === 'passphrase') vault.lock().then(store.refresh, store.refresh)
+      } else if (notice.type === 'changed') vault.refresh().then(store.refresh, store.refresh)
       else setKit((shown) => (shown?.recoveryKey ? null : shown))
     })
     post.current = notices.post
@@ -270,13 +356,13 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
 
   useAutoLock(vault, status)
 
-  const create = useCallback(
+  const protect = useCallback(
     async (input: CreateVaultInput) => {
-      let created: Awaited<ReturnType<Vault['create']>>
+      let created: Awaited<ReturnType<Vault['protect']>>
       try {
-        created = await vault.create(input)
+        created = await vault.protect(input)
       } catch (error) {
-        // Refused because another page created a vault first: this page now shows it locked.
+        // Refused because another page protected the vault first: this page now shows it protected.
         store.refresh()
         throw error
       }
@@ -288,6 +374,32 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
     },
     [vault, store],
   )
+
+  const unprotect = useCallback(
+    async (passphrase: string) => {
+      try {
+        await vault.unprotect({ kind: 'passphrase', passphrase })
+      } finally {
+        store.refresh()
+      }
+      // A kit never confirmed names a recovery key that no longer exists.
+      writePref('kitPending', '')
+      post.current({ type: 'changed' })
+    },
+    [vault, store],
+  )
+
+  const reset = useCallback(async () => {
+    try {
+      await vault.reset()
+      setDeviceFailed(false)
+      post.current({ type: 'changed' })
+    } finally {
+      store.refresh()
+    }
+  }, [vault, store])
+
+  const announceChange = useCallback(() => post.current({ type: 'changed' }), [])
 
   const unlock = useCallback(
     async (credential: UnlockCredential) => {
@@ -354,8 +466,38 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
   }, [])
 
   const value = useMemo<VaultValue>(
-    () => ({ vault, status, kit, renewingKit, lastLock, create, unlock, recover, lock, dismissKit }),
-    [vault, status, kit, renewingKit, lastLock, create, unlock, recover, lock, dismissKit],
+    () => ({
+      vault,
+      status,
+      kit,
+      renewingKit,
+      lastLock,
+      deviceFailed,
+      protect,
+      unprotect,
+      reset,
+      announceChange,
+      unlock,
+      recover,
+      lock,
+      dismissKit,
+    }),
+    [
+      vault,
+      status,
+      kit,
+      renewingKit,
+      lastLock,
+      deviceFailed,
+      protect,
+      unprotect,
+      reset,
+      announceChange,
+      unlock,
+      recover,
+      lock,
+      dismissKit,
+    ],
   )
   return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>
 }
@@ -366,7 +508,8 @@ function OpenVault({ opened, children }: { readonly opened: Opened; readonly chi
  * once rather than waiting for a late timer (holds still defer it, as for any auto-lock).
  */
 function useAutoLock(vault: Vault, status: VaultStatus) {
-  const open = status.state === 'unlocked' || status.state === 'locking'
+  // A `device` vault never auto-locks (core/vault/vault.ts does not schedule it either).
+  const open = (status.state === 'unlocked' || status.state === 'locking') && status.protection === 'passphrase'
   useEffect(() => {
     if (!open) return
     let lastTouch = Date.now()
@@ -415,17 +558,23 @@ function StorageFailed() {
 const Unlock = lazyChunk(() => import('../screens/Unlock/index.tsx').then((m) => m.default))
 const Recovery = lazyChunk(() => import('../screens/Recovery/index.tsx').then((m) => m.default))
 const EmergencyKit = lazyChunk(() => import('../screens/EmergencyKit/index.tsx').then((m) => m.default))
+const DeviceFailed = lazyChunk(() => import('../screens/Unlock/DeviceFailed.tsx').then((m) => m.default))
 
 /**
- * Shows the lock screen (or the recovery screen) instead of `children` while the vault is locked or unlocking, and
- * the Emergency Kit instead of `children` until the user confirms it is kept.
+ * Shows the lock screen (or the recovery screen) instead of `children` while a passphrase vault is locked or
+ * unlocking, and the Emergency Kit instead of `children` until the user confirms it is kept. While the device's vault
+ * is being made or a `device` vault opens, nothing shows; when its device slot does not open, the reason does.
  */
 export function VaultGate({ children }: { readonly children: ReactNode }) {
-  const { status, kit, renewingKit } = useVault()
+  const { status, kit, renewingKit, deviceFailed } = useVault()
   const [location] = useLocation()
   let gate: ReactNode = null
+  if (status.state === 'absent') return null
   if (status.state === 'locked' || status.state === 'unlocking') {
-    gate = location === paths.recover ? <Recovery /> : <Unlock />
+    if (location === paths.recover) gate = <Recovery />
+    else if (status.protection === 'passphrase') gate = <Unlock />
+    else if (deviceFailed) gate = <DeviceFailed />
+    else return null
   } else if (kit !== null || renewingKit) {
     gate = <EmergencyKit />
   }

@@ -130,6 +130,63 @@ describe('meta', () => {
     expect(await meta.get('device-key')).toBeUndefined()
   })
 
+  test('refuses an extractable device slot key and a device slot of the wrong size', async () => {
+    const { db } = await fresh()
+    const meta = S.createLocalMeta(db)
+    const extractable = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'])
+    await expect(meta.put('device-slot-key', extractable)).rejects.toBeInstanceOf(InvalidInputError)
+    await expect(meta.put('device-slot', new Uint8Array(59))).rejects.toBeInstanceOf(InvalidInputError)
+    await expect(meta.put('device-slot', new Uint8Array(61))).rejects.toBeInstanceOf(InvalidInputError)
+    expect(await meta.get('device-slot-key')).toBeUndefined()
+    await meta.put('device-slot', new Uint8Array(60).fill(7))
+    expect(await meta.get('device-slot')).toEqual(new Uint8Array(60).fill(7))
+  })
+
+  test('change lands whole or not at all', async () => {
+    const { db } = await fresh()
+    const meta = S.createLocalMeta(db)
+    const slot = 'a'.repeat(26)
+    await meta.putKeyslot(slot, B.utf8('{}'))
+    await meta.put('device-slot', new Uint8Array(60))
+    // A bad value anywhere refuses the whole change before anything is written.
+    await expect(
+      meta.change({ put: { 'secret-key': new Uint8Array(3) }, remove: ['device-slot'], removeKeyslots: [slot] }),
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(await meta.get('device-slot')).toEqual(new Uint8Array(60))
+    expect((await meta.keyslots()).map((k) => k.slot)).toEqual([slot])
+
+    const other = 'b'.repeat(26)
+    await meta.change({
+      put: { 'secret-key': new Uint8Array(44) },
+      keyslots: [{ slot: other, bytes: B.utf8('{}') }],
+      remove: ['device-slot'],
+      removeKeyslots: [slot],
+    })
+    expect(await meta.get('device-slot')).toBeUndefined()
+    expect(await meta.get('secret-key')).toEqual(new Uint8Array(44))
+    expect((await meta.keyslots()).map((k) => k.slot)).toEqual([other])
+  })
+
+  test('replacing a vault goes ahead only over the vault and keyslots it expects, and empties every store', async () => {
+    const { db, store } = await fresh()
+    const meta = S.createLocalMeta(db)
+    expect(await meta.initVault({ entries: { fmt: 'aparte/1\n', vault: 'a'.repeat(26) }, keyslots: [] })).toBe(true)
+    await store.put('draft', 'a', new Uint8Array(1))
+    const next = { entries: { fmt: 'aparte/1\n', vault: 'b'.repeat(26) }, keyslots: [] }
+    expect(await meta.initVault({ ...next, replace: { vault: 'c'.repeat(26), keyslots: [] } })).toBe(false)
+    expect(await meta.initVault({ ...next, replace: { vault: 'a'.repeat(26), keyslots: ['d'.repeat(26)] } })).toBe(
+      false,
+    )
+    // Without `replace`, a vault that exists is never overwritten.
+    expect(await meta.initVault(next)).toBe(false)
+    expect(await meta.get('vault')).toBe('a'.repeat(26))
+    expect(await store.list('draft')).toEqual(['a'])
+
+    expect(await meta.initVault({ ...next, replace: { vault: 'a'.repeat(26), keyslots: [] } })).toBe(true)
+    expect(await meta.get('vault')).toBe('b'.repeat(26))
+    expect(await store.list('draft')).toEqual([])
+  })
+
   test('a closed database rejects every call', async () => {
     const { db } = await fresh()
     const meta = S.createLocalMeta(db)

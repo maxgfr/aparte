@@ -9,9 +9,9 @@ import { accessible } from './gates.ts'
 
 /*
  * The French and German interfaces on every project (phone and desktop widths): the main screens reached through
- * `?locale=`, each one accessible and with no control, tab or heading wider than its box, then the language picker
- * of About, which switches in place and is remembered across a reload. Controls are found by their translated name,
- * read from the catalog under test.
+ * `?locale=`, from the first chat and the passphrase protection to a chat with a mocked answer, each one accessible
+ * and with no control, tab or heading wider than its box, then the language picker of About, which switches in place
+ * and is remembered across a reload. Controls are found by their translated name, read from the catalog under test.
  *
  * I18N_SHOTS=<folder> also saves a screenshot of each screen there (Chromium projects), for a look at the layout by eye.
  */
@@ -89,16 +89,28 @@ for (const locale of ['fr', 'de'] as const) {
     const t = await translator(locale)
     const key = `sk-ant-api03-i18n-${locale}`
 
-    // Welcome and onboarding, under the query override.
+    // The first launch, under the query override, lands in a chat; then the start screen.
     await page.goto(`./?locale=${locale}`)
-    await expect(h1(page, t('shell.welcomeTitle'))).toBeVisible()
+    await expect(page.getByRole('textbox', { name: t('chat.composerLabel'), exact: true })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}-`))
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
+    await expect(page.getByText(t('vault.hintBody'))).toBeVisible()
+    await check(page, info, locale, 'first chat')
+    await open(page, '/', t('shell.welcomeTitle'))
     await check(page, info, locale, 'welcome')
-    await page.getByRole('link', { name: t('shell.welcomeCreateVault') }).click()
+
+    // Passphrase protection, from the settings.
+    await open(page, '/protection', t('vault.protectionTitle'))
+    await check(page, info, locale, 'protection')
+    await open(page, '/sync', t('sync.title'))
+    await expect(page.getByRole('heading', { level: 2, name: t('sync.needsPassphraseTitle') })).toBeVisible()
+    await check(page, info, locale, 'sync without a passphrase')
+    await open(page, '/protection', t('vault.protectionTitle'))
+    await page.getByRole('link', { name: t('vault.protectAction'), exact: true }).click()
+    await expect(h1(page, t('vault.protectTitle'))).toBeVisible()
     const passphrase = await page.getByLabel(t('vault.generatedLabel'), { exact: true }).inputValue()
-    await check(page, info, locale, 'onboarding')
-    await page.getByRole('button', { name: t('vault.create'), exact: true }).click()
+    await check(page, info, locale, 'protect')
+    await page.getByRole('button', { name: t('vault.protect'), exact: true }).click()
     await expect(h1(page, t('vault.kitTitle'))).toBeVisible(ARGON2_WAIT)
     await check(page, info, locale, 'kit')
     await page.getByLabel(t('vault.kitConfirm')).check()
@@ -174,6 +186,8 @@ for (const locale of ['fr', 'de'] as const) {
     await check(page, info, locale, 'knowledge')
     await open(page, '/mcp', t('mcp.title'))
     await check(page, info, locale, 'mcp')
+    await open(page, '/protection', t('vault.protectionTitle'))
+    await check(page, info, locale, 'protection with a passphrase')
     await open(page, '/about', t('about.title'))
     await check(page, info, locale, 'about')
   })

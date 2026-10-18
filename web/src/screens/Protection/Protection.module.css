@@ -1,0 +1,61 @@
+.stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  max-width: 40rem;
+}
+
+.prose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  max-width: 65ch;
+  color: var(--ink-2);
+}
+
+/* The status reads as a fact: a device vault in the warning tone, a passphrase vault in the success one. */
+.state {
+  font-size: var(--text-footnote);
+  font-weight: 600;
+  text-align: end;
+}
+
+.state[data-state="device"] {
+  color: var(--warning);
+}
+
+.state[data-state="passphrase"] {
+  color: var(--success);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-title);
+  font-weight: 700;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  max-width: 28rem;
+}
+
+.note {
+  max-width: 65ch;
+  padding: var(--space-3) var(--space-4);
+  border-inline-start: 3px solid var(--warning);
+  border-radius: var(--radius-surface);
+  background: var(--warning-soft);
+}

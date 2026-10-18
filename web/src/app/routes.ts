@@ -2,7 +2,10 @@
 export const paths = {
   welcome: '/',
   about: '/about',
-  createVault: '/vault/new',
+  /** Whether a passphrase protects the vault, and the actions that add or remove it. */
+  protection: '/protection',
+  /** Protect the vault with a passphrase, the Secret Key and a recovery key. */
+  protect: '/vault/protect',
   recover: '/recover',
   /** A new chat (nothing is stored until its first message). */
   chat: '/chat',
@@ -17,7 +20,7 @@ export const paths = {
   provider: '/providers/:id',
   /** Sync status and destinations. */
   sync: '/sync',
-  /** A device without a vault takes one from its sync store. */
+  /** This device takes the vault another device syncs, in place of the one it started with. */
   syncJoin: '/sync/join',
   /** The MCP servers. */
   mcp: '/mcp',

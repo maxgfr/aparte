@@ -13,7 +13,9 @@ export const transfer = {
   backupImportLabel: 'Merge a backup into this vault',
   backupImported: 'Backup merged. Anything it held that this vault lacked is back.',
   backupFailed: 'The backup did not go through: {message}',
-  backupNewDevice: 'On a device without a vault, choose “I already have a vault” on the start screen, then this file.',
+  backupNewDevice: 'On another device, choose “I already have a vault” on the Sync screen, then this file.',
+  backupNeedsPassphrase:
+    'A backup opens with your passphrase and the Secret Key of your Emergency Kit: protect the vault with a passphrase first.',
 
   // A backup opened with the app (file_handlers)
   launchTitle: 'A backup file was opened',

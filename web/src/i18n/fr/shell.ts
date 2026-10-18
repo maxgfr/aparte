@@ -21,6 +21,7 @@ export const shell = {
   moreStats: 'Utilisation',
   moreStatsHint: 'Jetons et coût par fournisseur et par modèle, calculés sur cet appareil.',
   moreApp: 'Aparté',
+  moreProtection: 'Protection par phrase de passe',
   moreAbout: 'À propos de cette version',
   updateReady: 'Une nouvelle version d’Aparté est prête.',
   updateApply: 'Mettre à jour',
@@ -31,7 +32,6 @@ export const shell = {
     'Aparté vous permet de discuter avec les modèles d’IA de votre choix, entièrement dans ce navigateur : les conversations sont chiffrées sur cet appareil et synchronisées de bout en bout, sans serveur à nous entre les deux.',
   welcomePreview:
     'Vos appareils se synchronisent de bout en bout via un stockage qui vous appartient : un dépôt GitHub, un bucket, un dossier ou une archive.',
-  welcomeCreateVault: 'Créer votre coffre chiffré',
   welcomeComingNext: 'À venir',
   welcomeLearnMore: 'À propos de cette version',
   notFoundTitle: 'Rien ici',

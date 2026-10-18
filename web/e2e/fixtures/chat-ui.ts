@@ -53,18 +53,69 @@ async function unlocked(page: Page): Promise<void> {
   await expect(control(page, chat.navNewChat).first()).toBeVisible(ARGON2_WAIT)
 }
 
-/** Creates a vault with the generated passphrase, confirms the kit and returns the passphrase. */
-export async function createVault(page: Page): Promise<string> {
+const escapeRe = (text: string) => text.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&')
+
+/**
+ * Opens the app at its bare address on a device with no vault: the first launch makes a vault opened by this device's
+ * key alone and lands in a new chat, with no step before it.
+ */
+export async function openApp(page: Page): Promise<void> {
   await page.goto('./')
-  await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
+  await expect(page.getByRole('textbox', { name: chat.composerLabel, exact: true })).toBeVisible(ARGON2_WAIT)
+  await expect(lockHeading(page)).toHaveCount(0)
+}
+
+/** Opens the protect screen the way a user does: the More tab, its "Passphrase protection" row, then the action. */
+export async function openProtect(page: Page): Promise<void> {
+  await navigate(page, shell.navMore)
+  await page.getByRole('link', { name: new RegExp(`^${escapeRe(shell.moreProtection)}`) }).click()
+  await expect(page.getByRole('heading', { level: 1, name: vault.protectionTitle })).toBeVisible()
+  await page.getByRole('link', { name: vault.protectAction, exact: true }).click()
+  await expect(page.getByRole('heading', { level: 1, name: vault.protectTitle })).toBeVisible()
+}
+
+/** The keys an Emergency Kit shows, read off the screen. */
+export interface KitTexts {
+  readonly passphrase: string
+  readonly secretKey: string
+  readonly recoveryKey: string
+}
+
+/**
+ * From the settings, protects the open vault with the generated passphrase; the Emergency Kit is left on screen and
+ * its texts are returned.
+ */
+export async function protectFromSettings(page: Page): Promise<KitTexts> {
+  await openProtect(page)
   const passphrase = await page.getByLabel(vault.generatedLabel, { exact: true }).inputValue()
-  await page.getByRole('button', { name: vault.create }).click()
+  await page.getByRole('button', { name: vault.protect, exact: true }).click()
   await expect(page.getByRole('heading', { level: 1, name: vault.kitTitle })).toBeVisible(ARGON2_WAIT)
+  const secretKey = ((await page.locator('[data-key="secret-key"]').textContent()) ?? '').trim()
+  const recoveryKey = ((await page.locator('[data-key="recovery-key"]').textContent()) ?? '').trim()
+  return { passphrase, secretKey, recoveryKey }
+}
+
+/** Confirms the Emergency Kit on screen and waits for the unlocked app. */
+export async function confirmKit(page: Page): Promise<void> {
   await page.getByLabel(vault.kitConfirm).check()
   await page.getByRole('button', { name: vault.kitContinue }).click()
   await unlocked(page)
-  return passphrase
+}
+
+/**
+ * A vault a passphrase protects, as a user makes one: the app opened for the first time, then the passphrase added
+ * from the settings with the generated words, the kit confirmed. Returns the passphrase and the kit texts.
+ */
+export async function createVaultWithKit(page: Page): Promise<KitTexts> {
+  await openApp(page)
+  const kit = await protectFromSettings(page)
+  await confirmKit(page)
+  return kit
+}
+
+/** As createVaultWithKit; returns the passphrase. */
+export async function createVault(page: Page): Promise<string> {
+  return (await createVaultWithKit(page)).passphrase
 }
 
 export async function lock(page: Page): Promise<void> {

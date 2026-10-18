@@ -8,6 +8,8 @@ export const about = {
   modeProduction: 'Production',
   modeDevelopment: 'Development',
   protectionTitle: 'Protections',
+  vaultProtection: 'Vault',
+  vaultProtectionHint: 'What opens the vault on this device.',
   trustedTypes: 'Trusted Types',
   trustedTypesEnforced: 'Enforced',
   trustedTypesAvailable: 'Available, not enforced',

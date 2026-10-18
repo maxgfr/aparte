@@ -2,13 +2,15 @@ import type { Page } from '@playwright/test'
 import { common } from '../src/i18n/en/common.ts'
 import { shell } from '../src/i18n/en/shell.ts'
 import { vault } from '../src/i18n/en/vault.ts'
+import { openApp, openProtect } from './fixtures/chat-ui.ts'
 import { accessible, expect, test } from './gates.ts'
 
 /*
- * The vault from the user's side, on every project: create (generated passphrase), the Emergency Kit, lock and
- * unlock, a wrong passphrase, recovery with the recovery key, auto-lock, and the custom passphrase rules. The app
- * runs with its production Argon2 parameters (m = 64 MiB, t = 3): every create or unlock below costs a real run, so
- * the waits are generous.
+ * The vault a passphrase protects, from the user's side, on every project: protecting the vault from the settings
+ * (generated passphrase), the Emergency Kit, lock and unlock, a wrong passphrase, recovery with the recovery key,
+ * auto-lock, and the custom passphrase rules. The app runs with its production Argon2 parameters (m = 64 MiB, t = 3):
+ * every protect or unlock below costs a real run, so the waits are generous. The vault before a passphrase protects
+ * it is e2e/device.spec.ts.
  */
 
 const ARGON2_WAIT = { timeout: 60_000 }
@@ -19,19 +21,20 @@ const RECOVERY_KEY = /^[A-Z2-7]{4}(-[A-Z2-7]{4}){12}$/
 const welcomeHeading = (page: Page) => page.getByRole('heading', { level: 1, name: shell.welcomeTitle })
 const lockHeading = (page: Page) => page.getByRole('heading', { level: 1, name: common.appName, exact: true })
 
-/** Creates a vault with the generated passphrase; returns it and the kit texts, the kit still on screen. */
+/**
+ * Opens the app for the first time and protects its vault from the settings with the generated passphrase; returns
+ * it and the kit texts, the kit still on screen.
+ */
 async function createVault(page: Page) {
-  await page.goto('./')
-  await expect(welcomeHeading(page)).toBeVisible()
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
-  await expect(page.getByRole('heading', { level: 1, name: vault.createTitle })).toBeVisible()
+  await openApp(page)
+  await openProtect(page)
   const field = page.getByLabel(vault.generatedLabel, { exact: true })
   const first = await field.inputValue()
   await page.getByRole('button', { name: vault.regenerate }).click()
   await expect(field).not.toHaveValue(first)
   const passphrase = await field.inputValue()
   expect(passphrase.length).toBeGreaterThan(12)
-  await page.getByRole('button', { name: vault.create }).click()
+  await page.getByRole('button', { name: vault.protect }).click()
   await expect(page.getByRole('heading', { level: 1, name: vault.kitTitle })).toBeVisible(ARGON2_WAIT)
   const secretKey = (await page.locator('[data-key="secret-key"]').textContent()) ?? ''
   const recoveryKey = (await page.locator('[data-key="recovery-key"]').textContent()) ?? ''
@@ -128,14 +131,13 @@ test('the vault locks itself after five idle minutes', async ({ page }) => {
 })
 
 test('a custom passphrase must be strong and typed twice the same', async ({ page }) => {
-  await page.goto('./')
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
-  await expect(page.getByRole('heading', { level: 1, name: vault.createTitle })).toBeVisible()
-  await accessible(page, 'create vault')
+  await openApp(page)
+  await openProtect(page)
+  await accessible(page, 'protect vault')
   await page.getByLabel(vault.choiceCustom).check()
   const field = page.getByLabel(vault.generatedLabel, { exact: true })
   const confirm = page.getByLabel(vault.confirmLabel, { exact: true })
-  const create = page.getByRole('button', { name: vault.create })
+  const create = page.getByRole('button', { name: vault.protect })
 
   await field.fill('password')
   await expect(page.getByText(vault.strengthTooWeak)).toBeVisible()
@@ -151,5 +153,5 @@ test('a custom passphrase must be strong and typed twice the same', async ({ pag
   await confirm.fill(strong)
   await expect(page.getByText(vault.confirmMismatch)).toHaveCount(0)
   await expect(create).toBeEnabled()
-  await accessible(page, 'create vault, custom passphrase')
+  await accessible(page, 'protect vault, custom passphrase')
 })

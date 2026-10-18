@@ -35,8 +35,9 @@ import { useVault } from './vault.tsx'
  * - Destination settings, credentials included, are local records of purpose `sync-credential` (encrypted, never
  *   synced, never in a document). Each device is set up on its own.
  * - Every request a destination makes goes through web/src/security/net.ts with purpose `sync`.
- * - Sync runs only while the vault is unlocked: a round holds the vault lock while it writes, and locking stops the
- *   scheduler and closes the engine. A folder handle is kept in memory only, for the page's lifetime: nothing that
+ * - Sync runs only while the vault is unlocked and a passphrase protects it: another device cannot open a `device`
+ *   vault (spec/FORMAT.md section 17), so it has no keyslot to send. A round holds the vault lock while it writes, and
+ *   locking stops the scheduler and closes the engine. A folder handle is kept in memory only, for the page's lifetime: nothing that
  *   could be read stays on the device.
  * - The sync modules load in chunks of their own, after the session opened.
  */
@@ -291,7 +292,8 @@ export function useSync(): SyncValue {
 
 /** Runs sync while the chat session is open. */
 export function SyncProvider({ children }: { readonly children: ReactNode }) {
-  const { vault } = useVault()
+  const { vault, status: vaultStatus } = useVault()
+  const protectedByPassphrase = vaultStatus.protection === 'passphrase'
   const session = useSession()
   const workspace = session?.workspace ?? null
   const [runtime, setRuntime] = useState<SyncRuntime | null>(null)
@@ -301,7 +303,7 @@ export function SyncProvider({ children }: { readonly children: ReactNode }) {
 
   useEffect(() => {
     const current = sessionRef.current
-    if (workspace === null || current === null) {
+    if (workspace === null || current === null || !protectedByPassphrase) {
       setRuntime(null)
       return
     }
@@ -328,7 +330,7 @@ export function SyncProvider({ children }: { readonly children: ReactNode }) {
       unregister()
       opened?.close()
     }
-  }, [vault, workspace])
+  }, [vault, workspace, protectedByPassphrase])
 
   const subscribe = useCallback(
     (fn: () => void) => (runtime === null ? () => undefined : runtime.engine.subscribe(fn)),
@@ -452,20 +454,32 @@ export type JoinSource =
   | { readonly kind: 'archive'; readonly bytes: Uint8Array }
 
 /**
- * Reads the vault a store holds and makes this device hold it, locked (Vault.join). The destination (or the archive)
- * is kept in this page's memory until the first unlock, which stores it encrypted and syncs.
+ * Reads the vault a store holds and makes this device hold it, locked (Vault.join), in place of the `device` vault
+ * this device started with: that vault and everything in it are deleted. The store is read first, so a lookup that
+ * fails changes nothing. The destination (or the archive) is kept in this page's memory until the first unlock,
+ * which stores it encrypted and syncs.
  */
 export async function joinFromStore(vault: Vault, source: JoinSource): Promise<void> {
   const [{ readStoredVault }, providers] = await Promise.all([import('../core/sync/join.ts'), loadProviders()])
   if (source.kind === 'github') {
     const store = providers.githubStore({ ...source.config, http })
     const stored = await readStoredVault(store)
-    await vault.join(stored)
     pendingJoin = { kind: 'destination', config: { kind: 'github', ...source.config } }
+    await joinStored(vault, stored)
     return
   }
   const entries = await providers.readZip(source.bytes)
   const stored = await readStoredVault(providers.zipStore(entries))
-  await vault.join(stored)
   pendingJoin = { kind: 'archive', entries }
+  await joinStored(vault, stored)
+}
+
+/** Joins `stored`; the pending destination goes if the vault would not take it. */
+async function joinStored(vault: Vault, stored: Parameters<Vault['join']>[0]): Promise<void> {
+  try {
+    await vault.join(stored, { replaceDevice: true })
+  } catch (error) {
+    pendingJoin = null
+    throw error
+  }
 }

@@ -45,6 +45,7 @@ import { IconButton } from '../../ui/components/IconButton.tsx'
 import { AttachButton } from '../../ui/knowledge/AttachButton.tsx'
 import { ResearchButton, ResearchProgressPanel, useResearchProgress } from '../../ui/research/Research.tsx'
 import { QuickRepliesBar, RoleplayButton, useRoleplay } from '../../ui/roleplay/RoleplayButton.tsx'
+import { ProtectHint } from '../../ui/shell/ProtectHint.tsx'
 
 /*
  * The chat screen: one conversation's active branch, the answer streaming into it, and the composer. `/chat` is a new
@@ -668,6 +669,7 @@ function ChatView({ id }: { id: Id | null }) {
                 {t('chat.noProviderAction')}
               </Link>
             )}
+            <ProtectHint />
           </div>
         )}
         {hidden > 0 && (

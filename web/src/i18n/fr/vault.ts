@@ -7,9 +7,29 @@ export const vault = {
   storageFailedBody:
     'Aparté n’a pas pu ouvrir son stockage dans ce navigateur, rien ne peut donc être conservé sur cet appareil. Une fenêtre de navigation privée peut le bloquer : essayez une fenêtre classique, puis rechargez la page.',
 
-  createTitle: 'Créez votre coffre',
-  createLead:
-    'Tout ce qu’Aparté conserve est chiffré sur cet appareil, avec une clé que seule votre phrase de passe ouvre. Il n’y a ni compte ni lien de réinitialisation.',
+  protectionTitle: 'Protection par phrase de passe',
+  protectionDevice: 'Non protégé par une phrase de passe',
+  protectionPassphrase: 'Protégé par une phrase de passe',
+  protectionDeviceBody:
+    'Vos conversations sont chiffrées sur cet appareil avec une clé que le navigateur conserve et refuse d’exporter : une copie du disque ou une sauvegarde ne contient donc que du texte chiffré. Mais quiconque ouvre ce navigateur ouvre Aparté, et un autre site servi depuis la même origine pourrait utiliser cette clé pour lire vos données.',
+  protectionDeviceFix:
+    'Une phrase de passe comble ces deux failles : le coffre se verrouille alors après quelques minutes sans activité et ne s’ouvre qu’avec votre phrase de passe. La synchronisation et le passage du coffre sur un autre appareil en ont besoin.',
+  protectionPassphraseBody:
+    'Seule votre phrase de passe ouvre le coffre, avec la clé secrète de votre kit d’urgence sur un nouvel appareil. Il se verrouille automatiquement après cinq minutes sans activité.',
+  protectAction: 'Protéger par une phrase de passe',
+  unprotectTitle: 'Retirer la protection par phrase de passe',
+  unprotectBody:
+    'Le coffre s’ouvre alors sur cet appareil sans rien demander et ne se verrouille plus : quiconque utilise ce navigateur, ainsi qu’un autre site de la même origine, pourrait le lire. Votre phrase de passe, votre clé secrète et votre clé de récupération ne l’ouvrent plus ici.',
+  unprotectSyncFirst:
+    'Cet appareil se synchronise. Retirez d’abord ses destinations de synchronisation : la synchronisation exige la protection par phrase de passe.',
+  unprotect: 'Retirer la protection',
+  unprotecting: 'Retrait de la protection…',
+  unprotectFailed: 'La protection n’a pas pu être retirée. Rien n’a été modifié : réessayez.',
+  unprotected: 'Protection par phrase de passe retirée. Le coffre s’ouvre sur cet appareil sans rien demander.',
+
+  protectTitle: 'Protéger par une phrase de passe',
+  protectLead:
+    'Avec votre phrase de passe et la clé secrète du kit d’urgence qui suit, le coffre se verrouille après quelques minutes sans activité et ne s’ouvre que pour vous, sur cet appareil comme sur les autres. Il n’y a ni compte ni lien de réinitialisation.',
   choiceLabel: 'Phrase de passe',
   choiceGenerated: 'En générer une',
   choiceCustom: 'Utiliser la mienne',
@@ -35,9 +55,9 @@ export const vault = {
   strength3: 'Solide',
   strength4: 'Très solide',
   strengthTooWeak: 'Trop facile à deviner : ajoutez des mots ou rendez-la moins prévisible.',
-  create: 'Créer le coffre',
-  creating: 'Création de votre coffre. Cela prend quelques secondes…',
-  createFailed: 'Le coffre n’a pas pu être créé. Rien n’a été enregistré : réessayez.',
+  protect: 'Protéger le coffre',
+  protecting: 'Protection de votre coffre. Cela prend quelques secondes…',
+  protectFailed: 'La phrase de passe n’a pas pu être définie. Rien n’a été modifié : réessayez.',
 
   kitTitle: 'Votre kit d’urgence',
   kitLead:
@@ -92,6 +112,17 @@ export const vault = {
 
   homeUnlocked:
     'Votre coffre est ouvert sur cet appareil. Il se verrouille automatiquement après quelques minutes sans activité.',
+  homeDevice:
+    'Vos conversations sont chiffrées sur cet appareil et s’ouvrent sans rien demander. Aucune phrase de passe ne les protège encore.',
+  hintBody:
+    'Quiconque ouvre ce navigateur peut lire ces conversations. Ajoutez une phrase de passe quand vous voulez les verrouiller.',
+  hintDismiss: 'Masquer',
+
+  deviceFailedLead:
+    'Cet appareil ne peut plus ouvrir son coffre : la clé qu’il conservait pour lui est absente ou endommagée, par exemple après un effacement partiel des données du site. Aucune phrase de passe ne protège ce coffre, il n’y a donc pas d’autre moyen d’y entrer sur cet appareil.',
+  deviceFailedConfirm: 'Je comprends que ce que contenait cet appareil sera supprimé',
+  deviceFailedReset: 'Repartir avec un coffre vide',
+  deviceFailedResetFailed: 'Le coffre n’a pas pu être remplacé. Rien n’a été modifié : rechargez la page et réessayez.',
   lock: 'Verrouiller',
   lockDeferred: 'Verrouillage une fois le travail en cours terminé…',
 } as const satisfies Shape<typeof source>

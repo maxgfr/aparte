@@ -3,7 +3,16 @@ import { common } from '../src/i18n/en/common.ts'
 import { shell } from '../src/i18n/en/shell.ts'
 import { vault } from '../src/i18n/en/vault.ts'
 import { REFUSAL } from '../src/security/frame.ts'
-import { ARGON2_WAIT, createVault, lock, unlock } from './fixtures/chat-ui.ts'
+import {
+  ARGON2_WAIT,
+  confirmKit,
+  createVault,
+  lock,
+  openApp,
+  openProtect,
+  protectFromSettings,
+  unlock,
+} from './fixtures/chat-ui.ts'
 import { dumpStorage, plaintextHits } from './fixtures/storage.ts'
 import { expect, type Gates, test } from './gates.ts'
 
@@ -14,6 +23,9 @@ import { expect, type Gates, test } from './gates.ts'
  * (docs/security-model.md, "Shared origin"):
  *
  * - what it reads from the app's storage is ciphertext;
+ * - while no passphrase protects the vault, it can use the device slot key to unwrap the master key (documented, not
+ *   defended: the key cannot be exported, and the passphrase protection removes it); once a passphrase protects the
+ *   vault it finds no such key, and a device slot it plants opens nothing;
  * - what it plants in the app's precache is never served;
  * - a window it opens on the app is cut off from it once the service worker controls the app (COOP), even when it
  *   sets the window's opener to null;
@@ -47,8 +59,9 @@ async function siblingPage(context: BrowserContext, origin: string): Promise<Pag
   return page
 }
 
+/** The start screen, named in the hash: the bare address of a vault no passphrase protects opens a new chat. */
 async function openWelcome(page: Page) {
-  await page.goto('./')
+  await page.goto('./#/')
   await expect(page.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
 }
 
@@ -177,7 +190,7 @@ test('a window a sibling page opens on the app is cut off from it, even with its
     // Disowning keeps the handle and hides the opener from the app's own check: COOP is what has to cut it.
     if (w) w.opener = null
     ;(window as unknown as { opened: Window | null }).opened = w
-  }, `${origin}${BASE}`)
+  }, `${origin}${BASE}#/`)
   const popup = await opened
   // The app runs in the popup: served by its worker with Cross-Origin-Opener-Policy, it is in a context of its own.
   await expect(popup.getByRole('heading', { level: 1, name: shell.welcomeTitle })).toBeVisible()
@@ -341,10 +354,10 @@ test('a pending-kit marker a sibling page plants does not retire the recovery ke
 
 test('a kit left unconfirmed is renewed at the next unlock', async ({ page, context, baseURL }) => {
   test.setTimeout(180_000)
-  await page.goto('./')
-  await page.getByRole('link', { name: shell.welcomeCreateVault }).click()
+  await openApp(page)
+  await openProtect(page)
   const passphrase = await page.getByLabel(vault.generatedLabel, { exact: true }).inputValue()
-  await page.getByRole('button', { name: vault.create }).click()
+  await page.getByRole('button', { name: vault.protect }).click()
   await expect(page.getByRole('heading', { level: 1, name: vault.kitTitle })).toBeVisible(ARGON2_WAIT)
   const sibling = await siblingPage(context, new URL(baseURL ?? '').origin)
   const before = await keyslots(sibling)
@@ -359,4 +372,119 @@ test('a kit left unconfirmed is renewed at the next unlock', async ({ page, cont
   const after = await keyslots(sibling)
   expect(after.slots).toHaveLength(2)
   expect(after.slots.filter((s) => before.slots.includes(s))).toHaveLength(1)
+})
+
+/**
+ * What the sibling page gets from the device slot of the app's `meta` store (spec/FORMAT.md section 17): whether it is
+ * there, whether its key can be exported, and the length of what the key unwraps (the master key), or null.
+ */
+function useDeviceSlot(sibling: Page): Promise<{ found: boolean; exportable: boolean; unwrapped: number | null }> {
+  return sibling.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open('aparte-v1')
+      open.onerror = () => reject(open.error)
+      open.onsuccess = () => resolve(open.result)
+    })
+    const read = (key: string) =>
+      new Promise<unknown>((resolve, reject) => {
+        const r = db.transaction('meta', 'readonly').objectStore('meta').get(key)
+        r.onsuccess = () => resolve(r.result)
+        r.onerror = () => reject(r.error)
+      })
+    try {
+      const [vault, slot, key] = [await read('vault'), await read('device-slot'), await read('device-slot-key')]
+      if (!(key instanceof CryptoKey) || !(slot instanceof Uint8Array)) {
+        return { found: false, exportable: false, unwrapped: null }
+      }
+      const exportable = await crypto.subtle.exportKey('raw', key).then(
+        () => true,
+        () => false,
+      )
+      const aad = new TextEncoder().encode(`aparte/1|device-slot|${String(vault)}`)
+      const mk = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: slot.slice(0, 12), additionalData: aad },
+        key,
+        slot.slice(12),
+      )
+      return { found: true, exportable, unwrapped: mk.byteLength }
+    } finally {
+      db.close()
+    }
+  })
+}
+
+/** Writes, from the sibling page, a device slot of its own (its key, a master key it chose) for the app's vault. */
+function plantDeviceSlot(sibling: Page): Promise<void> {
+  return sibling.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open('aparte-v1')
+      open.onerror = () => reject(open.error)
+      open.onsuccess = () => resolve(open.result)
+    })
+    try {
+      const vault = await new Promise<unknown>((resolve, reject) => {
+        const r = db.transaction('meta', 'readonly').objectStore('meta').get('vault')
+        r.onsuccess = () => resolve(r.result)
+        r.onerror = () => reject(r.error)
+      })
+      const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+      const iv = crypto.getRandomValues(new Uint8Array(12))
+      const aad = new TextEncoder().encode(`aparte/1|device-slot|${String(vault)}`)
+      const sealed = new Uint8Array(
+        await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv, additionalData: aad },
+          key,
+          crypto.getRandomValues(new Uint8Array(32)),
+        ),
+      )
+      const slot = new Uint8Array(60)
+      slot.set(iv)
+      slot.set(sealed, 12)
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('meta', 'readwrite')
+        tx.objectStore('meta').put(slot, 'device-slot')
+        tx.objectStore('meta').put(key, 'device-slot-key')
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+      })
+    } finally {
+      db.close()
+    }
+  })
+}
+
+test('without a passphrase, a sibling page can use the device slot key to unwrap the master key, never export it', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  test.setTimeout(120_000)
+  await openApp(page)
+  const sibling = await siblingPage(context, new URL(baseURL ?? '').origin)
+  // The gap docs/security-model.md states for a vault no passphrase protects: the key is usable from any page of the
+  // origin. What rests on the disk is still ciphertext and a key object, never the key's bytes.
+  expect(await useDeviceSlot(sibling)).toEqual({ found: true, exportable: false, unwrapped: 32 })
+})
+
+test('with a passphrase, a sibling page finds no device slot, and one it plants opens nothing', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  test.setTimeout(180_000)
+  await openApp(page)
+  const { passphrase } = await protectFromSettings(page)
+  await confirmKit(page)
+  const sibling = await siblingPage(context, new URL(baseURL ?? '').origin)
+  expect(await useDeviceSlot(sibling)).toEqual({ found: false, exportable: false, unwrapped: null })
+
+  // A device slot the sibling makes for the app's vault would open the app without the passphrase, to a master key
+  // the sibling knows, if the app used it: it does not while a passphrase slot exists, and the next unlock deletes it.
+  await plantDeviceSlot(sibling)
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1, name: common.appName, exact: true })).toBeVisible()
+  await expect(page.getByLabel(vault.passphraseLabel, { exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation')).toHaveCount(0)
+  await unlock(page, passphrase)
+  expect(await useDeviceSlot(sibling)).toEqual({ found: false, exportable: false, unwrapped: null })
 })

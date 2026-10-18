@@ -16,6 +16,7 @@ import {
   content,
   createVault,
   newChat,
+  openApp,
   previousVersion,
   send,
   settled,
@@ -29,8 +30,8 @@ import { accessible } from './gates.ts'
 
 /*
  * Import and export from the user's side: one conversation saved as JSON, Markdown and a self-contained web page,
- * and its JSON imported back; the encrypted `.aparte` backup carrying a vault, photo included, to a device with no
- * vault; and a ChatGPT export imported with its branches.
+ * and its JSON imported back; the encrypted `.aparte` backup carrying a vault, photo included, to a device opened for
+ * the first time, in place of the vault it started with; and a ChatGPT export imported with its branches.
  */
 
 test.use({ netPurposes: ['provider'] })
@@ -141,7 +142,8 @@ test('the encrypted backup carries the vault, photo included, to a device withou
   const contextB = await browser.newContext({ baseURL, serviceWorkers: 'block' })
   await gates.watch(contextB)
   const b = await contextB.newPage()
-  await b.goto('./')
+  await openApp(b)
+  await go(b, sync.navSync)
   await b.getByRole('link', { name: sync.welcomeJoin }).click()
   await b.getByRole('radio', { name: sync.joinArchive, exact: true }).check()
   await b

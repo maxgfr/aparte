@@ -112,6 +112,11 @@ export const sync = {
 
   // Joining a vault from its store
   welcomeJoin: 'Ich habe bereits einen Tresor',
+  needsPassphraseTitle: 'Die Synchronisierung braucht eine Passphrase',
+  needsPassphraseBody:
+    'Ein anderes Gerät öffnet diesen Tresor mit Ihrer Passphrase und dem geheimen Schlüssel aus Ihrem Notfallkit. Dieser Tresor hat noch keins von beiden, daher öffnet er sich nur auf diesem Gerät.',
+  joinReplaces:
+    'Der Tresor, dem Sie beitreten, ersetzt den dieses Geräts: Die Chats, die dieses Gerät jetzt enthält, werden gelöscht.',
   joinTitle: 'Ihren Tresor auf diesem Gerät verwenden',
   joinLead:
     'Verbinden Sie sich mit dem Speicher, mit dem Ihr anderes Gerät synchronisiert. Seine Keyslots öffnen sich mit Ihrer Passphrase und dem geheimen Schlüssel aus Ihrem Notfallkit.',
