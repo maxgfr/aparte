@@ -311,6 +311,13 @@ function assistantContent(kind: ProviderKind, parts: readonly PromptPart[]): Ass
   return out
 }
 
+/**
+ * The stream parts that keep a run of text blocks together. Anthropic cuts an answer into a new text block at each
+ * citation, and those blocks read as one text (a citation can fall mid-sentence): reported as separate texts, they
+ * would be shown as one paragraph each.
+ */
+const CONTINUES_TEXT: ReadonlySet<string> = new Set(['text-start', 'text-delta', 'text-end', 'source'])
+
 /** A system prompt that marks "none": it opens the prompt so later system messages stay in place (see below). */
 const NO_SYSTEM = '\u0000aparte:no-system\u0000'
 
@@ -585,13 +592,17 @@ async function* streamChat(kind: ProviderKind, base: FetchLike, req: ChatRequest
     onError: () => {},
   })
   const reasoning = new Map<string, JsonRecord>()
+  // The id the current run of text blocks is reported under: anything but text or a source ends the run.
+  let textRun: string | null = null
   let step: { unified: string; raw: string | undefined; meta: unknown; modelId: string | undefined } | null = null
   try {
     for await (const part of result.fullStream) {
       if (req.signal.aborted) return
+      if (!CONTINUES_TEXT.has(part.type)) textRun = null
       switch (part.type) {
         case 'text-delta':
-          if (part.text !== '') yield { type: 'text-delta', id: part.id, text: part.text }
+          textRun ??= part.id
+          if (part.text !== '') yield { type: 'text-delta', id: textRun, text: part.text }
           break
         case 'reasoning-start':
           reasoning.set(part.id, {})

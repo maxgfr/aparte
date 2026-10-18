@@ -778,6 +778,67 @@ describe('tools and web search', () => {
     expect(replayed[2]).toMatchObject({ type: 'text', text: 'About 2.1 million people live in Paris itself.' })
   })
 
+  test('text blocks cut at a citation stay one text, and a search between two texts still parts them', async () => {
+    const sse = (data: Record<string, unknown>) => `event: ${data.type}\ndata: ${JSON.stringify(data)}\n\n`
+    const text = (index: number, value: string) =>
+      sse({ type: 'content_block_start', index, content_block: { type: 'text', text: '' } }) +
+      sse({ type: 'content_block_delta', index, delta: { type: 'text_delta', text: value } })
+    const cite = (index: number) =>
+      sse({
+        type: 'content_block_delta',
+        index,
+        delta: {
+          type: 'citations_delta',
+          citation: {
+            type: 'web_search_result_location',
+            cited_text: 'The city of Paris counted 2.1 million inhabitants.',
+            url: 'https://stats.example.org/paris',
+            title: 'Paris - Population statistics',
+            encrypted_index: 'Eo8BCioIAhgBIiQ',
+          },
+        },
+      })
+    const stop = (index: number) => sse({ type: 'content_block_stop', index })
+    const recorded = await Bun.file(new URL('anthropic-web-search.sse', SSE)).text()
+    const [head = '', rest = ''] = recorded.split(/(?=event: content_block_start\ndata: [^\n]*"index":2)/)
+    const tail = rest.slice(rest.indexOf('event: message_delta'))
+    const body =
+      head +
+      text(2, 'According to the city, ') +
+      stop(2) +
+      text(3, 'about 2.1 million people live in Paris') +
+      cite(3) +
+      stop(3) +
+      text(4, ', fewer than in 2011.') +
+      stop(4) +
+      sse({
+        type: 'content_block_start',
+        index: 5,
+        content_block: { type: 'server_tool_use', id: 'srvtoolu_2', name: 'web_search', input: {} },
+      }) +
+      sse({
+        type: 'content_block_delta',
+        index: 5,
+        delta: { type: 'input_json_delta', partial_json: '{"query": "Paris"}' },
+      }) +
+      stop(5) +
+      text(6, 'The region is larger.') +
+      stop(6) +
+      tail
+    const served = serve(body)
+    const events = await collect(
+      A.createAdapter('anthropic', { fetch: served.fetch }).stream(
+        chatRequest('anthropic', 'claude-opus-5-5', { webSearch: true }),
+      ),
+    )
+    const texts = new Map<string, string>()
+    for (const e of events) if (e.type === 'text-delta') texts.set(e.id, (texts.get(e.id) ?? '') + e.text)
+    expect([...texts.values()]).toEqual([
+      'According to the city, about 2.1 million people live in Paris, fewer than in 2011.',
+      'The region is larger.',
+    ])
+  })
+
   test('OpenAI, Gemini and OpenRouter get their own search', async () => {
     const openai = serve(await Bun.file(new URL('openai-tool-call.sse', SSE)).text())
     const openaiReq = chatRequest('openai', 'gpt-5.1', { webSearch: true })
