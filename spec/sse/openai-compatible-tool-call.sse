@@ -1,0 +1,14 @@
+data: {"id":"chatcmpl-7c1e93b2f04a4d58","object":"chat.completion.chunk","created":1760700000,"model":"llama-3.3-70b-versatile","system_fingerprint":"fp_3f8b2c1d9e","choices":[{"index":0,"delta":{"role":"assistant","content":null},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-7c1e93b2f04a4d58","object":"chat.completion.chunk","created":1760700000,"model":"llama-3.3-70b-versatile","system_fingerprint":"fp_3f8b2c1d9e","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_Qd2Lw9Xr4Tn7","type":"function","function":{"name":"calculator","arguments":""}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-7c1e93b2f04a4d58","object":"chat.completion.chunk","created":1760700000,"model":"llama-3.3-70b-versatile","system_fingerprint":"fp_3f8b2c1d9e","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"expression\":"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-7c1e93b2f04a4d58","object":"chat.completion.chunk","created":1760700000,"model":"llama-3.3-70b-versatile","system_fingerprint":"fp_3f8b2c1d9e","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"17 * 24\"}"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-7c1e93b2f04a4d58","object":"chat.completion.chunk","created":1760700000,"model":"llama-3.3-70b-versatile","system_fingerprint":"fp_3f8b2c1d9e","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}]}
+
+data: {"id":"chatcmpl-7c1e93b2f04a4d58","object":"chat.completion.chunk","created":1760700000,"model":"llama-3.3-70b-versatile","system_fingerprint":"fp_3f8b2c1d9e","choices":[],"usage":{"prompt_tokens":180,"completion_tokens":22,"total_tokens":202}}
+
+data: [DONE]
+

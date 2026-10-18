@@ -25,6 +25,7 @@ import {
   LockedError,
   type ShardId,
 } from '../contracts/crypto.ts'
+import type { ToolApproval, ToolApprovals } from '../contracts/tools.ts'
 import type {
   Conversation,
   ConversationFilter,
@@ -79,7 +80,7 @@ const STOPS: ReadonlySet<string> = new Set<StopReason>([
   'pause',
   'other',
 ])
-const TOOL_SOURCES: ReadonlySet<string> = new Set(['builtin', 'mcp', 'skill'])
+const TOOL_SOURCES: ReadonlySet<string> = new Set(['builtin', 'mcp', 'skill', 'sandbox', 'provider'])
 const PROVIDER_KINDS: ReadonlySet<string> = new Set<ProviderKind>([
   'anthropic',
   'openai',
@@ -673,7 +674,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   const listeners = new Map<string, Set<Listener>>()
   const scopeKey = (scope: Scope): string => {
     if (typeof scope === 'string') {
-      if (!['conversations', 'folders', 'settings', 'providers'].includes(scope)) {
+      if (!['conversations', 'folders', 'settings', 'providers', 'toolApprovals'].includes(scope)) {
         throw new InvalidInputError('Unknown scope')
       }
       return scope
@@ -706,6 +707,8 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   let foldersMap: Y.Map<Y.Map<unknown>>
   let settingsMap: Y.Map<unknown>
   let providersMap: Y.Map<Y.Map<unknown>>
+  let approvalsMap: Y.Map<unknown>
+  let approvalList: readonly ToolApproval[] | null = null
   const convCache = new Map<Id, Conversation>()
   const convLists = new Map<string, readonly Conversation[]>()
   const folderCache = new Map<Id, Folder>()
@@ -720,6 +723,11 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     foldersMap = doc.getMap('folders')
     settingsMap = doc.getMap('settings')
     providersMap = doc.getMap('providers')
+    approvalsMap = doc.getMap('toolApprovals')
+    approvalsMap.observe(() => {
+      approvalList = null
+      emit(['toolApprovals'])
+    })
     conversationsMap.observeDeep((events) => {
       const ids = changedKeys(events, conversationsMap)
       for (const id of ids) {
@@ -1110,6 +1118,67 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     },
   }
 
+  // Tool approvals (spec/DATA-MODEL.md section 3.4): one key per approval, so two devices granting different tools
+  // never overwrite each other.
+
+  const approvalKeyFor = (approvalKey: string, conversation: Id | null): string =>
+    conversation === null ? `always|${approvalKey}` : `conversation|${conversation}|${approvalKey}`
+  const readApproval = (raw: unknown): ToolApproval | undefined => {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+    const v = raw as Record<string, unknown>
+    if (typeof v.approvalKey !== 'string' || typeof v.fingerprint !== 'string') return undefined
+    const conversation = v.conversation === null ? null : isId(v.conversation) ? v.conversation : undefined
+    if (conversation === undefined) return undefined
+    return frozenCopy<ToolApproval>({
+      approvalKey: v.approvalKey,
+      fingerprint: v.fingerprint,
+      conversation,
+      grantedAt: num(v.grantedAt) ?? 0,
+    })
+  }
+
+  const toolApprovals: ToolApprovals = {
+    list() {
+      live()
+      if (approvalList) return approvalList
+      const out: ToolApproval[] = []
+      for (const value of approvalsMap.values()) {
+        const a = readApproval(value)
+        if (a) out.push(a)
+      }
+      out.sort(
+        (a, b) =>
+          Number(a.conversation !== null) - Number(b.conversation !== null) ||
+          (a.approvalKey < b.approvalKey ? -1 : a.approvalKey > b.approvalKey ? 1 : 0) ||
+          ((a.conversation ?? '') < (b.conversation ?? '') ? -1 : 1),
+      )
+      approvalList = Object.freeze(out)
+      return approvalList
+    },
+    get(approvalKey, conversation) {
+      live()
+      const a = readApproval(approvalsMap.get(approvalKeyFor(approvalKey, conversation)))
+      return a !== undefined && a.approvalKey === approvalKey && a.conversation === conversation ? a : undefined
+    },
+    grant(input) {
+      live()
+      const approvalKey = checkText(input.approvalKey, 'approvalKey')
+      const fingerprint = checkText(input.fingerprint, 'fingerprint')
+      if (approvalKey === '' || fingerprint === '')
+        throw new InvalidInputError('An approval needs a key and a fingerprint')
+      const conversation = input.conversation
+      if (conversation !== null && !isId(conversation)) throw new InvalidInputError('Unknown conversation')
+      const value = { approvalKey, fingerprint, conversation, grantedAt: now() }
+      local(indexDoc(), () => approvalsMap.set(approvalKeyFor(approvalKey, conversation), toAny(value, 'approval')))
+    },
+    revoke(approvalKey, conversation) {
+      live()
+      const key = approvalKeyFor(approvalKey, conversation)
+      if (!approvalsMap.has(key)) return
+      local(indexDoc(), () => approvalsMap.delete(key))
+    },
+  }
+
   // Providers
 
   const getProvider = (id: Id): ProviderConfig | undefined => {
@@ -1335,6 +1404,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     folders,
     settings,
     providers,
+    toolApprovals,
     async thread(conversationId) {
       live()
       const m = convEntity(conversationId)
@@ -1449,6 +1519,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       folderLists.clear()
       providerCache.clear()
       providerList = null
+      approvalList = null
       settingsCache.clear()
       shardIds.clear()
       listeners.clear()

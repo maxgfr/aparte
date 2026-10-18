@@ -16,6 +16,12 @@
  * - A part whose JSON is longer than LARGE_PART_BYTES is stored as a blob and committed as a `ref` part; requests
  *   substitute it back, so the provider always sees the same bytes.
  * - The decrypted contents this module keeps (streams, the ref cache) are dropped by `dispose`, which runs on lock.
+ * - A turn is an agent loop (contracts/chat.ts): each answer is committed once; when it ends with tool calls, each call
+ *   is decided by the approval policy (contracts/tools.ts), runs only once allowed, and every call gets exactly one
+ *   result, committed together as one `tool` message before the next answer streams. A stop, a lock or the step
+ *   budget answers the calls left with fixed error results instead of leaving them open.
+ * - A call runs only when the conversation declares its tool with the fingerprint it froze; arguments and results are
+ *   handled as data and never interpreted here.
  */
 
 import { needsKey } from '../ai/endpoints.ts'
@@ -30,8 +36,10 @@ import type {
   StopReason,
   Usage,
 } from '../contracts/ai.ts'
-import type { ChatController, ChatDeps, ChatEventName, StreamState, Turn } from '../contracts/chat.ts'
+import type { ChatController, ChatDeps, ChatEventName, StreamState, ToolCallState, Turn } from '../contracts/chat.ts'
 import { InvalidInputError, InvalidStateError } from '../contracts/crypto.ts'
+import type { ApprovalDecision, NotRunReason, RegisteredTool, ResolvedTools, ToolResult } from '../contracts/tools.ts'
+import { WEB_SEARCH } from '../contracts/tools.ts'
 import type {
   Conversation,
   Id,
@@ -42,8 +50,11 @@ import type {
   NewMessage,
   Part,
   Thread,
+  ToolSnapshotEntry,
 } from '../contracts/workspace.ts'
 import { base32Encode, fromUtf8, utf8 } from '../crypto/bytes.ts'
+import { resultPart, stepBudget, unansweredResult } from '../tools/loop.ts'
+import { decideApproval, recordDecision } from '../tools/policy.ts'
 import { LARGE_PART_BYTES, pickEffort, planPrompt, titleFrom } from './request.ts'
 
 const REASON = 'chat-stream'
@@ -79,16 +90,34 @@ interface Outcome {
   readonly refusal?: { readonly category: string | null; readonly explanation?: string }
 }
 
+/** One call of the tool round being run. */
+interface CallRun {
+  state: ToolCallState
+  readonly tool: RegisteredTool | null
+  /** Set while the call waits for the user; called with null when the turn stops first. */
+  answer: ((decision: ApprovalDecision | null) => void) | null
+}
+
+const NO_TOOLS: ResolvedTools = Object.freeze({ declared: [], webSearch: false, drifted: [], missing: [] })
+
 interface Run {
   readonly conversationId: Id
-  readonly messageId: Id
-  readonly parentId: Id
+  /** The answer streaming now, or (in the tools phase) the id the next answer will take. */
+  messageId: Id
+  /** What the streaming answer answers: the user message, or the tool message of the previous round. */
+  parentId: Id
   readonly model: ModelRef
   readonly effort: Effort | null
-  readonly startedAt: number
-  /** The leaf when the stream started: the commit moves the leaf only from there. */
-  readonly leafAtStart: Id | null
+  startedAt: number
+  /** The leaf when this step started: a commit moves the leaf only from there. */
+  leafAtStart: Id | null
   readonly prepared: Prepared
+  /** Model calls made so far in this turn. */
+  step: number
+  phase: 'model' | 'tools'
+  calls: CallRun[]
+  /** The conversation's tools as the current step declared them. */
+  resolved: ResolvedTools
   readonly abort: AbortController
   readonly release: () => void
   readonly settle: Settle<Message | null>
@@ -268,6 +297,21 @@ export function createChatController(deps: ChatDeps): ChatController {
     return part
   }
 
+  /** The conversation's tools that are still what it froze (drift detection), or none without a registry. */
+  function resolveTools(conversation: Conversation): ResolvedTools {
+    return deps.tools ? deps.tools.registry.resolve(conversation.tools) : NO_TOOLS
+  }
+
+  /** Whether a provider keeps the arguments valid against a schema it is told is strict, and this one qualifies. */
+  function strictFor(kind: ProviderConfig['kind'], schema: RegisteredTool['tool']['inputSchema']): boolean {
+    if (kind !== 'anthropic' && kind !== 'openai') return false
+    const properties = schema.properties
+    const required = schema.required
+    if (schema.additionalProperties !== false || properties === null || typeof properties !== 'object') return false
+    const names = Object.keys(properties as object)
+    return Array.isArray(required) && names.every((n) => required.includes(n))
+  }
+
   async function buildRequest(run: Run, thread: Thread): Promise<ChatRequest> {
     const conversation = conversationOf(run.conversationId)
     const path = await substituted(thread.path(run.parentId))
@@ -286,13 +330,27 @@ export function createChatController(deps: ChatDeps): ChatController {
       }
       messages.push({ role: planned.role, parts })
     }
+    const caps = run.prepared.descriptor.capabilities
+    const kind = run.prepared.descriptor.kind
+    run.resolved = resolveTools(conversation)
+    // A model without tools gets none (the same way on every turn); the others get the snapshot, minus what drifted.
+    const tools = caps.tools
+      ? run.resolved.declared.map((r) => ({
+          name: r.tool.name,
+          description: r.tool.description,
+          inputSchema: r.tool.inputSchema,
+          ...(strictFor(kind, r.tool.inputSchema) ? { strict: true } : {}),
+        }))
+      : []
+    const webSearch = run.resolved.webSearch && caps.webSearch !== null
     return {
       provider: run.prepared.provider,
       model: run.prepared.descriptor,
       apiKey: run.prepared.apiKey,
       system: plan.system,
       messages,
-      tools: [],
+      tools,
+      ...(webSearch ? { webSearch: true } : {}),
       effort: run.effort,
       signal: run.abort.signal,
     }
@@ -309,6 +367,9 @@ export function createChatController(deps: ChatDeps): ChatController {
       ...(run.usage === undefined ? {} : { usage: run.usage }),
       startedAt: run.startedAt,
       queued: run.queue.filter((p) => p.kind === 'user').length,
+      step: run.step,
+      phase: run.phase,
+      tools: Object.freeze(run.calls.map((c) => c.state)),
     }
     return Object.freeze(state)
   }
@@ -432,15 +493,38 @@ export function createChatController(deps: ChatDeps): ChatController {
       thread.commit(message)
       thread.setLeaf(run.messageId, { ifLeaf: run.leafAtStart })
     })
+    run.snapshot = null
     const committed = thread.get(run.messageId)
     if (committed === undefined) throw new InvalidStateError('The committed answer is missing')
     return committed
   }
 
-  /** Commits a user message as a child of the leaf and moves the leaf to it; the first one also names the chat. */
-  function commitUser(thread: Thread, conversationId: Id, id: Id, parts: readonly Part[], parent: Id | null): void {
+  /**
+   * The snapshot a conversation's first message freezes: its chosen tools with the fingerprints registered now (names
+   * the registry no longer has are dropped). Null once the conversation has started, or without a registry.
+   */
+  async function freshSnapshot(conversation: Conversation): Promise<readonly ToolSnapshotEntry[] | null> {
+    if (conversation.startedAt !== undefined || !deps.tools) return null
+    const names = conversation.tools.filter((t) => t.source !== 'provider').map((t) => t.name)
+    const webSearch = conversation.tools.some((t) => t.source === 'provider' && t.name === WEB_SEARCH)
+    return deps.tools.registry.snapshot(names, { webSearch })
+  }
+
+  /**
+   * Commits a user message as a child of the leaf and moves the leaf to it; the first one also names the chat and
+   * freezes its tool snapshot (`tools`), in the same write.
+   */
+  function commitUser(
+    thread: Thread,
+    conversationId: Id,
+    id: Id,
+    parts: readonly Part[],
+    parent: Id | null,
+    tools: readonly ToolSnapshotEntry[] | null = null,
+  ): void {
     const conversation = conversationOf(conversationId)
     ws.batch(() => {
+      if (tools !== null && conversation.startedAt === undefined) ws.conversations.update(conversationId, { tools })
       thread.commit({ id, parent, role: 'user', parts, model: null, status: 'done' })
       thread.setLeaf(id)
       if (conversation.title === '') {
@@ -483,6 +567,10 @@ export function createChatController(deps: ChatDeps): ChatController {
       startedAt: deps.clock.now(),
       leafAtStart: conversation.leaf,
       prepared,
+      step: 1,
+      phase: 'model',
+      calls: [],
+      resolved: NO_TOOLS,
       abort: new AbortController(),
       release,
       settle,
@@ -500,12 +588,186 @@ export function createChatController(deps: ChatDeps): ChatController {
     return run
   }
 
+  /**
+   * The calls an answer that ended `done` asks the client to run: its `tool-call` parts, in order, read from the parts
+   * in memory (a large call is committed as a `ref` part, but runs all the same).
+   */
+  function callsOf(outcome: Outcome, parts: readonly Part[]): Extract<Part, { readonly type: 'tool-call' }>[] {
+    if (outcome.status !== 'done') return []
+    return parts.filter((p): p is Extract<Part, { readonly type: 'tool-call' }> => p.type === 'tool-call')
+  }
+
+  function callState(
+    call: Extract<Part, { readonly type: 'tool-call' }>,
+    tool: RegisteredTool | null,
+    status: ToolCallState['status'],
+  ): ToolCallState {
+    const spec = tool?.tool
+    return Object.freeze({
+      callId: call.callId,
+      name: call.name,
+      input: call.input,
+      title: spec?.title ?? call.name,
+      source: spec?.source ?? null,
+      ...(spec?.origin === undefined ? {} : { origin: spec.origin }),
+      annotations: spec?.annotations ?? null,
+      status,
+    })
+  }
+
+  function setStatus(run: Run, call: CallRun, status: ToolCallState['status']): void {
+    call.state = Object.freeze({ ...call.state, status })
+    changed(run)
+  }
+
+  /** What a tool's result becomes as a stored part: images go to blobs first. */
+  async function storedResult(
+    call: { readonly callId: string; readonly name: string },
+    result: ToolResult,
+  ): Promise<Extract<Part, { readonly type: 'tool-result' }>> {
+    const images: Extract<Part, { readonly type: 'image' }>[] = []
+    for (const c of result.content) {
+      if (c.type !== 'image') continue
+      const blob = await deps.blobs.put(c.data, c.mediaType)
+      images.push({ type: 'image', blob, mediaType: c.mediaType, width: 0, height: 0 })
+    }
+    return resultPart(call, result, images)
+  }
+
+  /** Waits for the user's answer to a call, or null when the turn stops first. */
+  function ask(run: Run, call: CallRun): Promise<ApprovalDecision | null> {
+    return new Promise((resolve) => {
+      if (run.abort.signal.aborted) {
+        resolve(null)
+        return
+      }
+      const onAbort = () => done(null)
+      const done = (decision: ApprovalDecision | null) => {
+        run.abort.signal.removeEventListener('abort', onAbort)
+        call.answer = null
+        resolve(decision)
+      }
+      call.answer = done
+      run.abort.signal.addEventListener('abort', onAbort, { once: true })
+      setStatus(run, call, 'approval')
+    })
+  }
+
+  /** Runs one call to its result part; never throws. */
+  async function runCall(run: Run, call: CallRun, part: Extract<Part, { readonly type: 'tool-call' }>) {
+    const notRun = (reason: NotRunReason, status: ToolCallState['status']) => {
+      setStatus(run, call, status)
+      return unansweredResult(part, reason)
+    }
+    if (run.abort.signal.aborted) return notRun('stopped', 'skipped')
+    const verdict = decideApproval({
+      name: part.name,
+      resolved: run.resolved,
+      approvals: deps.tools?.approvals ?? { get: () => undefined },
+      conversationId: run.conversationId,
+    })
+    if (verdict.kind === 'refuse') return notRun(verdict.reason, 'refused')
+    const tool = call.tool
+    if (tool === null) return notRun('undeclared', 'refused')
+    if (verdict.kind === 'ask') {
+      const decision = await ask(run, call)
+      if (decision === null) return notRun('stopped', 'skipped')
+      if (decision === 'deny') return notRun('denied', 'denied')
+      if (deps.tools) {
+        try {
+          recordDecision({ decision, tool, approvals: deps.tools.approvals, conversationId: run.conversationId })
+        } catch {
+          // Storing the approval failed (a locking vault): this call was still approved by the user.
+        }
+      }
+    }
+    setStatus(run, call, 'running')
+    let result: ToolResult
+    try {
+      result = await tool.tool.execute(part.input, {
+        conversationId: run.conversationId,
+        callId: part.callId,
+        signal: run.abort.signal,
+      })
+    } catch (error) {
+      if (run.abort.signal.aborted) return notRun('stopped', 'skipped')
+      const message = error instanceof Error ? error.message : String(error)
+      result = { content: [{ type: 'text', text: `The tool failed: ${message}` }], isError: true }
+    }
+    setStatus(run, call, result.isError ? 'failed' : 'done')
+    try {
+      return await storedResult(part, result)
+    } catch {
+      setStatus(run, call, 'failed')
+      return unansweredResult(part, 'interrupted')
+    }
+  }
+
+  /**
+   * The tool round after answer `answer`: every call decided, run or answered with why not, then the results
+   * committed as one `tool` message. Returns that message's id.
+   */
+  async function round(
+    run: Run,
+    thread: Thread,
+    answer: Message,
+    parts: readonly Extract<Part, { readonly type: 'tool-call' }>[],
+  ): Promise<Id> {
+    const overBudget = run.step >= stepBudget(run.effort)
+    run.phase = 'tools'
+    run.parentId = answer.id
+    run.messageId = newId()
+    run.parts = []
+    run.usage = undefined
+    run.calls = parts.map((part) => {
+      const tool = run.resolved.declared.find((r) => r.tool.name === part.name) ?? null
+      return { state: callState(part, tool, 'running'), tool, answer: null }
+    })
+    run.snapshot = snapshotOf(run)
+    notify('stream', run.conversationId)
+    const results: Part[] = []
+    for (const [i, part] of parts.entries()) {
+      const call = run.calls[i] as CallRun
+      if (overBudget) {
+        setStatus(run, call, 'skipped')
+        results.push(unansweredResult(part, 'budget'))
+      } else {
+        results.push(await runCall(run, call, part))
+      }
+    }
+    const id = newId()
+    const stored = await storable(results)
+    ws.batch(() => {
+      thread.commit({ id, parent: answer.id, role: 'tool', parts: stored, model: null, status: 'done' })
+      thread.setLeaf(id, { ifLeaf: answer.id })
+    })
+    notify('commit', run.conversationId)
+    return id
+  }
+
   async function execute(run: Run, thread: Thread): Promise<void> {
-    const outcome = await consume(run, thread)
     let committed: Message | null = null
     let failure: unknown = null
     try {
-      committed = await commitAnswer(run, thread, outcome)
+      for (;;) {
+        const outcome = await consume(run, thread)
+        const made = callsOf(outcome, run.parts)
+        committed = await commitAnswer(run, thread, outcome)
+        notify('commit', run.conversationId)
+        if (made.length === 0) break
+        const overBudget = run.step >= stepBudget(run.effort)
+        const toolMessage = await round(run, thread, committed, made)
+        if (run.abort.signal.aborted || overBudget || disposed) break
+        // The next answer streams as a child of the results, from where the leaf now is.
+        run.step += 1
+        run.phase = 'model'
+        run.calls = []
+        run.parentId = toolMessage
+        run.leafAtStart = toolMessage
+        run.startedAt = deps.clock.now()
+        run.snapshot = snapshotOf(run)
+        notify('stream', run.conversationId)
+      }
     } catch (error) {
       failure = error
     }
@@ -580,6 +842,7 @@ export function createChatController(deps: ChatDeps): ChatController {
       const prepared = await prepare(conversationOf(conversationId))
       const thread = await ws.thread(conversationId)
       const stored = await storable(parts)
+      const tools = await freshSnapshot(conversationOf(conversationId))
       if (disposed) throw locking()
       const release = takeHolds()
       const id = newId()
@@ -591,7 +854,7 @@ export function createChatController(deps: ChatDeps): ChatController {
         return { userMessageId: id, done: promise }
       }
       try {
-        commitUser(thread, conversationId, id, stored, conversationOf(conversationId).leaf)
+        commitUser(thread, conversationId, id, stored, conversationOf(conversationId).leaf, tools)
       } catch (error) {
         release()
         throw error
@@ -665,6 +928,16 @@ export function createChatController(deps: ChatDeps): ChatController {
       }
       commitSystem(thread, conversationId, id, text)
       return id
+    },
+
+    approve(conversationId, callId, decision) {
+      const run = runs.get(conversationId)
+      const call = run?.phase === 'tools' ? run.calls.find((c) => c.state.callId === callId) : undefined
+      if (call?.answer == null) throw new InvalidStateError('No call waits for this approval')
+      if (!['once', 'conversation', 'always', 'deny'].includes(decision)) {
+        throw new InvalidInputError('Unknown approval decision')
+      }
+      call.answer(decision)
     },
 
     stop(conversationId) {

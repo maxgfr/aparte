@@ -6,10 +6,13 @@
  * hosts the deployed app is expected to contact.
  */
 
-/** Why a request is made. `app` is the app's own origin (its files, its manifest); the rest reach other hosts. */
-export type NetPurpose = 'provider' | 'mcp' | 'sync' | 'download' | 'catalog' | 'app'
+/**
+ * Why a request is made. `app` is the app's own origin (its files, its manifest); `tool` is a tool the user approved
+ * (the built-in `fetch_url`); the rest reach other hosts.
+ */
+export type NetPurpose = 'provider' | 'mcp' | 'tool' | 'sync' | 'download' | 'catalog' | 'app'
 
-export const NET_PURPOSES: readonly NetPurpose[] = ['provider', 'mcp', 'sync', 'download', 'catalog', 'app']
+export const NET_PURPOSES: readonly NetPurpose[] = ['provider', 'mcp', 'tool', 'sync', 'download', 'catalog', 'app']
 
 /** One origin contacted for one purpose. */
 export interface NetEntry {

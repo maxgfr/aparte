@@ -1,0 +1,2 @@
+data: {"candidates": [{"content": {"parts": [{"functionCall": {"name": "calculator", "args": {"expression": "17 * 24"}}, "thoughtSignature": "CiQB0e2Kb7Xq1wR4mN8sT2vL6yP9cZ3hJ5gD0fA7uE1iO4kQsW"}], "role": "model"}, "finishReason": "STOP", "index": 0}], "usageMetadata": {"promptTokenCount": 96, "candidatesTokenCount": 14, "totalTokenCount": 152, "promptTokensDetails": [{"modality": "TEXT", "tokenCount": 96}], "thoughtsTokenCount": 42}, "modelVersion": "gemini-3-flash", "responseId": "pQzyaO2rB8yLz7IPw9mR6Ac"}
+

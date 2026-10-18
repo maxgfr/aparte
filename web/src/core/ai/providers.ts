@@ -96,6 +96,8 @@ export function guardedFetch(kind: ProviderKind, base: FetchLike, transform?: Bo
 export interface ModelSettings {
   /** OpenRouter's `reasoning.effort`, which its package reads from the model settings. */
   readonly openrouterEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+  /** OpenRouter's `web` plugin, its native web search. */
+  readonly openrouterWeb?: boolean
 }
 
 /**
@@ -135,9 +137,13 @@ export async function createModel(
     case 'openrouter': {
       const { createOpenRouter } = await import('@openrouter/ai-sdk-provider')
       const effort = settings.openrouterEffort
+      const options = {
+        ...(effort === undefined ? {} : { reasoning: { effort } }),
+        ...(settings.openrouterWeb ? { plugins: [{ id: 'web' as const, max_results: 5 }] } : {}),
+      }
       return createOpenRouter({ apiKey: key, baseURL, fetch }).chat(
         modelId,
-        effort === undefined ? undefined : { reasoning: { effort } },
+        Object.keys(options).length === 0 ? undefined : options,
       )
     }
     case 'openai-compatible': {

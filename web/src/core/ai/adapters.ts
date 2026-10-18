@@ -107,6 +107,21 @@ function validate(kind: ProviderKind, req: ChatRequest): void {
     }
   }
   if (req.tools.length > 0 && !caps.tools) refuse('The model does not take tools')
+  if (req.webSearch) {
+    const variant = caps.webSearch
+    if (variant === null) refuse('The model has no web search')
+    if (!variant.startsWith(`${kind}:`)) refuse(`The ${variant} search is not one of the ${kind} provider`)
+    // Gemini before 3 drops function tools declared next to Google Search; neither may be dropped silently.
+    if (kind === 'google' && req.tools.length > 0 && /^gemini-[12]([.-]|$)/.test(req.model.ref.id)) {
+      refuse('This Gemini model cannot combine web search with function tools')
+    }
+  }
+  const names = new Set<string>()
+  for (const t of req.tools) {
+    if (names.has(t.name) || (req.webSearch && t.name === WEB_SEARCH_NAME))
+      refuse(`The tool ${t.name} is declared twice`)
+    names.add(t.name)
+  }
   const choice = req.toolChoice
   if (choice === 'required' || typeof choice === 'object') {
     if (!caps.forcedToolChoice) refuse('The model does not accept a forced tool choice')
@@ -154,13 +169,93 @@ function replayOptions(kind: ProviderKind, meta: ProviderMeta | undefined): Reco
   return { [key]: entry }
 }
 
+/** The name the provider's own web search is declared under (contracts/tools.ts `WEB_SEARCH`). */
+const WEB_SEARCH_NAME = 'web_search'
+
+/** One result of an Anthropic `web_search_tool_result` block, in Anthropic's wire shape. */
+function searchResult(r: unknown): JsonRecord | null {
+  if (!isRecord(r) || typeof r.url !== 'string' || typeof r.encrypted_content !== 'string') return null
+  return {
+    type: typeof r.type === 'string' ? r.type : 'web_search_result',
+    url: r.url,
+    title: typeof r.title === 'string' ? r.title : null,
+    pageAge: typeof r.page_age === 'string' ? r.page_age : null,
+    encryptedContent: r.encrypted_content,
+  }
+}
+
 /** The AI SDK content of a `provider` part, or null when the AI SDK has no way to send that block back verbatim. */
 function replayBlock(kind: ProviderKind, block: unknown): AssistantContent[number] | null {
+  if (kind !== 'anthropic' || !isRecord(block)) return null
   // Anthropic's `fallback` switch point, which stays where it appeared; the SDK sends it from a custom part.
-  if (kind === 'anthropic' && isRecord(block) && block.type === 'fallback') {
+  if (block.type === 'fallback') {
     return { type: 'custom', kind: 'anthropic.fallback', providerOptions: { anthropic: block as never } }
   }
+  // Server-side web search: the call and its (encrypted) results go back where they were, as the SDK's
+  // provider-executed parts, which it writes as `server_tool_use` and `web_search_tool_result` again.
+  if (block.type === 'server_tool_use' && block.name === WEB_SEARCH_NAME && typeof block.id === 'string') {
+    return {
+      type: 'tool-call',
+      toolCallId: block.id,
+      toolName: WEB_SEARCH_NAME,
+      input: block.input,
+      providerExecuted: true,
+    }
+  }
+  if (block.type === 'web_search_tool_result' && typeof block.tool_use_id === 'string') {
+    const content = block.content
+    if (Array.isArray(content)) {
+      const results = content.map(searchResult)
+      if (results.some((r) => r === null)) return null
+      return {
+        type: 'tool-result',
+        toolCallId: block.tool_use_id,
+        toolName: WEB_SEARCH_NAME,
+        output: { type: 'json', value: results as JSONValue },
+      }
+    }
+    if (isRecord(content) && typeof content.error_code === 'string') {
+      return {
+        type: 'tool-result',
+        toolCallId: block.tool_use_id,
+        toolName: WEB_SEARCH_NAME,
+        output: {
+          type: 'error-json',
+          value: { type: 'web_search_tool_result_error', errorCode: content.error_code },
+        },
+      }
+    }
+  }
   return null
+}
+
+/** Anthropic's wire block for a provider-executed web search call the SDK reported. */
+function serverToolUse(part: { toolCallId: string; toolName: string; input: unknown }): JsonRecord {
+  return { type: 'server_tool_use', id: part.toolCallId, name: part.toolName, input: part.input }
+}
+
+/** Anthropic's wire block for the results (or the error) of a provider-executed web search. */
+function webSearchResult(toolCallId: string, output: unknown, isError: boolean): JsonRecord | null {
+  if (!isError && Array.isArray(output)) {
+    const content: JsonRecord[] = []
+    for (const r of output) {
+      if (!isRecord(r) || typeof r.url !== 'string' || typeof r.encryptedContent !== 'string') return null
+      content.push({
+        type: typeof r.type === 'string' ? r.type : 'web_search_result',
+        url: r.url,
+        title: typeof r.title === 'string' ? r.title : null,
+        page_age: typeof r.pageAge === 'string' ? r.pageAge : null,
+        encrypted_content: r.encryptedContent,
+      })
+    }
+    return { type: 'web_search_tool_result', tool_use_id: toolCallId, content }
+  }
+  const code = isRecord(output) && typeof output.errorCode === 'string' ? output.errorCode : 'unavailable'
+  return {
+    type: 'web_search_tool_result',
+    tool_use_id: toolCallId,
+    content: { type: 'web_search_tool_result_error', error_code: code },
+  }
 }
 
 function textOf(parts: readonly PromptPart[]): string {
@@ -331,7 +426,10 @@ function callOptions(kind: ProviderKind, req: ChatRequest): CallOptions {
     case 'openrouter':
       return {
         providerOptions: {},
-        settings: wire?.param === 'reasoning.effort' ? { openrouterEffort: wire.value } : {},
+        settings: {
+          ...(wire?.param === 'reasoning.effort' ? { openrouterEffort: wire.value } : {}),
+          ...(req.webSearch ? { openrouterWeb: true } : {}),
+        },
         maxOutputTokens,
       }
     default:
@@ -339,10 +437,38 @@ function callOptions(kind: ProviderKind, req: ChatRequest): CallOptions {
   }
 }
 
-function toolSet(req: ChatRequest): ToolSet | undefined {
-  if (req.tools.length === 0) return undefined
+/** At most this many searches per answer, so one turn cannot run up the provider's search bill unseen. */
+const WEB_SEARCH_MAX_USES = 5
+
+/** The provider's own web search tool for the model's variant; OpenRouter's is a plugin (see callOptions). */
+async function webSearchTool(req: ChatRequest): Promise<ToolSet[string] | null> {
+  switch (req.model.capabilities.webSearch) {
+    case 'anthropic:web_search_20260209': {
+      const { anthropic } = await import('@ai-sdk/anthropic')
+      return anthropic.tools.webSearch_20260209({ maxUses: WEB_SEARCH_MAX_USES })
+    }
+    case 'anthropic:web_search_20250305': {
+      const { anthropic } = await import('@ai-sdk/anthropic')
+      return anthropic.tools.webSearch_20250305({ maxUses: WEB_SEARCH_MAX_USES })
+    }
+    case 'openai:web_search': {
+      const { openai } = await import('@ai-sdk/openai')
+      return openai.tools.webSearch({})
+    }
+    case 'google:google_search': {
+      const { google } = await import('@ai-sdk/google')
+      return google.tools.googleSearch({})
+    }
+    default:
+      return null
+  }
+}
+
+async function toolSet(req: ChatRequest): Promise<ToolSet | undefined> {
+  const search = req.webSearch ? await webSearchTool(req) : null
+  if (req.tools.length === 0 && search === null) return undefined
   const tools: ToolSet = {}
-  // Object keys keep insertion order, so the snapshot's order is the order sent.
+  // Object keys keep insertion order, so the snapshot's order is the order sent; the provider's search comes last.
   for (const t of req.tools) {
     tools[t.name] = tool({
       description: t.description,
@@ -350,6 +476,7 @@ function toolSet(req: ChatRequest): ToolSet | undefined {
       ...(t.strict === undefined ? {} : { strict: t.strict }),
     })
   }
+  if (search !== null) tools[WEB_SEARCH_NAME] = search
   return tools
 }
 
@@ -442,7 +569,7 @@ async function* streamChat(kind: ProviderKind, base: FetchLike, req: ChatRequest
     model,
     messages,
     allowSystemInMessages: true,
-    tools: toolSet(req),
+    tools: await toolSet(req),
     toolChoice: toolChoiceOf(req),
     maxOutputTokens: call.maxOutputTokens,
     temperature: sampling.temperature,
@@ -488,6 +615,14 @@ async function* streamChat(kind: ProviderKind, base: FetchLike, req: ChatRequest
           break
         }
         case 'tool-call': {
+          if (part.providerExecuted) {
+            // The provider ran it (web search). Only Anthropic's needs replaying, as its own wire block; OpenAI's runs
+            // with `store: false` and Gemini's grounding come back as sources only.
+            if (kind === 'anthropic' && part.toolName === WEB_SEARCH_NAME) {
+              yield { type: 'provider-block', provider: 'anthropic', block: serverToolUse(part) }
+            }
+            break
+          }
           const providerMeta = partMeta(kind, part.providerMetadata)
           yield {
             type: 'tool-call',
@@ -496,6 +631,14 @@ async function* streamChat(kind: ProviderKind, base: FetchLike, req: ChatRequest
             input: part.input,
             ...(providerMeta ? { providerMeta } : {}),
           }
+          break
+        }
+        case 'tool-result':
+        case 'tool-error': {
+          if (!part.providerExecuted || kind !== 'anthropic' || part.toolName !== WEB_SEARCH_NAME) break
+          const output = part.type === 'tool-result' ? part.output : part.error
+          const block = webSearchResult(part.toolCallId, output, part.type === 'tool-error')
+          if (block !== null) yield { type: 'provider-block', provider: 'anthropic', block }
           break
         }
         case 'source':

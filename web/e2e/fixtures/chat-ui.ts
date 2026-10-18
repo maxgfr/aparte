@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test'
 import { chat } from '../../src/i18n/en/chat.ts'
 import { common } from '../../src/i18n/en/common.ts'
 import { shell } from '../../src/i18n/en/shell.ts'
+import { tools } from '../../src/i18n/en/tools.ts'
 import { vault } from '../../src/i18n/en/vault.ts'
 import { expect } from '../gates.ts'
 import { CUSTOM_BASE_URL, type MockKind, type ProviderMock } from './providers.ts'
@@ -20,6 +21,11 @@ import { CUSTOM_BASE_URL, type MockKind, type ProviderMock } from './providers.t
  * Inside a message: the reasoning is a details element whose summary is "Reasoning"; the branch controls are the
  * "Previous version" and "Next version" buttons around the text "Version {index} of {count}"; "Regenerate" and
  * "Edit" may show on hover or focus only. A photo of a user message is an img.
+ *
+ * Tools (web/src/i18n/en/tools.ts): the composer's "Tools" button opens the "Tools" sheet of switches; a tool call is
+ * a region named "Tool call: {name}" with data-tool-status (approval | running | done | failed | denied | refused |
+ * skipped | pending); a call waiting for approval shows its arguments in full, the "Allow" radio group and the
+ * "Allow" and "Decline" buttons; the sources of an answer are buttons in the region "Sources".
  */
 
 export const ARGON2_WAIT = { timeout: 60_000 }
@@ -237,3 +243,49 @@ export async function openConversation(page: Page, title: RegExp): Promise<void>
     .click()
   await expect(messages(page).first()).toBeVisible()
 }
+
+/** The composer's Tools control ("Tools" or "Tools: {count} on"). */
+export const toolsButton = (page: Page) =>
+  composer(page).getByRole('button', { name: new RegExp(`^${tools.button}(?::|$)`) })
+
+/** Opens the Tools sheet of the chat and returns it. */
+export async function openTools(page: Page): Promise<Locator> {
+  await toolsButton(page).click()
+  const sheet = page.getByRole('dialog', { name: tools.sheetTitle })
+  await expect(sheet).toBeVisible()
+  return sheet
+}
+
+/** Closes an open sheet with its Close button. */
+export async function closeSheet(sheet: Locator): Promise<void> {
+  await sheet.getByRole('button', { name: common.close, exact: true }).click()
+  await expect(sheet).toBeHidden()
+}
+
+/** The switch named `label` in the Tools sheet. */
+export const toolSwitch = (sheet: Locator, label: string) => sheet.getByRole('switch', { name: label, exact: true })
+
+/** The card of the latest call of tool `title` (its display name). */
+export const toolCard = (page: Page, title: string) =>
+  page.getByRole('region', { name: tools.callLabel.replace('{name}', title), exact: true }).last()
+
+/** Waits for the card of `title` to wait for approval and returns it. */
+export async function awaitingApproval(page: Page, title: string): Promise<Locator> {
+  const card = toolCard(page, title)
+  await expect(card).toHaveAttribute('data-tool-status', 'approval', ANSWER_WAIT)
+  return card
+}
+
+/** Allows the call of `card`, for the scope chosen by its label (this time only by default). */
+export async function allowCall(card: Locator, scope: string = tools.rememberOnce): Promise<void> {
+  await card.getByRole('radio', { name: scope, exact: true }).check()
+  await card.getByRole('button', { name: tools.approve, exact: true }).click()
+}
+
+export async function declineCall(card: Locator): Promise<void> {
+  await card.getByRole('button', { name: tools.deny, exact: true }).click()
+}
+
+/** The sources of an answer, as buttons. */
+export const sourcesOf = (answer: Locator) =>
+  answer.getByRole('region', { name: tools.sources, exact: true }).getByRole('button')

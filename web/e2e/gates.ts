@@ -18,7 +18,15 @@ import type { NetPurpose } from '../src/security/net.ts'
  */
 
 /** Every value of `NetPurpose`, checked against the type in both directions so the two cannot drift apart. */
-const PURPOSES = ['provider', 'mcp', 'sync', 'download', 'catalog', 'app'] as const satisfies readonly NetPurpose[]
+const PURPOSES = [
+  'provider',
+  'mcp',
+  'tool',
+  'sync',
+  'download',
+  'catalog',
+  'app',
+] as const satisfies readonly NetPurpose[]
 const purposesComplete: [Exclude<NetPurpose, (typeof PURPOSES)[number]>] extends [never] ? true : false = true
 void purposesComplete
 

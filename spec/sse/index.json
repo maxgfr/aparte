@@ -118,5 +118,102 @@
       "raw": "STOP",
       "usage": { "input": 9, "output": 70, "cacheRead": 0, "reasoning": 46 }
     }
+  },
+  "anthropic-tool-call.sse": {
+    "provider": "anthropic",
+    "endpoint": "POST https://api.anthropic.com/v1/messages",
+    "status": 200,
+    "contentType": "text/event-stream",
+    "model": "claude-opus-5-5",
+    "expect": {
+      "text": "Let me work that out.",
+      "reasoning": [
+        {
+          "text": "The user wants 17 × 24 exactly; the calculator tool gives it without slips.",
+          "providerMeta": {
+            "anthropic": {
+              "type": "thinking",
+              "signature": "EuYBCkYIBhgCKkB3vQp1cZf9mT0aYxR8kLw2nH6sJd4eGu0iVbN7oCqP5rMyWtSzA1lKjF8hXg3D9QeUo6nIiRvBc2LpZs4TOmEyHAoNTg0N0Q2zuUc3eDJlMBoMnr4xVaWq8sTyLp9KIjDs1oZQ7kXv0bN6mR2cJ8hP4eYwTa5uGdS3fLq9iKz1nVxMjB0WyHoE7AtrCl2gPKAhQ8oN"
+            }
+          }
+        }
+      ],
+      "toolCalls": [{ "name": "calculator", "input": { "expression": "17 * 24" }, "callId": "toolu_01Hn4QwR8sTz6Lm2Vb9Xc3Jd" }],
+      "stop": "tool-calls",
+      "raw": "tool_use",
+      "usage": { "input": 612, "output": 71, "cacheRead": 0, "cacheWrite": 0 }
+    }
+  },
+  "anthropic-web-search.sse": {
+    "provider": "anthropic",
+    "endpoint": "POST https://api.anthropic.com/v1/messages",
+    "status": 200,
+    "contentType": "text/event-stream",
+    "model": "claude-opus-5-5",
+    "webSearch": true,
+    "expect": {
+      "text": "About 2.1 million people live in Paris itself.",
+      "reasoning": [],
+      "sources": [{ "url": "https://stats.example.org/paris", "title": "Paris - Population statistics" }, { "url": "https://region.example.net/figures", "title": "Île-de-France in figures" }],
+      "providerBlocks": ["server_tool_use", "web_search_tool_result"],
+      "stop": "end",
+      "raw": "end_turn",
+      "usage": { "input": 2048, "output": 38, "cacheRead": 0, "cacheWrite": 0 }
+    }
+  },
+  "openai-tool-call.sse": {
+    "provider": "openai",
+    "endpoint": "POST https://api.openai.com/v1/responses",
+    "status": 200,
+    "contentType": "text/event-stream",
+    "model": "gpt-5.1",
+    "expect": {
+      "text": "",
+      "reasoning": [
+        {
+          "text": "",
+          "providerMeta": {
+            "openai": {
+              "itemId": "rs_0c4e8a2b6d1f3e5a",
+              "reasoningEncryptedContent": "gAAAAABo8pZ1xW3qR7tY2uI5oP9aS4dF6gH8jK0lZ1xC3vB5nM7qW9eR2tY4uI6oP8aS0dF2gH4jK6lZ8xC0vB2nM4qW6eR8tY0uI2o="
+            }
+          }
+        }
+      ],
+      "toolCalls": [{ "name": "calculator", "input": { "expression": "17 * 24" }, "callId": "call_Mx4Tq8Wn2Zr6" }],
+      "stop": "tool-calls",
+      "usage": { "input": 164, "output": 58, "cacheRead": 0, "reasoning": 36 }
+    }
+  },
+  "openai-compatible-tool-call.sse": {
+    "provider": "openai-compatible",
+    "endpoint": "POST {baseUrl}/chat/completions",
+    "status": 200,
+    "contentType": "text/event-stream",
+    "model": "llama-3.3-70b-versatile",
+    "expect": {
+      "text": "",
+      "reasoning": [],
+      "toolCalls": [{ "name": "calculator", "input": { "expression": "17 * 24" }, "callId": "call_Qd2Lw9Xr4Tn7" }],
+      "stop": "tool-calls",
+      "raw": "tool_calls",
+      "usage": { "input": 180, "output": 22, "cacheRead": 0, "reasoning": 0 }
+    }
+  },
+  "gemini-tool-call.sse": {
+    "provider": "google",
+    "endpoint": "POST https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse",
+    "status": 200,
+    "contentType": "text/event-stream",
+    "model": "gemini-3-flash",
+    "expect": {
+      "text": "",
+      "reasoning": [],
+      "toolCalls": [{ "name": "calculator", "input": { "expression": "17 * 24" } }],
+      "toolCallMeta": { "google": { "thoughtSignature": "CiQB0e2Kb7Xq1wR4mN8sT2vL6yP9cZ3hJ5gD0fA7uE1iO4kQsW" } },
+      "stop": "tool-calls",
+      "raw": "STOP",
+      "usage": { "input": 96, "output": 56, "cacheRead": 0, "reasoning": 42 }
+    }
   }
 }

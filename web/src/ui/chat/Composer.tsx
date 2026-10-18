@@ -1,5 +1,14 @@
 import { ArrowUp, Camera, ImagePlus, Square, X } from 'lucide-react'
-import { type ClipboardEvent, type DragEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
+import {
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import { useSession } from '../../app/chat.tsx'
 import type { Effort, ModelDescriptor } from '../../core/contracts/ai.ts'
 import type { ModelRef, Part } from '../../core/contracts/workspace.ts'
@@ -20,6 +29,8 @@ export interface ComposerProps {
   readonly system: string
   readonly systemFrozen: boolean
   readonly onSystem: (text: string) => Promise<void> | void
+  /** The chat's Tools control (ui/chat/Tools.tsx), shown with the other settings of the toolbar. */
+  readonly tools?: ReactNode
   readonly streaming: boolean
   readonly queued: number
   /** Resolves true when the message was taken (the draft is then cleared). */
@@ -268,6 +279,7 @@ export function Composer(props: ComposerProps) {
             <ModelPicker value={props.modelRef} onChange={props.onModel} />
             <EffortSelect model={model} value={props.effort} onChange={props.onEffort} />
             <SystemPromptButton value={props.system} frozen={props.systemFrozen} onSave={props.onSystem} />
+            {props.tools}
           </div>
           <div className={styles.toolbarEnd}>
             {streaming && (

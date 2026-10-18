@@ -882,3 +882,10 @@
     transition: none;
   }
 }
+
+/* The tool work of an answer (Tools.tsx): web searches, tool cards and sources, between the text and its footer. */
+.toolWork {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}

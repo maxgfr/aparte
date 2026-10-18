@@ -2,7 +2,8 @@ import { ChevronLeft, ChevronRight, Pencil, RefreshCw } from 'lucide-react'
 import { memo, useEffect, useId, useState } from 'react'
 import { useResolvedParts, useSession } from '../../app/chat.tsx'
 import type { ModelDescriptor } from '../../core/contracts/ai.ts'
-import type { StreamState } from '../../core/contracts/chat.ts'
+import type { StreamState, ToolCallState } from '../../core/contracts/chat.ts'
+import type { ApprovalDecision } from '../../core/contracts/tools.ts'
 import type { Id, Message, Part, Thread } from '../../core/contracts/workspace.ts'
 import { formatNumber, formatUsd } from '../../i18n/format.ts'
 import type { Key } from '../../i18n/index.ts'
@@ -12,6 +13,7 @@ import { IconButton } from '../components/IconButton.tsx'
 import { CopyButton, Markdown } from '../render/Sanitized.tsx'
 import styles from './Chat.module.css'
 import { useEffortLabel } from './ModelPicker.tsx'
+import { isWebSearchCall, SourcesList, ToolCallCard, WebSearchNote } from './Tools.tsx'
 import { costOf, type ImagePart, imagesOf, reasoningOf, textOf } from './view.ts'
 
 /** Marks the element that holds a message's rendered text, apart from its reasoning, notes and controls. */
@@ -22,8 +24,71 @@ export interface MessageActions {
   readonly onEdit?: (messageId: Id, parts: readonly Part[]) => Promise<void>
   readonly onRegenerate?: (messageId: Id) => void
   readonly onBranch?: (messageId: Id) => void
+  /** Answers the approval a tool call of the current round waits for. */
+  readonly onApprove?: (callId: string, decision: ApprovalDecision) => void
   /** A stream runs in this conversation: regenerating and editing wait for it. */
   readonly busy: boolean
+}
+
+type CallPart = Extract<Part, { readonly type: 'tool-call' }>
+type ResultPart = Extract<Part, { readonly type: 'tool-result' }>
+type SourcePart = Extract<Part, { readonly type: 'source' }>
+
+const NO_PARTS: readonly Part[] = []
+
+/**
+ * The tool work of an answer, in part order: the provider's web searches, then each call with its result (from the
+ * `tool` message that answers it) or its live state, then the sources.
+ */
+function ToolWork({
+  parts,
+  results,
+  live,
+  streaming,
+  onApprove,
+}: {
+  parts: readonly Part[]
+  results: readonly Part[]
+  live?: readonly ToolCallState[]
+  streaming: boolean
+  onApprove?: (callId: string, decision: ApprovalDecision) => void
+}) {
+  const searches = parts.filter(isWebSearchCall)
+  const calls = parts.filter((p): p is CallPart => p.type === 'tool-call')
+  const sources = parts.filter((p): p is SourcePart => p.type === 'source')
+  if (searches.length === 0 && calls.length === 0 && sources.length === 0) return null
+  const byId = new Map<string, ResultPart>()
+  for (const r of results) if (r.type === 'tool-result' && !byId.has(r.callId)) byId.set(r.callId, r)
+  const answered = new Set(
+    parts.flatMap((p) => {
+      const b = p.type === 'provider' ? (p.block as { type?: unknown; tool_use_id?: unknown } | null) : null
+      return b?.type === 'web_search_tool_result' && typeof b.tool_use_id === 'string' ? [b.tool_use_id] : []
+    }),
+  )
+  return (
+    <div className={styles.toolWork}>
+      {searches.map((p, i) => {
+        const id = (p as { block: { id?: unknown } }).block.id
+        return (
+          <WebSearchNote
+            key={typeof id === 'string' ? id : `s${i}`}
+            block={(p as { block: unknown }).block}
+            live={streaming && !(typeof id === 'string' && answered.has(id))}
+          />
+        )
+      })}
+      {calls.map((call) => (
+        <ToolCallCard
+          key={call.callId}
+          call={call}
+          result={byId.get(call.callId)}
+          live={live?.find((c) => c.callId === call.callId)}
+          onApprove={onApprove}
+        />
+      ))}
+      {sources.length > 0 && <SourcesList sources={sources} />}
+    </div>
+  )
 }
 
 /** A stored photo, decrypted into an object URL for as long as the vault stays unlocked. */
@@ -279,11 +344,24 @@ function Reasoning({ text, live, hidden }: { text: string; live: boolean; hidden
   )
 }
 
-function AssistantMessage({ thread, message, actions }: { thread: Thread; message: Message; actions: MessageActions }) {
+function AssistantMessage({
+  thread,
+  message,
+  actions,
+  live,
+}: {
+  thread: Thread
+  message: Message
+  actions: MessageActions
+  live?: readonly ToolCallState[]
+}) {
   const t = useT()
   const session = useSession()
   const model = message.model === null ? null : (session?.resolveModel(message.model) ?? null)
   const parts = useResolvedParts(message.parts)
+  const hasCalls = message.parts.some((p) => p.type === 'tool-call')
+  const toolMessage = hasCalls ? thread.children(message.id).find((m) => m.role === 'tool') : undefined
+  const results = useResolvedParts(toolMessage?.parts ?? NO_PARTS)
   const text = textOf(parts)
   const reasoning = reasoningOf(parts)
   const hadReasoning = parts.some((p) => p.type === 'reasoning')
@@ -297,6 +375,7 @@ function AssistantMessage({ thread, message, actions }: { thread: Thread; messag
     >
       <Reasoning text={reasoning} live={false} hidden={hadReasoning && reasoning === ''} />
       {text !== '' && <Markdown source={text} className={styles.answerContent} data={CONTENT} />}
+      <ToolWork parts={parts} results={results} live={live} streaming={false} onApprove={actions.onApprove} />
       <AnswerNote message={message} />
       <div className={styles.answerFooter}>
         <UsageLine message={message} model={model} />
@@ -338,15 +417,20 @@ export const MessageRow = memo(function MessageRow({
   thread,
   message,
   actions,
+  live,
 }: {
   thread: Thread
   message: Message
   actions: MessageActions
   treeSize: number
+  /** The live state of this answer's tool calls while their round runs. */
+  live?: readonly ToolCallState[]
 }) {
   if (message.role === 'user') return <UserMessage thread={thread} message={message} actions={actions} />
-  if (message.role === 'assistant') return <AssistantMessage thread={thread} message={message} actions={actions} />
+  if (message.role === 'assistant')
+    return <AssistantMessage thread={thread} message={message} actions={actions} live={live} />
   if (message.role === 'system') return <SystemNotice message={message} />
+  // A `tool` message holds the results of the answer before it, which shows them in its tool cards.
   return null
 })
 
@@ -369,6 +453,7 @@ export function StreamingAnswer({ stream }: { stream: StreamState }) {
     >
       <Reasoning text={reasoning} live={thinking} hidden={false} />
       {text !== '' && <Markdown source={text} live className={styles.answerContent} data={CONTENT} />}
+      <ToolWork parts={stream.parts} results={NO_PARTS} streaming />
       <p className={styles.caption} role="status" aria-live="polite">
         {thinking ? t('chat.thinking') : t('chat.writing')}
       </p>

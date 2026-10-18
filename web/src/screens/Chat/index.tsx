@@ -4,6 +4,7 @@ import { Link, Redirect, useLocation } from 'wouter'
 import {
   useConversation,
   useKeyedProviders,
+  useRegisteredTools,
   useSession,
   useSessionState,
   useSetting,
@@ -17,12 +18,14 @@ import { useVault } from '../../app/vault.tsx'
 import type { Effort } from '../../core/contracts/ai.ts'
 import type { StreamState } from '../../core/contracts/chat.ts'
 import { InvalidInputError, InvalidStateError } from '../../core/contracts/crypto.ts'
+import { type ApprovalDecision, WEB_SEARCH } from '../../core/contracts/tools.ts'
 import type { Id, ModelRef, Part } from '../../core/contracts/workspace.ts'
 import { useT } from '../../i18n/react.tsx'
 import styles from '../../ui/chat/Chat.module.css'
 import { Composer } from '../../ui/chat/Composer.tsx'
 import { ConversationActions } from '../../ui/chat/ConversationList.tsx'
 import { type MessageActions, MessageRow, StreamingAnswer } from '../../ui/chat/Messages.tsx'
+import { ToolsButton } from '../../ui/chat/Tools.tsx'
 import { visibleMessages, windowOf } from '../../ui/chat/view.ts'
 import { Button, buttonClass } from '../../ui/components/Button.tsx'
 import { EmptyState } from '../../ui/components/EmptyState.tsx'
@@ -145,11 +148,15 @@ function ChatView({ id }: { id: Id | null }) {
   const [earlier, setEarlier] = useState(0)
 
   // A new chat keeps its choices here until its first message creates the conversation.
-  const [draft, setDraft] = useState<{ model: ModelRef | null; effort: Effort | null; system: string | null }>({
-    model: null,
-    effort: null,
-    system: null,
-  })
+  const [draft, setDraft] = useState<{
+    model: ModelRef | null
+    effort: Effort | null
+    system: string | null
+    /** Tool names chosen for the new chat; null: every registered tool. */
+    tools: readonly string[] | null
+    webSearch: boolean
+  }>({ model: null, effort: null, system: null, tools: null, webSearch: false })
+  const registered = useRegisteredTools()
   const fallbackModel = defaultModel ?? choices[0]?.model.ref ?? null
   const modelRef = conversation?.model ?? (id === null ? (draft.model ?? fallbackModel) : null)
   const model = modelRef === null || session === null ? null : session.resolveModel(modelRef)
@@ -165,6 +172,19 @@ function ChatView({ id }: { id: Id | null }) {
   const system = conversation?.system ?? draft.system ?? defaultSystem ?? ''
   const started = conversation?.startedAt !== undefined
 
+  // The chat's tool set: the draft's until a conversation exists, then the conversation's own snapshot.
+  const toolNames = useMemo(() => {
+    if (conversation !== undefined)
+      return new Set(conversation.tools.filter((e) => e.source !== 'provider').map((e) => e.name))
+    return new Set(draft.tools ?? registered.map((r) => r.tool.name))
+  }, [conversation, draft.tools, registered])
+  const webSearch =
+    conversation !== undefined
+      ? conversation.tools.some((e) => e.source === 'provider' && e.name === WEB_SEARCH)
+      : draft.webSearch
+  // Cheap, and read again on every render: a registry change re-renders through useRegisteredTools.
+  const resolved = conversation === undefined || session === null ? null : session.tools.resolve(conversation.tools)
+
   const path = thread.status === 'ready' ? thread.path : []
   // A regenerated answer streams as a sibling of the one on screen: the branch shows up to its parent meanwhile.
   const streamParent = rawStream?.parentId ?? null
@@ -179,7 +199,8 @@ function ChatView({ id }: { id: Id | null }) {
   let streamed = 0
   for (const part of stream?.parts ?? [])
     if (part.type === 'text' || part.type === 'reasoning') streamed += part.text.length
-  const follow = useFollow(`${visible.length}|${stream?.parts.length ?? 0}|${streamed}`)
+  const calls = stream?.tools.map((c) => c.status).join(',') ?? ''
+  const follow = useFollow(`${visible.length}|${stream?.parts.length ?? 0}|${streamed}|${calls}`)
   const busy = rawStream !== null
 
   // Esc stops the answer from anywhere on the screen, unless a dialog is open (Esc closes it instead).
@@ -217,9 +238,11 @@ function ChatView({ id }: { id: Id | null }) {
     let target = id
     let created = false
     if (target === null) {
+      const tools = await session.tools.snapshot([...toolNames], { webSearch })
       target = session.workspace.conversations.create({
         model: modelRef,
         effort: draft.effort,
+        tools,
         ...(draft.system === null ? {} : { system: draft.system }),
       })
       created = true
@@ -257,8 +280,48 @@ function ChatView({ id }: { id: Id | null }) {
       onBranch: (messageId) => {
         tree.setLeaf(tree.descend(messageId))
       },
+      onApprove: (callId: string, decision: ApprovalDecision) => {
+        try {
+          session.chat.approve(id, callId, decision)
+        } catch (error) {
+          explain(error)
+        }
+      },
     }
   }, [session, id, tree, busy, explain])
+
+  // Whether the model takes tools is the catalog's say; the user may correct it for a model the catalog does not know.
+  const provider =
+    modelRef === null || session === null ? undefined : session.workspace.providers.get(modelRef.provider)
+  const toolsOverride = modelRef === null ? undefined : provider?.overrides?.[modelRef.id]?.tools
+  const modelTools =
+    model === null ||
+    provider === undefined ||
+    modelRef === null ||
+    (model.capabilities.tools && toolsOverride === undefined)
+      ? null
+      : {
+          checked: model.capabilities.tools,
+          onChange: (on: boolean) => {
+            const overrides = provider.overrides ?? {}
+            session?.workspace.providers.update(provider.id, {
+              overrides: { ...overrides, [modelRef.id]: { ...overrides[modelRef.id], tools: on } },
+            })
+          },
+        }
+
+  /** Changes the tool set before the first message: the draft's, or a conversation's that has not started. */
+  const setTools = (names: ReadonlySet<string>, search: boolean) => {
+    if (session === null || started) return
+    if (id === null) {
+      setDraft((d) => ({ ...d, tools: [...names], webSearch: search }))
+      return
+    }
+    void session.tools.snapshot([...names], { webSearch: search }).then((tools) => {
+      if (session.workspace.conversations.get(id)?.startedAt === undefined)
+        session.workspace.conversations.update(id, { tools })
+    })
+  }
 
   const onModel = (ref: ModelRef) => {
     if (session === null) return
@@ -356,9 +419,15 @@ function ChatView({ id }: { id: Id | null }) {
               message={message}
               actions={actions}
               treeSize={treeSize}
+              live={stream?.phase === 'tools' && stream.parentId === message.id ? stream.tools : undefined}
             />
           ))}
-        {stream !== null && <StreamingAnswer stream={stream} />}
+        {stream !== null && stream.phase === 'model' && <StreamingAnswer stream={stream} />}
+        {stream !== null && stream.phase === 'tools' && (
+          <p className={styles.caption} role="status" aria-live="polite">
+            {stream.tools.some((c) => c.status === 'approval') ? t('tools.approvalPending') : t('tools.runningTools')}
+          </p>
+        )}
       </div>
 
       <div className={styles.composerDock}>
@@ -371,6 +440,31 @@ function ChatView({ id }: { id: Id | null }) {
           system={system}
           systemFrozen={started}
           onSystem={onSystem}
+          tools={
+            <ToolsButton
+              options={registered.map((r) => ({
+                name: r.tool.name,
+                source: r.tool.source,
+                ...(r.tool.title === undefined ? {} : { title: r.tool.title }),
+                ...(r.tool.origin === undefined ? {} : { origin: r.tool.origin }),
+              }))}
+              selected={toolNames}
+              webSearch={webSearch}
+              frozen={started}
+              model={model}
+              drifted={resolved?.drifted ?? []}
+              missing={resolved?.missing ?? []}
+              onToggle={(name, on) => {
+                const next = new Set(toolNames)
+                if (on) next.add(name)
+                else next.delete(name)
+                setTools(next, webSearch)
+              }}
+              onWebSearch={(on) => setTools(toolNames, on)}
+              onRevoke={(key) => session?.workspace.toolApprovals.revoke(key, null)}
+              modelTools={modelTools}
+            />
+          }
           streaming={busy}
           queued={rawStream?.queued ?? 0}
           onSend={onSend}

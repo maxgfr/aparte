@@ -21,6 +21,7 @@ import type {
   ProviderKind,
 } from '../core/contracts/ai.ts'
 import type { ChatController, RequestModule, StreamState } from '../core/contracts/chat.ts'
+import type { RegisteredTool, ToolApproval, ToolRegistry } from '../core/contracts/tools.ts'
 import type { Vault } from '../core/contracts/vault.ts'
 import type {
   Conversation,
@@ -54,6 +55,8 @@ import { useVault } from './vault.tsx'
  *   never with the first paint.
  * - Streams hold the vault lock and the PWA reload (the controller takes both, `chat-stream`), so neither an
  *   auto-lock nor an update cuts an answer.
+ * - The tool registry holds the built-in tools (web/src/core/tools/builtins.ts) for the session only; approvals that
+ *   outlive a call are stored encrypted in the workspace (`toolApprovals`).
  */
 
 /** The core modules a session uses, loaded together after unlock. */
@@ -76,6 +79,8 @@ export interface ChatSession {
   readonly blobs: LocalBlobs
   /** Full-text search over the conversations, in memory only; dropped on lock. */
   readonly search: SearchIndex
+  /** The tools chats may declare (contracts/tools.ts), registered when the session opens. */
+  readonly tools: ToolRegistry
   readonly modules: ChatModules
   /** The bundled model catalog, null until its chunk has loaded (the session opens without waiting for it). */
   readonly catalog: Catalog | null
@@ -138,6 +143,9 @@ async function openSession(vault: Vault): Promise<{
     blobsModule,
     rngModule,
     render,
+    registryModule,
+    builtinsModule,
+    toolFetchModule,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -151,6 +159,9 @@ async function openSession(vault: Vault): Promise<{
     import('../core/media/blobs.ts'),
     import('../core/crypto/rng.ts'),
     import('../ui/render/markdown.ts'),
+    import('../core/tools/registry.ts'),
+    import('../core/tools/builtins.ts'),
+    import('../core/tools/fetch.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
@@ -176,6 +187,10 @@ async function openSession(vault: Vault): Promise<{
   // The controller resolves models through the same function: it sees the catalog as soon as it has loaded.
   let catalog: Catalog | null = null
   const resolveModel = (ref: ModelRef) => resolveModelWith(workspace, capabilities, catalog, ref)
+  const tools = registryModule.createToolRegistry()
+  for (const tool of builtinsModule.builtinTools({ clock, search, download: toolFetchModule.toolFetch })) {
+    await tools.register(tool)
+  }
   const chat = controller.createChatController({
     workspace,
     holdLock: (reason: string) => vault.holdLock(reason),
@@ -186,6 +201,7 @@ async function openSession(vault: Vault): Promise<{
     blobs,
     rng,
     clock,
+    tools: { registry: tools, approvals: workspace.toolApprovals },
   })
 
   const urls = new Map<string, Promise<string | null>>()
@@ -257,6 +273,7 @@ async function openSession(vault: Vault): Promise<{
     keys,
     blobs,
     search,
+    tools,
     modules,
     catalog,
     resolveModel,
@@ -513,6 +530,28 @@ export function useKeyedProviders(): ReadonlySet<string> | null {
     }
   }, [keys])
   return ids
+}
+
+const EMPTY_TOOLS: readonly RegisteredTool[] = []
+
+/** The tools of the session's registry, by name. */
+export function useRegisteredTools(): readonly RegisteredTool[] {
+  const session = useSession()
+  const registry = session?.tools ?? null
+  const subscribe = useMemo(() => (registry === null ? null : (fn: () => void) => registry.subscribe(fn)), [registry])
+  const read = useCallback(() => (registry === null ? EMPTY_TOOLS : registry.list()), [registry])
+  return useExternal(subscribe, read)
+}
+
+const EMPTY_APPROVALS: readonly ToolApproval[] = []
+
+/** The stored tool approvals ("always" and "for this chat"). */
+export function useToolApprovals(): readonly ToolApproval[] {
+  const session = useSession()
+  const ws = session?.workspace ?? null
+  const subscribe = useMemo(() => (ws === null ? null : (fn: () => void) => ws.subscribe('toolApprovals', fn)), [ws])
+  const read = useCallback(() => (ws === null ? EMPTY_APPROVALS : ws.toolApprovals.list()), [ws])
+  return useExternal(subscribe, read)
 }
 
 /** Whether the workspace has local changes not yet saved on this device. */

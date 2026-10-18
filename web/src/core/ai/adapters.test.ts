@@ -39,12 +39,22 @@ interface Expected {
   usage?: Record<string, number>
   refusal?: { category: string | null; explanation?: string }
   error?: { code: string; retryable: boolean; status?: number; message?: string }
+  /** Function calls for the client, in order; `callId` when the provider names one (Gemini does not). */
+  toolCalls?: { name: string; input: unknown; callId?: string }[]
+  /** The `providerMeta` the (single) tool call carries. */
+  toolCallMeta?: unknown
+  /** Sources of the answer (provider web search). */
+  sources?: { url: string; title?: string }[]
+  /** The `type` of each provider block, in order (Anthropic server tool blocks). */
+  providerBlocks?: string[]
 }
 interface Fixture {
   provider: ProviderKind
   status: number
   contentType: string
   model: string
+  /** Served to a request that declares the provider's web search. */
+  webSearch?: boolean
   expect: Expected
 }
 const index = (await Bun.file(new URL('index.json', SSE)).json()) as Record<string, Fixture | string>
@@ -97,6 +107,7 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     updatedAt: now,
   },
   google: { id: 'pg', kind: 'google', label: 'Gemini', syncKey: false, createdAt: now, updatedAt: now },
+  openai: { id: 'po', kind: 'openai', label: 'OpenAI', syncKey: false, createdAt: now, updatedAt: now },
 }
 
 const KEY = 'sk-test-key-0123456789'
@@ -104,6 +115,17 @@ const SEARCH: ToolDefinition = {
   name: 'search',
   description: 'Searches the notes.',
   inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'], additionalProperties: false },
+}
+const CALCULATOR: ToolDefinition = {
+  name: 'calculator',
+  description: 'Evaluates an arithmetic expression.',
+  inputSchema: {
+    type: 'object',
+    properties: { expression: { type: 'string' } },
+    required: ['expression'],
+    additionalProperties: false,
+  },
+  strict: true,
 }
 const user = (text: string): PromptMessage => ({ role: 'user', parts: [{ type: 'text', text }] })
 
@@ -154,12 +176,40 @@ function fold(events: readonly ChatEvent[]) {
   return { text, reasoning: [...reasoning.values()], usage, terminal }
 }
 
+/** The request a fixture answers: the calculator declared when it calls one, the web search when it searches. */
+function fixtureRequest(meta: Fixture): ChatRequest {
+  const over: Partial<ChatRequest> = {}
+  if (meta.expect.toolCalls) Object.assign(over, { tools: [CALCULATOR] })
+  if (meta.webSearch) Object.assign(over, { webSearch: true })
+  const req = chatRequest(meta.provider, meta.model, over)
+  // A model the bundled tables do not know is assumed to take no tools; the fixture says it called one.
+  return meta.expect.toolCalls
+    ? { ...req, model: { ...req.model, capabilities: { ...req.model.capabilities, tools: true } } }
+    : req
+}
+
 describe('recorded streams', () => {
   test.each(fixtures)('%s', async (file, meta) => {
     const served = await fixture(file)
     const adapter = A.createAdapter(meta.provider, { fetch: served.fetch })
-    const events = await collect(adapter.stream(chatRequest(meta.provider, meta.model)))
+    const events = await collect(adapter.stream(fixtureRequest(meta)))
     const got = fold(events)
+    const calls = events.filter((e) => e.type === 'tool-call')
+    expect(calls.map((c) => ({ name: c.name, input: c.input }))).toEqual(
+      (meta.expect.toolCalls ?? []).map((c) => ({ name: c.name, input: c.input })),
+    )
+    for (const [i, c] of (meta.expect.toolCalls ?? []).entries()) {
+      if (c.callId !== undefined) expect(calls[i]?.callId).toBe(c.callId)
+      else expect(calls[i]?.callId).toMatch(/\S/)
+    }
+    if (meta.expect.toolCallMeta !== undefined)
+      expect(calls[0]?.providerMeta).toEqual(meta.expect.toolCallMeta as never)
+    expect(events.filter((e) => e.type === 'source').map((e) => ({ url: e.part.url, title: e.part.title }))).toEqual(
+      (meta.expect.sources ?? []) as never,
+    )
+    expect(events.filter((e) => e.type === 'provider-block').map((e) => (e.block as { type: string }).type)).toEqual(
+      meta.expect.providerBlocks ?? [],
+    )
     expect(got.text).toBe(meta.expect.text)
     expect(got.reasoning).toEqual(meta.expect.reasoning)
     expect(got.terminal).toHaveLength(1)
@@ -416,6 +466,7 @@ describe('headers and keys', () => {
     ],
     'openai-compatible': ['authorization', 'content-type', 'accept'],
     google: ['x-goog-api-key', 'content-type', 'accept'],
+    openai: ['authorization', 'content-type', 'accept'],
   }
   test.each(fixtures)(
     '%s sends only headers a preflight can allow, and never the key in the URL',
@@ -569,5 +620,200 @@ describe('the default fetch is the network wrapper', () => {
     expect(seen).toHaveLength(1)
     expect(seen[0]?.init?.credentials).toBe('omit')
     expect(networkLog.snapshot().map((e) => e.purpose)).toEqual(['provider'])
+  })
+})
+
+describe('tools and web search', () => {
+  type Block = { type: string; [k: string]: unknown }
+  type Turn = { role: string; content: Block[] }
+
+  test('Claude: function tools declared strict in snapshot order, no tool choice, the dynamic web search last', async () => {
+    const served = await fixture('anthropic-tool-call.sse')
+    const second: ToolDefinition = { ...SEARCH, name: 'search_notes' }
+    await collect(
+      A.createAdapter('anthropic', { fetch: served.fetch }).stream(
+        chatRequest('anthropic', 'claude-opus-5-5', { effort: 'high', tools: [CALCULATOR, second], webSearch: true }),
+      ),
+    )
+    const body = (served.calls[0] as Call).body as Record<string, unknown>
+    const tools = body.tools as Block[]
+    expect(tools.map((t) => t.name)).toEqual(['calculator', 'search_notes', 'web_search'])
+    expect(tools[0]).toMatchObject({
+      name: 'calculator',
+      description: CALCULATOR.description,
+      input_schema: CALCULATOR.inputSchema,
+      strict: true,
+    })
+    expect(tools[1]?.strict).toBeUndefined()
+    expect(tools[2]).toMatchObject({ type: 'web_search_20260209', name: 'web_search', max_uses: 5 })
+    // Claude Opus 5.5 refuses a forced tool choice: the request leaves it to the model.
+    expect(body.tool_choice === undefined || (body.tool_choice as Block).type === 'auto').toBe(true)
+  })
+
+  test('Claude models without dynamic filtering get the basic web search', async () => {
+    const served = await fixture('anthropic-text.sse')
+    await collect(
+      A.createAdapter('anthropic', { fetch: served.fetch }).stream(
+        chatRequest('anthropic', 'claude-haiku-5-5', { effort: 'low', webSearch: true }),
+      ),
+    )
+    const tools = ((served.calls[0] as Call).body as { tools: Block[] }).tools
+    expect(tools).toEqual([expect.objectContaining({ type: 'web_search_20250305', name: 'web_search', max_uses: 5 })])
+  })
+
+  test('a tool round is replayed verbatim: thinking with its signature, the call, then its result', async () => {
+    const served = await fixture('anthropic-text.sse')
+    const signature = 'EuYBCkYIBhgCKkB3vQp1cZf9mT0aYxR8kLw2nH6sJd4eGu0iVbN7oCq'
+    const messages: PromptMessage[] = [
+      user('What is 17 × 24?'),
+      {
+        role: 'assistant',
+        parts: [
+          {
+            type: 'reasoning',
+            text: 'Use the calculator.',
+            providerMeta: { anthropic: { type: 'thinking', signature } },
+          },
+          { type: 'text', text: 'Let me work that out.' },
+          { type: 'tool-call', callId: 'toolu_1', name: 'calculator', input: { expression: '17 * 24' } },
+        ],
+      },
+      { role: 'tool', parts: [{ type: 'tool-result', callId: 'toolu_1', name: 'calculator', output: '408' }] },
+    ]
+    await collect(
+      A.createAdapter('anthropic', { fetch: served.fetch }).stream(
+        chatRequest('anthropic', 'claude-opus-5-5', { effort: 'high', tools: [CALCULATOR], messages }),
+      ),
+    )
+    const turns = ((served.calls[0] as Call).body as { messages: Turn[] }).messages
+    expect(turns.map((t) => t.role)).toEqual(['user', 'assistant', 'user'])
+    expect(turns[1]?.content).toEqual([
+      { type: 'thinking', thinking: 'Use the calculator.', signature },
+      { type: 'text', text: 'Let me work that out.' },
+      expect.objectContaining({
+        type: 'tool_use',
+        id: 'toolu_1',
+        name: 'calculator',
+        input: { expression: '17 * 24' },
+      }),
+    ])
+    expect(turns[2]?.content).toEqual([
+      expect.objectContaining({ type: 'tool_result', tool_use_id: 'toolu_1', content: '408' }),
+    ])
+  })
+
+  test('a web search is kept as Anthropic blocks and replayed byte for byte on the next turn', async () => {
+    const searched = await fixture('anthropic-web-search.sse')
+    const events = await collect(
+      A.createAdapter('anthropic', { fetch: searched.fetch }).stream(
+        chatRequest('anthropic', 'claude-opus-5-5', { effort: 'high', webSearch: true }),
+      ),
+    )
+    const blocks = events.flatMap((e) => (e.type === 'provider-block' ? [e.block as Block] : []))
+    expect(blocks[0]).toEqual({
+      type: 'server_tool_use',
+      id: 'srvtoolu_01Ab3Cd5Ef7Gh9Jk2Lm4Np6Q',
+      name: 'web_search',
+      input: { query: 'Paris population 2026' },
+    })
+    expect(blocks[1]?.type).toBe('web_search_tool_result')
+
+    const served = await fixture('anthropic-text.sse')
+    const messages: PromptMessage[] = [
+      user('How many people live in Paris?'),
+      {
+        role: 'assistant',
+        parts: [
+          ...blocks.map((block) => ({ type: 'provider' as const, provider: 'anthropic', block })),
+          { type: 'text', text: 'About 2.1 million people live in Paris itself.' },
+        ],
+      },
+      user('And in the region?'),
+    ]
+    await collect(
+      A.createAdapter('anthropic', { fetch: served.fetch }).stream(
+        chatRequest('anthropic', 'claude-opus-5-5', { effort: 'high', webSearch: true, messages }),
+      ),
+    )
+    const turns = ((served.calls[0] as Call).body as { messages: Turn[] }).messages
+    const replayed = (turns[1]?.content ?? []).map(({ cache_control: _c, caller: _k, ...rest }) => rest)
+    expect(replayed.slice(0, 2)).toEqual(blocks)
+    expect(replayed[2]).toMatchObject({ type: 'text', text: 'About 2.1 million people live in Paris itself.' })
+  })
+
+  test('OpenAI, Gemini and OpenRouter get their own search', async () => {
+    const openai = serve(await Bun.file(new URL('openai-tool-call.sse', SSE)).text())
+    const openaiReq = chatRequest('openai', 'gpt-5.1', { webSearch: true })
+    await collect(
+      A.createAdapter('openai', { fetch: openai.fetch }).stream({
+        ...openaiReq,
+        model: {
+          ...openaiReq.model,
+          capabilities: { ...openaiReq.model.capabilities, webSearch: 'openai:web_search' },
+        },
+      }),
+    )
+    expect(((openai.calls[0] as Call).body as { tools: Block[] }).tools).toEqual([
+      expect.objectContaining({ type: 'web_search' }),
+    ])
+
+    const gemini = await fixture('gemini-text.sse')
+    const geminiReq = chatRequest('google', 'gemini-3-flash', { webSearch: true })
+    await collect(
+      A.createAdapter('google', { fetch: gemini.fetch }).stream({
+        ...geminiReq,
+        model: {
+          ...geminiReq.model,
+          capabilities: { ...geminiReq.model.capabilities, webSearch: 'google:google_search' },
+        },
+      }),
+    )
+    expect(((gemini.calls[0] as Call).body as { tools: unknown }).tools).toEqual([{ googleSearch: {} }])
+
+    const openrouter = await fixture('openai-compatible-text.sse')
+    const provider: ProviderConfig = {
+      id: 'pr',
+      kind: 'openrouter',
+      label: 'OpenRouter',
+      syncKey: false,
+      createdAt: now,
+      updatedAt: now,
+    }
+    const req = chatRequest('openrouter', 'openai/gpt-5.1', { provider, webSearch: true })
+    await collect(
+      A.createAdapter('openrouter', { fetch: openrouter.fetch }).stream({
+        ...req,
+        model: { ...req.model, capabilities: { ...req.model.capabilities, webSearch: 'openrouter:web' } },
+      }),
+    )
+    expect(((openrouter.calls[0] as Call).body as { plugins: unknown }).plugins).toEqual([
+      { id: 'web', max_results: 5 },
+    ])
+  })
+
+  const refusals: [string, ProviderKind, string, Partial<ChatRequest>][] = [
+    ['web search on a model without one', 'openai-compatible', 'llama-3.3-70b-versatile', { webSearch: true }],
+    [
+      'web search next to function tools on Gemini 2',
+      'google',
+      'gemini-2.5-flash',
+      { webSearch: true, tools: [CALCULATOR] },
+    ],
+    ['a tool declared twice', 'anthropic', 'claude-opus-5-5', { effort: 'high', tools: [CALCULATOR, CALCULATOR] }],
+    [
+      'a function tool named like the web search',
+      'anthropic',
+      'claude-opus-5-5',
+      { effort: 'high', webSearch: true, tools: [{ ...CALCULATOR, name: 'web_search' }] },
+    ],
+  ]
+  test.each(refusals)('refused before any call: %s', async (_, kind, model, over) => {
+    const served = await fixture('anthropic-text.sse')
+    const req = chatRequest(kind, model, over)
+    const withTools = { ...req, model: { ...req.model, capabilities: { ...req.model.capabilities, tools: true } } }
+    await expect(collect(A.createAdapter(kind, { fetch: served.fetch }).stream(withTools))).rejects.toBeInstanceOf(
+      InvalidInputError,
+    )
+    expect(served.calls).toHaveLength(0)
   })
 })

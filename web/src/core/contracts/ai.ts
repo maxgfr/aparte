@@ -293,7 +293,10 @@ export interface PromptMessage {
   readonly parts: readonly PromptPart[]
 }
 
-/** A tool as declared to the provider (milestone M5a fills it; empty until then). */
+/**
+ * A function tool as declared to the provider: a registered tool of the conversation's snapshot (contracts/tools.ts).
+ * `strict` asks the provider to keep the arguments valid against the schema (Anthropic and OpenAI).
+ */
 export interface ToolDefinition {
   readonly name: string
   readonly description: string
@@ -316,6 +319,12 @@ export interface ChatRequest {
   readonly messages: readonly PromptMessage[]
   /** The conversation's tool snapshot, in its order, with the same definitions every turn. */
   readonly tools: readonly ToolDefinition[]
+  /**
+   * Declares the provider's own web search (`model.capabilities.webSearch` picks the variant: Anthropic's dynamic or
+   * basic `web_search` tool, OpenAI's `web_search`, Gemini's Google Search grounding, OpenRouter's `web` plugin). It is
+   * declared after the function tools, under the name `web_search`. InvalidInputError when the model has none.
+   */
+  readonly webSearch?: boolean
   readonly toolChoice?: ToolChoice
   /** Sent explicitly whenever the model takes effort; null otherwise. */
   readonly effort: Effort | null
@@ -399,6 +408,7 @@ export type ChatEvent =
    * `providerMeta` is display-only and never replayed.
    */
   | { readonly type: 'reasoning-end'; readonly id: string; readonly providerMeta?: ProviderMeta }
+  /** A call of a declared function tool, for the client to run. A provider-executed call (web search) is not one. */
   | {
       readonly type: 'tool-call'
       readonly callId: string
@@ -409,8 +419,9 @@ export type ChatEvent =
   /** A source the answer cites (provider web search, citations). */
   | { readonly type: 'source'; readonly part: Extract<Part, { readonly type: 'source' }> }
   /**
-   * A provider block with no portable meaning (an Anthropic `fallback` switch point, server tool use and results,
-   * compaction), kept as a `provider` part and replayed verbatim to that provider only.
+   * A provider block with no portable meaning (an Anthropic `fallback` switch point, its `server_tool_use` and
+   * `web_search_tool_result` blocks in Anthropic's own wire shape, compaction), kept as a `provider` part and replayed
+   * verbatim to that provider only.
    */
   | { readonly type: 'provider-block'; readonly provider: ProviderKind; readonly block: unknown }
   /** Latest totals; may arrive several times, the last one wins. */

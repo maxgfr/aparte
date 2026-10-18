@@ -305,3 +305,94 @@ describe('titleFrom', () => {
     expect(Q.LARGE_PART_BYTES).toBe(16384)
   })
 })
+
+describe('tool rounds (rules 7 and 8)', () => {
+  const call = (callId: string, name = 'calculator'): Part => ({
+    type: 'tool-call',
+    callId,
+    name,
+    input: { expression: '1 + 1' },
+  })
+  const result = (callId: string, output: unknown = '2', name = 'calculator'): Part => ({
+    type: 'tool-result',
+    callId,
+    name,
+    output,
+  })
+  const interrupted = (callId: string, name = 'calculator'): Part => ({
+    type: 'tool-result',
+    callId,
+    name,
+    output: 'Not run: the app closed before this tool ran.',
+    isError: true,
+    details: { notRun: 'interrupted' },
+  })
+
+  test('a round is planned as the answer with its calls, their results, then the next answer', () => {
+    const path = chain(
+      m('user', [text('1 + 1?')]),
+      m('assistant', [signed('Use the tool.', 'sig'), text('Computing.'), call('c1')], { stop: 'tool-calls' }),
+      m('tool', [result('c1')]),
+      m('assistant', [text('It is 2.')]),
+      m('user', [text('Thanks')]),
+    )
+    expect(shape(plan(path))).toEqual([
+      ['user', [text('1 + 1?')]],
+      ['assistant', [signed('Use the tool.', 'sig'), text('Computing.'), call('c1')]],
+      ['tool', [result('c1')]],
+      ['assistant', [text('It is 2.')]],
+      ['user', [text('Thanks')]],
+    ])
+    // The request for the next step ends with the results: never with an assistant message.
+    expect(plan(path.slice(0, 3)).messages.at(-1)?.role).toBe('tool')
+  })
+
+  test('calls left without a result (the app closed mid-round) get the fixed interrupted result, in call order', () => {
+    const path = chain(
+      m('user', [text('Two sums')]),
+      m('assistant', [call('c1'), call('c2', 'current_time')]),
+      m('tool', [result('c2', 'noon', 'current_time')]),
+      m('user', [text('Go on')]),
+    )
+    expect(shape(plan(path))[2]).toEqual(['tool', [result('c2', 'noon', 'current_time'), interrupted('c1')]])
+    const none = chain(m('user', [text('One sum')]), m('assistant', [call('c1')]), m('user', [text('Hello?')]))
+    expect(shape(plan(none))).toEqual([
+      ['user', [text('One sum')]],
+      ['assistant', [call('c1')]],
+      ['tool', [interrupted('c1')]],
+      ['user', [text('Hello?')]],
+    ])
+  })
+
+  test('results of calls that are not right before them are left out, and so is a duplicate', () => {
+    const failed = chain(
+      m('user', [text('Sum')]),
+      m('assistant', [call('c1')], { status: 'error' }),
+      m('tool', [result('c1')]),
+      m('user', [text('Again')]),
+    )
+    expect(plan(failed).messages.map((x) => x.role)).toEqual(['user', 'user'])
+    const mixed = chain(
+      m('user', [text('Sum')]),
+      m('assistant', [call('c1')]),
+      m('tool', [result('zz'), result('c1', '2'), result('c1', 'again')]),
+    )
+    expect(shape(plan(mixed))[2]).toEqual(['tool', [result('c1', '2')]])
+  })
+
+  test('appending rounds only appends to the plan', () => {
+    const path = chain(
+      m('user', [text('Sum')]),
+      m('assistant', [signed('t', 's1'), call('c1')]),
+      m('tool', [result('c1')]),
+      m('assistant', [signed('t2', 's2'), call('c2')]),
+      m('tool', [result('c2')]),
+      m('assistant', [text('Done.')]),
+      m('user', [text('More')]),
+    )
+    for (const end of [3, 5, 7]) {
+      const shorter = shape(plan(path.slice(0, end)))
+      expect(shape(plan(path)).slice(0, shorter.length)).toEqual(shorter)
+    }
+  })
+})

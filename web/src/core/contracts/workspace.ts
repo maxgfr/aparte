@@ -24,6 +24,7 @@
 import type { Effort, ProviderConfig, StopReason, Usage } from './ai.ts'
 import type { Bytes, DocId, Rng, ShardId, Subkeys } from './crypto.ts'
 import type { LocalStore } from './store.ts'
+import type { ToolApprovals, ToolSource } from './tools.ts'
 import type { Clock } from './vault.ts'
 
 /** A 26-character base32 id of 16 random bytes (spec/FORMAT.md section 4). */
@@ -73,6 +74,8 @@ export type Part =
       readonly output: unknown
       readonly isError?: true
       readonly parts?: readonly Part[]
+      /** What the interface shows beside the result; never sent to a model (contracts/tools.ts `ToolResult`). */
+      readonly details?: unknown
     }
   | {
       readonly type: 'source'
@@ -93,12 +96,15 @@ export type Part =
   | { readonly type: 'provider'; readonly provider: string; readonly block: unknown }
   | { readonly type: 'ref'; readonly partType: string; readonly blob: string; readonly size: number }
 
-/** One entry of a conversation's tool snapshot (spec/DATA-MODEL.md section 3.2), sorted by `name`. */
+/**
+ * One entry of a conversation's tool snapshot (spec/DATA-MODEL.md section 3.2), sorted by `name`. Source `provider` is
+ * the provider's own web search (contracts/tools.ts `WEB_SEARCH`).
+ */
 export interface ToolSnapshotEntry {
   readonly name: string
-  readonly source: 'builtin' | 'mcp' | 'skill'
+  readonly source: ToolSource | 'provider'
   readonly origin?: string
-  /** base64url SHA-256 of the canonical JSON of the definition as sent. */
+  /** contracts/tools.ts `fingerprintOf`: base64url SHA-256 of the canonical JSON of the definition. */
   readonly fingerprint: string
 }
 
@@ -305,6 +311,8 @@ export type Scope =
   | 'folders'
   | 'settings'
   | 'providers'
+  /** The stored tool approvals. */
+  | 'toolApprovals'
   /** The messages and leaf of one conversation. */
   | { readonly conversation: Id }
 
@@ -320,6 +328,8 @@ export interface Workspace {
   readonly folders: Folders
   readonly settings: SettingsRepo
   readonly providers: Providers
+  /** Tool approvals that outlive a call (contracts/tools.ts): "always" and "for this conversation". */
+  readonly toolApprovals: ToolApprovals
   /** Loads the conversation's shard (once) and returns its tree; InvalidInputError for an unknown or purged id. */
   thread(conversationId: Id): Promise<Thread>
   /** Runs `fn` as one transaction per touched document (one update each). */

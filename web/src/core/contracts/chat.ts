@@ -16,10 +16,20 @@
  *   with the reason `chat-stream`, one hold per stream. Both are released once the message is committed and the
  *   workspace has flushed (or failed to), never before.
  * - Nothing is written for a turn that cannot start (no model, no key, an unknown provider): `send` rejects first.
+ * - A turn is an agent loop of at most `stepBudget(effort)` model calls. An answer that ends with tool calls
+ *   (`stop: 'tool-calls'`) is committed, its calls are approved (contracts/tools.ts) and run, their results are
+ *   committed as one `role: 'tool'` message (one `tool-result` part per call, in call order, an error result for a call
+ *   that did not run), and the next answer streams as its child. Every call gets a result, so the history is always a
+ *   valid request; nothing earlier is rewritten. `Turn.done` resolves with the last answer.
+ * - The tool set is the conversation's snapshot (`tools`), chosen before the first message and frozen by it: the
+ *   first `send` refreshes the snapshot's fingerprints from the registry (dropping names it no longer has) in the same
+ *   write that commits the first message, and from then on it never changes. Each turn declares the snapshot's tools
+ *   that have not drifted (`ToolRegistry.resolve`).
  */
 
 import type { Capabilities, ChatAdapter, Effort, ModelDescriptor, ProviderKeys, ProviderKind, Usage } from './ai.ts'
 import type { Rng } from './crypto.ts'
+import type { ApprovalDecision, ToolAnnotations, ToolApprovals, ToolRegistry, ToolSource } from './tools.ts'
 import type { Clock } from './vault.ts'
 import type { BlobPort, Conversation, Id, Message, ModelRef, Part, Role, Settings, Workspace } from './workspace.ts'
 
@@ -62,6 +72,11 @@ export interface RequestModule {
    *    becomes a user message whose only part is the text `<system-update>\n${text}\n</system-update>`.
    * 6. Without `capabilities.vision`, an image part becomes the text part `[image omitted: ${name ?? 'image'}]`;
    *    without `capabilities.pdf`, an `application/pdf` file part becomes `[document omitted: ${name}]`.
+   * 7. A `role: 'tool'` message keeps only the `tool-result` parts that answer a `tool-call` of the planned message right
+   *    before it (the first result of each call, in stored order); with nothing left it is left out.
+   * 8. A `tool-call` of a planned assistant message that has no result there gets the fixed error result
+   *    `unansweredResult(call, 'interrupted')` (contracts/tools.ts), appended to the tool message that follows, or in a
+   *    tool message inserted right after it when the next message is not one.
    * InvalidStateError when the result is empty or ends with an assistant message.
    */
   planPrompt(input: PlanInput): PromptPlan
@@ -83,6 +98,23 @@ export interface RequestModule {
 
 // Controller
 
+/** One tool call of the round the controller is running. */
+export interface ToolCallState {
+  readonly callId: string
+  readonly name: string
+  /** The arguments as the model wrote them: untrusted, shown in full before approval. */
+  readonly input: unknown
+  readonly title: string
+  readonly source: ToolSource | null
+  readonly origin?: string
+  readonly annotations: ToolAnnotations | null
+  /**
+   * `approval`: waiting for the user; `running`; `done` or `failed` once it returned; `denied` by the user; `refused`
+   * because the conversation does not declare it (or its definition changed); `skipped` when the turn stopped first.
+   */
+  readonly status: 'approval' | 'running' | 'done' | 'failed' | 'denied' | 'refused' | 'skipped'
+}
+
 /** A response streaming in memory. */
 export interface StreamState {
   readonly conversationId: Id
@@ -97,6 +129,15 @@ export interface StreamState {
   readonly startedAt: number
   /** User messages sent during this stream, waiting for it to commit. */
   readonly queued: number
+  /** Model calls of this turn so far, this one included (1 for a turn without tools). */
+  readonly step: number
+  /**
+   * `model` while the model answers (`messageId` streams); `tools` while the calls of the committed answer `parentId`
+   * are approved and run (`messageId` is the id the next answer will take).
+   */
+  readonly phase: 'model' | 'tools'
+  /** The calls of the current tool round, in the order the model made them; empty in the `model` phase. */
+  readonly tools: readonly ToolCallState[]
 }
 
 /** A turn that was started or queued. */
@@ -122,6 +163,11 @@ export interface ChatDeps {
   readonly blobs: BlobPort
   readonly rng: Rng
   readonly clock: Clock
+  /**
+   * The tools turns may declare and run, and the stored approvals. Without it no tool is declared, and a call the
+   * model makes anyway gets an error result.
+   */
+  readonly tools?: { readonly registry: ToolRegistry; readonly approvals: ToolApprovals }
 }
 
 export interface ChatController {
@@ -145,7 +191,15 @@ export interface ChatController {
    * the leaf to it. Before the first message it updates `system` instead and returns null.
    */
   appendSystem(conversationId: Id, text: string): Promise<Id | null>
-  /** Stops the conversation's stream (committed as `stopped`) and cancels its queued turns. No-op without a stream. */
+  /**
+   * Answers the approval request of call `callId` in the conversation's current tool round. `conversation` and
+   * `always` decisions are stored for the tool's current fingerprint. InvalidStateError when no such call waits.
+   */
+  approve(conversationId: Id, callId: string, decision: ApprovalDecision): void
+  /**
+   * Stops the conversation's stream (committed as `stopped`) and cancels its queued turns. During a tool round, the
+   * calls not yet answered get an error result (`stopped`) so the history stays valid. No-op without a stream.
+   */
   stop(conversationId: Id): void
   /** The conversation's stream, or null. */
   stream(conversationId: Id): StreamState | null

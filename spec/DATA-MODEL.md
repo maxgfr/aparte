@@ -10,7 +10,7 @@ A vault holds 17 Yjs documents, each synced as its own stream of segments and ch
 
 | `docId` | Content | Loaded |
 |---|---|---|
-| `index` | everything except messages: conversation list, folders, personas, prompts, provider and MCP configuration, skills, knowledge, settings | at unlock |
+| `index` | everything except messages: conversation list, folders, personas, prompts, provider and MCP configuration, skills, knowledge, settings, tool approvals | at unlock |
 | `c00` to `c15` | the messages of the conversations whose shard (FORMAT.md section 8.3) is that `docId` | on demand, when one of its conversations is opened or searched |
 
 Sharding keeps the index small and lets a phone open one conversation without downloading the whole history. A
@@ -48,6 +48,7 @@ Top-level `Y.Map`s, each `id -> Y.Map` of one entity whose fields are `Any` valu
 | `skills` | `{id, name, description, source: object, files?: blob ref, enabled: boolean}` |
 | `knowledge` | `{id, name, documents: {blob: blob ref, name, mediaType}[]}` |
 | `settings` | not entities: `settingName -> Any`, synced preferences: `defaultModel: ModelRef \| null`, `defaultEffort: Effort \| null`, `defaultSystem: string`... |
+| `toolApprovals` | not entities: `approvalKey -> Any`, the tool approvals that outlive a call ([3.4](#34-tool-approvals)) |
 | `keyslots` | `slotId -> {label: string, createdAt}`: names the user gave the keyslots; the slots themselves are not in the document |
 
 Every entity also has `createdAt` and `updatedAt`, and the trash fields of [3.1](#31-trash). `order` is a fractional
@@ -78,9 +79,14 @@ deleted, and for a conversation its messages are deleted from the shard. Ciphert
 | `startedAt?` | number | when the first message was appended; from then on `system` and `tools` never change |
 | `createdAt`, `updatedAt`, `deletedAt?`, `purgedAt?` | number | |
 
-`ToolSnapshot` is `{name, source: 'builtin' | 'mcp' | 'skill', origin?: string, fingerprint: string}[]` sorted by
-`name`; `fingerprint` is the base64url SHA-256 of the canonical JSON (FORMAT.md section 3.3) of the tool's definition as
-sent to the provider, so a drifted definition is detected before it is used.
+`ToolSnapshot` is `{name, source: 'builtin' | 'mcp' | 'skill' | 'sandbox' | 'provider', origin?: string, fingerprint:
+string}[]` sorted by `name`. Each entry names one tool of the registry ([8](#8-tools)) by `name`, `source` and `origin`
+(the MCP server, skill or sandbox that provides it; absent for built-ins), and `fingerprint` is the tool's fingerprint
+([8.2](#82-identity-and-fingerprint)), so a drifted definition is detected before it is used. The entry of source
+`provider` is the provider's own web search, named `web_search`, whose fingerprint is the constant fingerprint of
+`{"name":"web_search","provider":true}`. The snapshot may be edited until the first message; the commit of that message
+refreshes its fingerprints from the registry (dropping names the registry no longer has), and from then on it never
+changes.
 
 ### 3.3 Provider
 
@@ -93,6 +99,19 @@ required. `overrides` holds the user's corrections of a model's resolved capabil
 `web/src/core/contracts/ai.ts`), by model id. No API key is ever a
 field: `syncKey` says whether the user opted in to syncing the key, and `secret` is then the id of its secret
 ([6](#6-secrets)). With `syncKey` false the key is a device-only record.
+
+### 3.4 Tool approvals
+
+The `toolApprovals` map holds the approvals the user gave beyond one call ([8.3](#83-approvals)), one key per approval so
+two devices granting different tools never overwrite each other:
+
+| Key | Value |
+|---|---|
+| `always\|<approvalKey>` | `{approvalKey, fingerprint, conversation: null, grantedAt}`: the tool may run in every conversation |
+| `conversation\|<conversationId>\|<approvalKey>` | `{approvalKey, fingerprint, conversation, grantedAt}`: the tool may run in that conversation |
+
+An approval holds only while the tool's current fingerprint equals `fingerprint`. Granting again replaces the value
+(last writer wins); revoking deletes the key. These are not entities and have no trash.
 
 ## 4. Conversation shard documents
 
@@ -145,10 +164,10 @@ hides it, and the request builder leaves it out under rule 7 of [section 5](#5-p
 | `image` | `blob: string` (manifest id), `mediaType: string`, `width: number`, `height: number`, `name?: string` |
 | `file` | `blob: string`, `mediaType: string`, `size: number`, `name: string` |
 | `tool-call` | `callId: string`, `name: string`, `input: Any`, `providerMeta?: ProviderMeta` |
-| `tool-result` | `callId: string`, `name: string`, `output: Any`, `isError?: true`, `parts?: Part[]` (images a tool returned) |
+| `tool-result` | `callId: string`, `name: string`, `output: Any` (what the model reads), `isError?: true`, `parts?: Part[]` (images a tool returned), `details?: Any` (what the interface shows beside it, never sent; `{notRun: reason}` for a call that did not run, [8.4](#84-the-agent-loop)) |
 | `source` | `sourceType: 'url' \| 'document'`, `url?: string`, `title?: string`, `citedText?: string`, `documentPart?: number` |
 | `artifact` | `artifactId: string`, `kind: 'html' \| 'svg' \| 'mermaid' \| 'react' \| 'code'`, `title: string`, `blob?: string`, `content?: string` |
-| `provider` | `provider: string`, `block: Any`: a provider block with no portable meaning (server tool use and results, compaction blocks), replayed verbatim to that provider and ignored by others |
+| `provider` | `provider: string`, `block: Any`: a provider block with no portable meaning (server tool use and results, compaction blocks), replayed verbatim to that provider and ignored by others. Anthropic's web search is kept in Anthropic's own wire shape: `{type: 'server_tool_use', id, name: 'web_search', input}` and `{type: 'web_search_tool_result', tool_use_id, content}` (`content` the list of `{type: 'web_search_result', url, title, page_age, encrypted_content}`, or `{type: 'web_search_tool_result_error', error_code}`) |
 | `ref` | `partType: string`, `blob: string`, `size: number`: a part too large to inline ([4.3](#43-large-parts)) |
 
 `ProviderMeta` is an object keyed by provider kind, `{anthropic?: Any, openai?: Any, ...}`, opaque to everything but
@@ -202,7 +221,8 @@ append-only so a conversation's prefix never changes:
    never injected into an earlier message and removed. Trimming long histories uses the provider's server-side
    compaction or context editing, whose blocks are kept as `provider` parts.
 5. **Branches are separate prefixes.** Editing creates a sibling, so each branch is its own append-only history and
-   its reasoning stays valid for it.
+   its reasoning stays valid for it. A tool round is part of its branch: regenerating the answer after a round is a
+   sibling of that answer, under the same results.
 6. **Stable bytes.** Images and documents are sent from blobs, as the same bytes on every turn.
 
 The request for a turn is a function of `system`, `tools`, the committed messages of the path and the target model
@@ -224,6 +244,16 @@ appends to it:
     `[image omitted: <name>]`, a PDF sent to a model without PDF input `[document omitted: <name>]`.
 11. **Explicit effort, allowed parameters only.** Every turn to a model that takes effort sends a level explicitly; no
     request carries a sampling parameter, a forced tool choice or an effort the model's capabilities do not allow.
+    Tools are declared with the provider's default choice (`auto`); a schema that allows it is declared `strict` to
+    Anthropic and OpenAI. A model whose capabilities say it takes no tools gets none, on every turn alike.
+12. **Every call answered, in place.** A `role: 'tool'` message carries only the results of the calls of the answer
+    right before it, the first result of each call; a result of any other call is never sent. A call of that answer
+    with no result there gets the fixed error result `Not run: the app closed before this tool ran.` (`details:
+    {notRun: 'interrupted'}`), in the tool message that follows or in one inserted right after the answer. The request
+    is therefore always one the provider accepts, and the rule only looks back, so appending still only appends.
+13. **Declared as frozen.** Each turn declares, in snapshot order, the snapshot's tools whose registered fingerprint
+    still equals the snapshot's, then the web search when the snapshot has it and the model has one. A drifted or
+    vanished tool is left out of every later turn and a call to it is refused, never silently re-declared.
 
 ## 6. Secrets
 
@@ -257,6 +287,7 @@ Deleting it writes a version with `deleted: true` and no `value`. Each device ke
 |---|---|---|
 | conversations, messages, folders, personas, prompts, settings, keyslot labels | Yjs documents | yes |
 | provider and MCP configuration (no secret) | index document | yes |
+| tool snapshots, tool approvals | index document | yes |
 | photos, files, artifacts, large parts | blobs | yes |
 | API keys with `syncKey` | secret versions | yes, on opt-in |
 | keyslots | `keys/*.json`, `meta` | yes (plaintext, by design) |
@@ -265,3 +296,52 @@ Deleting it writes a version with `deleted: true` and no `value`. Each device ke
 | Secret Key | `meta`, wrapped | no (pairing only) |
 | theme and other UI preferences | `localStorage` | no |
 | unlocked keys | memory, non-extractable `CryptoKey` | no; dropped at lock |
+
+## 8. Tools
+
+The contract of the tools is `web/src/core/contracts/tools.ts` (F6). Every source plugs into it: built-in tools,
+MCP servers, skills, the sandboxes' `run_js` and `run_python`, and the knowledge base's `search_knowledge`.
+
+### 8.1 Definition
+
+| Field | Meaning |
+|---|---|
+| `name` | `^[A-Za-z0-9_-]{1,64}$`, unique in the registry; `web_search` is reserved for the provider's own search |
+| `title?` | what the interface calls it; never sent |
+| `description` | what the model reads |
+| `inputSchema` | a JSON Schema of `type: 'object'` |
+| `annotations` | `{readOnly, destructive, openWorld}` booleans, MCP's tool annotations: it only reads; it may delete or overwrite; it reaches beyond this device |
+| `source` | `builtin`, `mcp`, `skill` or `sandbox` |
+| `origin?` | the MCP server, skill or sandbox that provides it |
+| `autoApprove?` | the tool may run without asking; honoured only for a `builtin` that is read-only, not destructive and not open-world |
+
+Running a tool returns `{content, details?, isError?}`: `content` is what the model reads (text, JSON values, images),
+`details` what the interface shows beside it. A failure is a result with `isError`, never an exception.
+
+### 8.2 Identity and fingerprint
+
+A tool's **approval key** is `<source>:<origin>:<name>`, with `-` for no origin; it names the tool across versions. Its
+**fingerprint** is the base64url (FORMAT.md section 3.2) SHA-256 of the RFC 8785 canonical JSON of `{name, description,
+inputSchema, annotations}` (`annotations` with exactly its three booleans): any change of what the model reads or of
+what decides approval is a new fingerprint. Canonical JSON here is the full RFC 8785 (finite numbers in ECMAScript
+form), of which FORMAT.md section 3.3 uses the integer-only subset.
+
+### 8.3 Approvals
+
+A call runs only when its tool is declared in the conversation ([5](#5-provider-replay-rules), rule 13), and then:
+without asking for an auto-approved built-in; with a stored approval of its current fingerprint, for the conversation
+then "always" ([3.4](#34-tool-approvals)); otherwise after the user answers, with the arguments shown in full. The user
+allows the call once, for the conversation, or always (the two last are stored), or declines it. A declined call gets
+the error result `The user declined to run this tool.`.
+
+### 8.4 The agent loop
+
+A turn makes at most `stepBudget(effort)` model calls: `none` and `minimal` 2, `low` 4, `medium` 8, `high` 16, `xhigh`
+24, `max` 32, and 8 for a model that takes no effort. An answer committed with `status: 'done'` and `tool-call` parts
+starts a round: each call, in order, is decided ([8.3](#83-approvals)) and run, and the results are committed as one
+`role: 'tool'` message, child of the answer, one `tool-result` part per call in call order. The next answer streams
+as a child of that message. A call that does not run gets an error result and `details: {notRun: reason}`, with
+reason `denied`, `stopped` (the user stopped the turn or the vault locked), `budget` (the last allowed call ended with
+calls), `undeclared`, `drifted`, `missing` or `interrupted`. Provider-executed calls (the web search) are not rounds:
+they are `provider` parts of the answer ([4.2](#42-parts)), and their sources are `source` parts.
+

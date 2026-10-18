@@ -9,6 +9,8 @@
  * - Parts are passed through as the same objects, never copied or reformatted: `providerMeta` reaches the adapter byte
  *   for byte.
  * - A plan never ends with an assistant message (no prefill) and is never empty.
+ * - Every tool call of a planned assistant message is answered by the tool message right after it, and a tool message
+ *   only carries results of the calls just before it: the request is always one the provider accepts.
  */
 
 import { EFFORTS } from '../ai/effort.ts'
@@ -16,6 +18,7 @@ import type { Capabilities, Effort } from '../contracts/ai.ts'
 import type { PlanInput, PlannedMessage, PromptPlan } from '../contracts/chat.ts'
 import { InvalidStateError } from '../contracts/crypto.ts'
 import type { Conversation, Message, Part, ProviderMeta, Settings } from '../contracts/workspace.ts'
+import { unansweredResult } from '../tools/loop.ts'
 
 /** Parts whose JSON is longer than this many bytes are stored as blobs (spec/DATA-MODEL.md section 4.3). */
 export const LARGE_PART_BYTES = 16384 as const
@@ -57,6 +60,36 @@ function planPart(part: Part, message: Message, input: PlanInput, stripReasoning
   }
 }
 
+type ResultPart = Extract<Part, { readonly type: 'tool-result' }>
+
+/** The tool calls of a planned assistant message that no later part of the plan answers yet. */
+function callsOf(message: PlannedMessage | undefined): { callId: string; name: string }[] {
+  if (message === undefined || message.role !== 'assistant') return []
+  return message.parts
+    .filter((p): p is Extract<Part, { readonly type: 'tool-call' }> => p.type === 'tool-call')
+    .map((p) => ({ callId: p.callId, name: p.name }))
+}
+
+/**
+ * Rules 7 and 8: a tool message keeps the results of the calls of the planned message before it (in its own order),
+ * and every call of that message left without one gets the fixed "not run" result (the app closed mid-round).
+ * Returns the parts of the tool message to send there, or null when the previous message made no call.
+ */
+function answer(previous: PlannedMessage | undefined, results: readonly ResultPart[]): ResultPart[] | null {
+  const calls = callsOf(previous)
+  if (calls.length === 0) return null
+  const ids = new Set(calls.map((c) => c.callId))
+  const kept: ResultPart[] = []
+  const answered = new Set<string>()
+  for (const r of results) {
+    if (!ids.has(r.callId) || answered.has(r.callId)) continue
+    answered.add(r.callId)
+    kept.push(r)
+  }
+  for (const call of calls) if (!answered.has(call.callId)) kept.push(unansweredResult(call, 'interrupted'))
+  return kept
+}
+
 export function planPrompt(input: PlanInput): PromptPlan {
   const { conversation, path, capabilities } = input
   const messages: PlannedMessage[] = []
@@ -74,7 +107,19 @@ export function planPrompt(input: PlanInput): PromptPlan {
       const planned = planPart(part, message, input, stripReasoning)
       if (planned !== null) parts.push(planned)
     }
+    if (message.role === 'tool') {
+      const results = parts.filter((p): p is ResultPart => p.type === 'tool-result')
+      const kept = answer(messages.at(-1), results)
+      // Results of calls that are not right before them (their answer was deleted or failed) are never sent.
+      if (kept !== null) messages.push({ role: 'tool', parts: kept, from: message.id })
+      continue
+    }
     if (parts.length === 0) continue
+    const pending = answer(messages.at(-1), [])
+    if (pending !== null) {
+      const last = messages.at(-1) as PlannedMessage
+      messages.push({ role: 'tool', parts: pending, from: last.from })
+    }
     if (message.role === 'system' && !capabilities.midConversationSystem) {
       messages.push({
         role: 'user',

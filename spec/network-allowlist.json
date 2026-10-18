@@ -4,6 +4,7 @@
     "app": "The app's own files: the shell, its chunks, the manifest, the service worker and its precache.",
     "provider": "The default API hosts of the model providers the app ships (Anthropic, OpenAI, Google Gemini, Mistral, OpenRouter). User-entered endpoints (local servers, OpenAI-compatible services, custom base URLs) are not listed.",
     "mcp": "Placeholder: fixed MCP servers. User-added servers are not listed.",
+    "tool": "Hosts a tool reaches once the user approved the call (the built-in fetch_url): chosen by the conversation, never fixed, so none are listed.",
     "sync": "Placeholder: fixed relays for end-to-end encrypted sync. Carries ciphertext only.",
     "download": "Placeholder: pinned, hash-checked downloads such as in-browser model weights or runtimes.",
     "catalog": "Placeholder: the model catalog the app refreshes, if it is fetched rather than bundled."
@@ -17,6 +18,7 @@
     "https://openrouter.ai"
   ],
   "mcp": [],
+  "tool": [],
   "sync": [],
   "download": [],
   "catalog": []

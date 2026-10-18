@@ -73,3 +73,11 @@
     background: Highlight;
   }
 }
+
+.row[data-disabled] {
+  cursor: default;
+}
+
+.row[data-disabled] .switch {
+  opacity: 0.6;
+}
