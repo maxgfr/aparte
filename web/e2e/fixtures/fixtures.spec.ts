@@ -122,7 +122,8 @@ test('the provider mock records, polices headers, streams and sees a stop', asyn
     const reader = response.body?.getReader()
     const decoder = new TextDecoder()
     let partial = ''
-    while (reader && partial.split('data:').length < 3) {
+    // Read until the first content event is whole: engines split the stream at arbitrary byte boundaries.
+    while (reader && !partial.includes('"content":"a"}')) {
       const read = await reader.read()
       if (read.done) break
       partial += decoder.decode(read.value)
