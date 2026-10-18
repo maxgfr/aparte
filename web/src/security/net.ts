@@ -109,10 +109,19 @@ export function checkRequestURL(input: string | URL, purpose: NetPurpose, page: 
 }
 
 /**
+ * Purposes whose answers stay out of the browser's HTTP cache, a plaintext store on the disk: what a provider or an
+ * MCP server answers and the pages a tool fetched are the user's data. Pinned downloads (public, hash-checked files),
+ * sync objects (ciphertext) and the app's own files may be cached.
+ */
+const NO_STORE: ReadonlySet<NetPurpose> = new Set(['provider', 'mcp', 'tool'])
+
+/**
  * The only `fetch` in the app. Checks the URL, records the origin and purpose, then fetches without cookies or HTTP
- * auth (`credentials: 'omit'`, whatever the caller passed) and without a referrer. Rejects with a TypeError, as
- * `fetch` itself does, when the URL is refused. `transport` is the browser's own `fetch` a confined worker kept aside
- * before replacing the global one (web/src/security/workerNet.ts); everywhere else it is the global `fetch`.
+ * auth (`credentials: 'omit'`, whatever the caller passed), without a referrer and, for the purposes in `NO_STORE`,
+ * without the HTTP cache. A response that was redirected to another origin records that origin too, so the log names
+ * every host contacted. Rejects with a TypeError, as `fetch` itself does, when the URL is refused. `transport` is the
+ * browser's own `fetch` a confined worker kept aside before replacing the global one (web/src/security/workerNet.ts);
+ * everywhere else it is the global `fetch`.
  */
 export async function request(
   input: string | URL,
@@ -122,5 +131,15 @@ export async function request(
   const { purpose, ...rest } = init
   const url = checkRequestURL(input, purpose, here())
   record(url.origin, purpose, Date.now())
-  return transport.call(globalThis, url.href, { ...rest, credentials: 'omit', referrerPolicy: 'no-referrer' })
+  const response = await transport.call(globalThis, url.href, {
+    ...rest,
+    ...(NO_STORE.has(purpose) ? { cache: 'no-store' } : {}),
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+  })
+  if (response.redirected && response.url) {
+    const final = URL.canParse(response.url) ? new URL(response.url).origin : null
+    if (final !== null && final !== 'null' && final !== url.origin) record(final, purpose, Date.now())
+  }
+  return response
 }

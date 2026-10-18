@@ -133,6 +133,38 @@ describe('request', () => {
     expect(Object.isFrozen(after)).toBe(true)
   })
 
+  test('keeps what a provider, an MCP server or a fetched page answers out of the HTTP cache', async () => {
+    // The browser's HTTP cache is a plaintext store on the disk: a page fetch_url read, a model list or an MCP answer
+    // must not land there. Pinned downloads, sync objects (ciphertext) and the app's own files may.
+    for (const purpose of ['provider', 'mcp', 'tool'] as const) {
+      await request('https://api.example.com/x', { purpose, cache: 'force-cache' })
+      expect(calls.at(-1)?.init?.cache, purpose).toBe('no-store')
+      await request('https://api.example.com/x', { purpose })
+      expect(calls.at(-1)?.init?.cache, purpose).toBe('no-store')
+    }
+    await request('https://cdn.example.com/model.bin', { purpose: 'download' })
+    expect(calls.at(-1)?.init?.cache).toBeUndefined()
+    await request('https://api.github.com/repos/x', { purpose: 'sync', cache: 'no-cache' })
+    expect(calls.at(-1)?.init?.cache).toBe('no-cache')
+  })
+
+  test('records the origin a request was redirected to, as the transparency panel must show every host', async () => {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      const response = new Response('ok')
+      Object.defineProperty(response, 'redirected', { value: true })
+      Object.defineProperty(response, 'url', { value: 'https://cdn.example.net/blob/abc?token=secret' })
+      return response
+    }) as typeof fetch
+    await request('https://huggingface.example/model/resolve/x', { purpose: 'download' })
+    await request('https://huggingface.example/model/resolve/y', { purpose: 'download' })
+    expect(networkLog.snapshot().map((e) => [e.purpose, e.origin, e.count])).toEqual([
+      ['download', 'https://huggingface.example', 2],
+      ['download', 'https://cdn.example.net', 2],
+    ])
+    expect(JSON.stringify(networkLog.snapshot())).not.toContain('secret')
+  })
+
   test('records an attempt even when the network fails', async () => {
     globalThis.fetch = (async () => {
       throw new TypeError('offline')
