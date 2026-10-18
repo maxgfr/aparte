@@ -690,9 +690,20 @@ fn serve(ctx: &Ctx, a: ServeArgs) -> anyhow::Result<ExitCode> {
     rt.block_on(async {
         let server = LoopbackServer::bind_port(a.port).await?;
         let url = format!("http://{}{}", server.local_addr(), aparte_mcp::serve::ENDPOINT);
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<CallRecord>();
+        // Reported as the call is answered, before the reply leaves: whoever reads the reply finds the call logged.
+        let ui = ctx.ui.clone();
         let log: CallLog = Arc::new(move |r: &CallRecord| {
-            let _ = tx.send(r.clone());
+            let ms = r.elapsed.as_millis();
+            ui.emit(
+                "mcp-call",
+                json!({"tool": r.tool, "input": r.summary, "outcome": r.outcome.name(), "ms": ms}),
+            );
+            eprintln!(
+                "aparte: call {} {} -> {} ({ms} ms)",
+                r.tool,
+                r.summary,
+                r.outcome.name()
+            );
         });
         let handler = Arc::new(ToolServer::new(tools, cwd.clone(), approver, log));
         let names = handler.tool_names();
@@ -710,24 +721,7 @@ fn serve(ctx: &Ctx, a: ServeArgs) -> anyhow::Result<ExitCode> {
         }
         show_token(&token, source.as_deref());
         eprintln!("aparte: Ctrl-C stops the server");
-        let serving = server.serve(Arc::new(token), handler, interrupted());
-        tokio::pin!(serving);
-        loop {
-            tokio::select! {
-                done = &mut serving => {
-                    done?;
-                    break;
-                }
-                Some(r) = rx.recv() => {
-                    let ms = r.elapsed.as_millis();
-                    ctx.ui.emit(
-                        "mcp-call",
-                        json!({"tool": r.tool, "input": r.summary, "outcome": r.outcome.name(), "ms": ms}),
-                    );
-                    eprintln!("aparte: call {} {} -> {} ({ms} ms)", r.tool, r.summary, r.outcome.name());
-                }
-            }
-        }
+        server.serve(Arc::new(token), handler, interrupted()).await?;
         ctx.ui.emit("mcp-stopped", json!({}));
         anyhow::Ok(())
     })?;
@@ -752,9 +746,15 @@ fn bridge(ctx: &Ctx, a: BridgeArgs) -> anyhow::Result<ExitCode> {
     let (token, source) = token(a.token_file.as_deref())?;
     let rt = runtime()?;
     rt.block_on(async {
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<BridgeRecord>();
+        // Reported as the message is relayed, before the answer leaves: whoever reads the answer finds it logged.
+        let ui = ctx.ui.clone();
         let log: BridgeLog = Arc::new(move |r: &BridgeRecord| {
-            let _ = tx.send(r.clone());
+            ui.emit(
+                "mcp-relay",
+                json!({"server": r.server, "method": r.method, "tool": r.tool, "status": r.status}),
+            );
+            let tool = r.tool.as_deref().map(|t| format!(" {t}")).unwrap_or_default();
+            eprintln!("aparte: {} {}{tool} -> {}", r.server, r.method, r.status);
         });
         let bridge = Arc::new(Bridge::new(selected, opts, log)?);
         let server = LoopbackServer::bind_port(a.port).await?;
@@ -780,21 +780,7 @@ fn bridge(ctx: &Ctx, a: BridgeArgs) -> anyhow::Result<ExitCode> {
             "aparte: open to {} and http://localhost or 127.0.0.1 pages; Ctrl-C stops the bridge",
             aparte_mcp::loopback::APP_ORIGIN
         );
-        let serving = server.serve(Arc::new(token), bridge.clone(), interrupted());
-        tokio::pin!(serving);
-        let outcome = loop {
-            tokio::select! {
-                done = &mut serving => break done,
-                Some(r) = rx.recv() => {
-                    ctx.ui.emit(
-                        "mcp-relay",
-                        json!({"server": r.server, "method": r.method, "tool": r.tool, "status": r.status}),
-                    );
-                    let tool = r.tool.as_deref().map(|t| format!(" {t}")).unwrap_or_default();
-                    eprintln!("aparte: {} {}{tool} -> {}", r.server, r.method, r.status);
-                }
-            }
-        };
+        let outcome = server.serve(Arc::new(token), bridge.clone(), interrupted()).await;
         bridge.shutdown().await;
         outcome?;
         ctx.ui.emit("mcp-stopped", json!({}));

@@ -6,6 +6,7 @@ use std::io::{IsTerminal, Write};
 use serde_json::{Map, Value};
 
 /// Where and how a verb reports.
+#[derive(Clone)]
 pub struct Ui {
     json: bool,
     quiet: bool,
