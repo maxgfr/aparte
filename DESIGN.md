@@ -331,8 +331,9 @@ square's corners; splash screens on Paper and the dark ground).
 
 ### Transparency panel
 
-- A grouped list of every origin contacted this session: origin in mono, purpose as a chip (`provider`, `mcp`, `sync`,
-  `download`, `catalog`, `app`), request count in Caption. Empty state: "Nothing has left this device yet."
+- A grouped list of every origin contacted this session, on the About screen: origin in mono, purpose (`provider`,
+  `mcp`, `tool`, `sync`, `download`, `catalog`, `skills`, `research`, `app`) in words, request count trailing. Empty
+  state: "Nothing has left this device yet."
 
 ### Lock screen (signature)
 

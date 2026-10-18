@@ -140,7 +140,7 @@ if [ -n "$rebuild" ]; then
   origin="$(printf '%s' "$site" | sed -E 's#^(https?://[^/]+).*#\1#')"
   base="$(printf '%s' "$site" | sed -E 's#^https?://[^/]+##')"
   echo "Rebuild: $sha as version $version for origin $origin, path $base"
-  git -C "$root" worktree add --detach "$work/src" "$sha" > /dev/null
+  git -C "$root" worktree add --detach "$work/src" "$sha" > /dev/null 2>&1
   (
     cd "$work/src/web"
     bun install --frozen-lockfile > "$work/install.log" 2>&1

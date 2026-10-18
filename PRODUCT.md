@@ -2,7 +2,8 @@
 
 <!-- impeccable:product-schema 1 -->
 
-This record was written from the project brief and the repository at milestone M0, without a separate interview.
+This record was written from the project brief and the repository at milestone M0, without a separate interview, and
+brought up to date with what has shipped since.
 Facts marked _(assumed)_ are inferences from that brief and should be confirmed or corrected before they steer a
 decision.
 
@@ -24,8 +25,8 @@ documents to live on someone else's server. They bring their own API keys or run
 
 - iPhone or Android, installed as a PWA, for quick questions, voice and photos on the move; this is the first target;
 - desktop browser for long sessions: code, documents, tool calls, reading long answers;
-- the terminal, through the CLI, for scripting and for reading their own synced history _(assumed: CLI scope beyond
-  sync is not decided)_.
+- the terminal, through the CLI: a coding agent with tools, skills and MCP that opens the same vault, syncs through
+  the same stores and continues the web app's conversations.
 
 They read technical detail and want to verify claims rather than take them on trust.
 
@@ -51,10 +52,12 @@ transparency panel together.
 - Providers are configured once per device with the user's own keys; on-device and local-network models need no key.
 - Optional capabilities the user turns on deliberately: MCP tools, skills, a JavaScript and Python sandbox, local
   document search, voice input and output.
-- The app is locked behind a passphrase (passkey unlock only on a dedicated origin); unlocking decrypts locally.
+- The app is locked behind a passphrase and the Secret Key of the Emergency Kit; unlocking decrypts locally. Passkey
+  unlock is reserved to builds served from a dedicated origin and not offered yet.
 - Sync destinations (a Git repository the user owns, or other user-owned storage) are configured once and carry only
   ciphertext.
-- A transparency panel lists every origin contacted and why (`provider`, `mcp`, `sync`, `download`, `catalog`, `app`).
+- A transparency panel (on the About screen) lists every origin contacted this session and why (`provider`, `mcp`,
+  `tool`, `sync`, `download`, `catalog`, `skills`, `research`, `app`).
 
 ## Capabilities and Constraints
 
@@ -64,9 +67,10 @@ transparency panel together.
   script, style, font or CDN, all requests through one audited module, untrusted code only in sandbox frames, nothing
   stored in plaintext.
 - Interface language: English only for now, every string through i18n so more languages can follow.
-- M0 ships an empty shell: security baseline, PWA, CI and gates; no chat yet.
-- Undecided: the list of sync backends beyond Git, the exact on-device model catalogue, a custom domain, pricing (none
-  is planned _(assumed)_).
+- Shipped: chat with streaming, branches and effort; in-browser and local models; tools, MCP with OAuth and
+  approvals; skills and Deep research; JavaScript and Python sandboxes and artifacts; local knowledge bases; voice;
+  end-to-end sync to a GitHub repository, an S3-compatible bucket, a folder or an archive; the CLI.
+- Undecided: a custom domain, pricing (none is planned _(assumed)_).
 
 ## Brand Commitments
 
