@@ -201,6 +201,25 @@ export const chat = {
   providerSearchNone:
     'Aucun fournisseur ne correspond. Un point d’accès personnalisé fonctionne avec tout serveur compatible OpenAI.',
   providerSearchHint: 'Recherchez pour voir tous les fournisseurs qu’un navigateur peut appeler directement.',
+  providerAll: 'Afficher tous les fournisseurs du catalogue llm-models',
+  providerAllHint:
+    'Ajoute les fournisseurs qu’un navigateur ne peut pas appeler directement. Ils fonctionnent via un proxy que vous gérez, ou depuis la CLI Aparté.',
+  providerAllLoading: 'Chargement de tous les fournisseurs…',
+  providerAllLegend:
+    '« Proxy requis » : son API refuse les appels depuis une page web (CORS). « Non pris en charge » : Aparté ne parle pas son API.',
+  providerBadgeProxy: 'Proxy requis',
+  providerBadgeNone: 'Non pris en charge',
+  providerProxyExplain:
+    'Un navigateur ne peut pas appeler {name} directement : son API n’autorise pas les appels depuis une page web (CORS). Indiquez comme URL de base un proxy que vous gérez et qui relaie vers lui, comme LiteLLM ou un proxy CORS que vous contrôlez, ou utilisez-le depuis la CLI Aparté, qui n’est pas un navigateur.',
+  providerProxyStill:
+    'L’URL de base est encore l’adresse de {name} : les conversations depuis ce navigateur échouent tant qu’elle ne désigne pas votre proxy.',
+  providerProxyBaseUrlHint:
+    'L’adresse de votre proxy, par exemple https://proxy.example.com/v1, ou http://localhost:4000/v1 sur cet ordinateur.',
+  providerForeignExplain:
+    'Aparté ne peut pas appeler {name} : son API n’est pas l’une de celles que parle Aparté (compatible OpenAI, Anthropic, Gemini, Mistral, OpenRouter). Un proxy qui l’expose comme une API compatible OpenAI, comme LiteLLM, peut être ajouté comme point d’accès personnalisé.',
+  providerCatalogModels: 'Modèles listés par llm-models',
+  providerCatalogMore: 'Et {count} de plus.',
+  providerDocs: 'Documentation du fournisseur',
   providerCatalogLoading: 'Chargement de la liste des fournisseurs…',
   providerHosted: 'API hébergées',
   providerLocal: 'Sur cet ordinateur',

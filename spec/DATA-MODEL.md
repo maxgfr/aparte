@@ -47,7 +47,7 @@ Top-level `Y.Map`s, each `id -> Y.Map` of one entity whose fields are `Any` valu
 | `mcp` | [3.5](#35-mcp-server) |
 | `skills` | [3.8](#38-skills): `{id, name, description, source: object, files?: blob ref, enabled: boolean}` |
 | `knowledge` | [3.7](#37-knowledge-bases): `{id, name, documents: {blob: blob ref, name, mediaType, size?, index?: blob ref, chunks?, addedAt?}[], embedder: EmbedderRef \| null}` |
-| `settings` | not entities: `settingName -> Any`, synced preferences: `defaultModel: ModelRef \| null`, `defaultEffort: Effort \| null`, `defaultSystem: string`, `transcriptionModel: ModelRef \| null`, `speechModel: ModelRef \| null`, `speechVoice: string`, `imageModel: ModelRef \| null`... |
+| `settings` | not entities: `settingName -> Any`, synced preferences: `defaultModel: ModelRef \| null`, `defaultEffort: Effort \| null`, `defaultSystem: string`, `transcriptionModel: ModelRef \| null`, `speechModel: ModelRef \| null`, `speechVoice: string`, `imageModel: ModelRef \| null`, `allProviders: boolean`... |
 | `toolApprovals` | not entities: `approvalKey -> Any`, the tool approvals that outlive a call ([3.4](#34-tool-approvals)) |
 | `keyslots` | `slotId -> {label: string, createdAt}`: names the user gave the keyslots; the slots themselves are not in the document |
 

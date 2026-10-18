@@ -127,6 +127,14 @@ describe('conversations', () => {
     expect(() => ws.settings.set('speechVoice', 42 as never)).toThrow(InvalidInputError)
   })
 
+  test('the every-provider listing is a boolean, off by default', async () => {
+    const { ws } = await setup()
+    expect(ws.settings.get('allProviders')).toBe(false)
+    ws.settings.set('allProviders', true)
+    expect(ws.settings.get('allProviders')).toBe(true)
+    expect(() => ws.settings.set('allProviders', 'yes' as never)).toThrow(InvalidInputError)
+  })
+
   test('update bumps updatedAt and keeps the object identity until a change', async () => {
     const { ws, clock } = await setup()
     const id = ws.conversations.create({ title: 'First' })

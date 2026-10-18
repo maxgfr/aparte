@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
 import { Redirect } from 'wouter'
-import { useKeyedProviders, useProviders, useSession, useSessionState } from '../../app/chat.tsx'
+import { useKeyedProviders, useProviders, useSession, useSessionState, useSetting } from '../../app/chat.tsx'
 import { isCallable, LOCAL_PRESETS, needsKey, serviceName } from '../../app/providers.tsx'
 import { newProviderPath, paths, providerPath } from '../../app/routes.ts'
 import { useVault } from '../../app/vault.tsx'
-import { RECOMMENDED_PROVIDERS, sortedProviders } from '../../core/ai/catalog.ts'
+import { listedProviders, RECOMMENDED_PROVIDERS } from '../../core/ai/catalog.ts'
 import { useT } from '../../i18n/react.tsx'
 import styles from '../../ui/chat/Chat.module.css'
 import { matches, queryWords } from '../../ui/chat/view.ts'
 import { Field } from '../../ui/components/Field.tsx'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
+import { SwitchRow } from '../../ui/components/Switch.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
+import { ReachBadge } from './CatalogInfo.tsx'
 import { DeviceSources, deviceServiceName } from './Local.tsx'
 
 /** The providers of this vault, and where a new one comes from: the catalog, a local server, a custom endpoint. */
@@ -22,14 +24,18 @@ export default function Providers() {
   const providers = useProviders()
   const keyed = useKeyedProviders()
   const [query, setQuery] = useState('')
+  const allProviders = useSetting('allProviders') === true
   const catalog = session?.catalog ?? null
+  // The full list is in once the merged catalog lists its foreign providers (an empty list still counts).
+  const allLoaded = catalog?.foreign !== undefined
   const hosted = useMemo(() => {
     if (catalog === null) return []
     const words = queryWords(query)
-    const all = sortedProviders(catalog)
-    if (words.length === 0) return all.filter((p) => RECOMMENDED_PROVIDERS.includes(p.id))
-    return all.filter((p) => matches(`${p.name} ${p.id}`, words))
-  }, [catalog, query])
+    // With the setting off, a provider the vault made from the full list may keep it loaded: list the direct ones.
+    const all = listedProviders(catalog).filter((p) => allProviders || p.reach === 'direct')
+    if (words.length > 0) return all.filter((p) => matches(`${p.name} ${p.id}`, words))
+    return allProviders ? all : all.filter((p) => RECOMMENDED_PROVIDERS.includes(p.id))
+  }, [catalog, query, allProviders])
 
   if (status.state === 'absent') return <Redirect to={paths.welcome} replace />
   if (state.status !== 'open') {
@@ -74,6 +80,12 @@ export default function Providers() {
         <h2 id="providers-hosted" className={styles.sectionTitle}>
           {t('chat.providerHosted')}
         </h2>
+        <SwitchRow
+          label={t('chat.providerAll')}
+          hint={t('chat.providerAllHint')}
+          checked={allProviders}
+          onChange={(on) => session?.workspace.settings.set('allProviders', on)}
+        />
         <Field
           label={t('chat.providerSearch')}
           hideLabel
@@ -94,15 +106,27 @@ export default function Providers() {
             footer={
               hosted.length === 0
                 ? t('chat.providerSearchNone')
-                : query === ''
-                  ? t('chat.providerSearchHint')
-                  : undefined
+                : allProviders
+                  ? t('chat.providerAllLegend')
+                  : query === ''
+                    ? t('chat.providerSearchHint')
+                    : undefined
             }
           >
             {hosted.map((p) => (
-              <ListRow key={p.id} href={newProviderPath({ from: 'catalog', id: p.id })} title={p.name} />
+              <ListRow
+                key={p.id}
+                href={newProviderPath({ from: 'catalog', id: p.id })}
+                title={p.name}
+                trailing={<ReachBadge reach={p.reach} />}
+              />
             ))}
           </ListGroup>
+        )}
+        {allProviders && catalog !== null && !allLoaded && (
+          <p className={styles.muted} role="status">
+            {t('chat.providerAllLoading')}
+          </p>
         )}
       </section>
 

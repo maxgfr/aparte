@@ -108,6 +108,7 @@ const SETTINGS_DEFAULTS: Settings = {
   speechModel: null,
   speechVoice: '',
   imageModel: null,
+  allProviders: false,
 }
 
 /** Settings that hold a model reference. */
@@ -1443,6 +1444,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       if (MODEL_SETTINGS.has(key) && isModelRef(raw)) value = frozenCopy(raw)
       else if (key === 'defaultEffort' && typeof raw === 'string' && EFFORTS.has(raw)) value = raw
       else if ((key === 'defaultSystem' || key === 'speechVoice') && typeof raw === 'string') value = raw
+      else if (key === 'allProviders' && typeof raw === 'boolean') value = raw
       settingsCache.set(key, value)
       return value as Settings[typeof key]
     },
@@ -1452,6 +1454,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       if (MODEL_SETTINGS.has(key)) clean = checkModel(value, key)
       else if (key === 'defaultEffort') clean = checkEffort(value)
       else if (key === 'defaultSystem' || key === 'speechVoice') clean = checkText(value, key)
+      else if (key === 'allProviders') clean = checkBool(value, key)
       else throw new InvalidInputError('Unknown setting')
       local(indexDoc(), () => settingsMap.set(key, clean))
     },

@@ -1,5 +1,5 @@
 import { Trash2, X } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { Redirect, useLocation, useSearch } from 'wouter'
 import { useKeyedProviders, useProviders, useSession, useSessionState, useSetting } from '../../app/chat.tsx'
 import {
@@ -13,13 +13,14 @@ import {
   localPresetOf,
   modelsOf,
   needsKey,
+  needsProxy,
   sameModel,
   serviceName,
 } from '../../app/providers.tsx'
 import { paths, providerPath, providerSourceOf } from '../../app/routes.ts'
 import { useToast } from '../../app/toast.tsx'
 import { useVault } from '../../app/vault.tsx'
-import { findProvider, providerFields, sortedModels } from '../../core/ai/catalog.ts'
+import { type ForeignProvider, findForeign, findProvider, providerFields, sortedModels } from '../../core/ai/catalog.ts'
 import { normalizeBaseUrl } from '../../core/ai/endpoints.ts'
 import { DEFAULT_BASE_URLS } from '../../core/ai/providers.ts'
 import type { ConnectionCheck, ProviderConfig } from '../../core/contracts/ai.ts'
@@ -30,11 +31,13 @@ import { Field } from '../../ui/components/Field.tsx'
 import { IconButton } from '../../ui/components/IconButton.tsx'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
+import { CatalogModels, ReachNotice } from './CatalogInfo.tsx'
 import { ChromeAiStatus, deviceServiceName, NewDeviceProvider, ServerDiagnosis, WebllmModels } from './Local.tsx'
 
 /*
  * One provider: its name and address, its key on this device, a connection test, and the models it offers. The key is
- * written only to the provider-key local record (encrypted, never synced, never in the workspace documents).
+ * written only to the provider-key local record (encrypted, never synced, never in the workspace documents). A
+ * provider of the full llm-models list that a browser cannot call directly takes the address of the user's proxy.
  */
 
 /** Whether a key may be stored: no surrounding whitespace, no control character, not empty. */
@@ -50,6 +53,22 @@ function hostOf(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): string {
   } catch {
     return url
   }
+}
+
+/** A provider of the full list whose protocol no adapter speaks: what llm-models says about it, and nothing to add. */
+function ForeignProviderInfo({ foreign }: { foreign: ForeignProvider }) {
+  const t = useT()
+  return (
+    <Screen title={foreign.name} back={paths.providers}>
+      <ReachNotice reach="none" name={foreign.name} />
+      {foreign.doc !== undefined && (
+        <ListGroup>
+          <ListRow title={t('chat.providerDocs')} external={{ href: foreign.doc, note: t('common.opensInNewTab') }} />
+        </ListGroup>
+      )}
+      <CatalogModels provider={foreign} />
+    </Screen>
+  )
 }
 
 function useBaseUrlError(value: string): string | undefined {
@@ -71,19 +90,26 @@ export function NewProvider() {
   const device = source.from === 'device' ? source.id : null
   const entry = source.from === 'catalog' && catalog !== null ? findProvider(catalog, source.id) : undefined
   const local = source.from === 'local' ? LOCAL_PRESETS.find((p) => p.id === source.id) : undefined
-  const fields = entry !== undefined ? providerFields(entry) : undefined
+  // Stable while the entry is, so the effect below fills the form once rather than on every keystroke.
+  const fields = useMemo(() => (entry !== undefined ? providerFields(entry) : undefined), [entry])
   const custom = entry === undefined
+  // Behind a proxy: the base URL is the user's, starting from the provider's own address.
+  const proxied = entry?.reach === 'proxy'
+  const editable = custom || proxied
+  const foreign =
+    source.from === 'catalog' && catalog !== null && entry === undefined && findForeign(catalog, source.id)
   const [label, setLabel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     setLabel(fields?.label ?? local?.name ?? '')
-    setBaseUrl(fields === undefined ? (local?.endpoint ?? '') : '')
-  }, [fields?.label, local?.name, local?.endpoint, fields])
+    setBaseUrl(fields === undefined ? (local?.endpoint ?? '') : proxied ? (fields.baseUrl ?? '') : '')
+  }, [fields?.label, local?.name, local?.endpoint, fields, proxied])
   const baseError = useBaseUrlError(baseUrl)
   if (session === null) return null
   if (device !== null) return <NewDeviceProvider kind={device} />
+  if (foreign) return <ForeignProviderInfo foreign={foreign} />
   if (source.from === 'catalog' && catalog === null) {
     return (
       <Screen title={t('chat.providerNew')} back={paths.providers}>
@@ -94,15 +120,17 @@ export function NewProvider() {
     )
   }
   const kind = fields?.kind ?? 'openai-compatible'
-  const target = { kind, baseUrl: custom ? baseUrl : fields?.baseUrl }
+  const target = { kind, baseUrl: editable ? baseUrl : fields?.baseUrl }
   const keyNeeded = needsKey(target)
   const keyError = key !== '' && keyProblem(key) ? t('chat.providerKeyInvalid') : undefined
-  const normalized = custom ? normalizeBaseUrl(baseUrl) : null
+  const normalized = editable ? normalizeBaseUrl(baseUrl) : null
   // A custom endpoint left unnamed is called by its host, which is how the user typed it.
   const name = label.trim() !== '' ? label.trim() : custom && normalized !== null ? new URL(normalized).host : ''
-  const ready = name !== '' && (!custom || normalized !== null) && (!keyNeeded || key !== '') && keyError === undefined
+  const ready =
+    name !== '' && (!editable || normalized !== null) && (!keyNeeded || key !== '') && keyError === undefined
   const title = entry?.name ?? local?.name ?? t('chat.providerCustom')
-  const keyPage = KEY_PAGES[kind] ?? entry?.doc
+  // A maker's key page only for the maker's own API, not for another service that speaks its protocol.
+  const keyPage = (entry === undefined || entry.id === kind ? KEY_PAGES[kind] : undefined) ?? entry?.doc
 
   const create = async () => {
     if (!ready) return
@@ -116,6 +144,7 @@ export function NewProvider() {
         ...(fields?.baseUrl === undefined ? {} : { baseUrl: fields.baseUrl }),
         ...(fields?.preset === undefined ? {} : { preset: fields.preset }),
         ...(custom && normalized !== null ? { baseUrl: normalized, preset: local?.id ?? 'custom' } : {}),
+        ...(proxied && normalized !== null ? { baseUrl: normalized } : {}),
         ...(models.length === 0 ? {} : { models, defaultModel: models[0] as string }),
       })
       if (key !== '') await session.keys.set(id, key)
@@ -127,6 +156,7 @@ export function NewProvider() {
 
   return (
     <Screen title={title} back={paths.providers}>
+      {proxied && <ReachNotice reach="proxy" name={entry.name} />}
       <form
         className={styles.form}
         onSubmit={(e) => {
@@ -142,10 +172,10 @@ export function NewProvider() {
           placeholder={custom && normalized !== null ? new URL(normalized).host : undefined}
           required={!custom}
         />
-        {custom && (
+        {editable && (
           <Field
             label={t('chat.providerBaseUrl')}
-            hint={t('chat.providerBaseUrlHint')}
+            hint={proxied ? t('chat.providerProxyBaseUrlHint') : t('chat.providerBaseUrlHint')}
             error={baseError}
             type="url"
             inputMode="url"
@@ -178,6 +208,7 @@ export function NewProvider() {
       {(local !== undefined || isLocalEndpoint(baseUrl)) && (
         <ServerDiagnosis baseUrl={normalized ?? ''} preset={local?.id} />
       )}
+      {proxied && <CatalogModels provider={entry} />}
     </Screen>
   )
 }
@@ -239,7 +270,9 @@ export function EditProvider({ id }: { id: string }) {
   const entry = catalogProviderOf(catalog, provider)
   const local = localPresetOf(provider)
   const custom = provider.kind === 'openai-compatible' && entry === undefined
-  const keyPage = KEY_PAGES[provider.kind] ?? entry?.doc
+  const editable = custom || entry?.reach === 'proxy'
+  const keyPage =
+    (entry === undefined || entry.id === provider.kind ? KEY_PAGES[provider.kind] : undefined) ?? entry?.doc
   const suggestions = entry === undefined ? [] : sortedModels(entry).map((m) => m.id)
   // The service under the title, unless the provider is simply named after it.
   const onDevice = provider.kind === 'webllm' || provider.kind === 'chrome-ai'
@@ -274,22 +307,28 @@ export function EditProvider({ id }: { id: string }) {
   return (
     <Screen title={provider.label} subtitle={service === provider.label ? undefined : service} back={paths.providers}>
       {!isCallable(provider.kind) && <p className={styles.warningText}>{t('chat.providerUnsupported')}</p>}
+      {entry !== undefined && needsProxy(entry, provider) && (
+        <>
+          <ReachNotice reach="proxy" name={entry.name} />
+          <p className={styles.footnote}>{t('chat.providerProxyStill', { name: entry.name })}</p>
+        </>
+      )}
       <form
         className={styles.form}
         onSubmit={(e) => {
           e.preventDefault()
           const patch: { label?: string; baseUrl?: string } = {}
           if (label.trim() !== '' && label.trim() !== provider.label) patch.label = label.trim()
-          const normalized = custom ? normalizeBaseUrl(baseUrl) : null
+          const normalized = editable ? normalizeBaseUrl(baseUrl) : null
           if (normalized !== null && normalized !== provider.baseUrl) patch.baseUrl = normalized
           if (Object.keys(patch).length > 0) update(patch)
         }}
       >
         <Field label={t('chat.providerName')} value={label} onChange={(e) => setLabel(e.target.value)} />
-        {custom && (
+        {editable && (
           <Field
             label={t('chat.providerBaseUrl')}
-            hint={t('chat.providerBaseUrlHint')}
+            hint={custom ? t('chat.providerBaseUrlHint') : t('chat.providerProxyBaseUrlHint')}
             error={baseError}
             type="url"
             inputMode="url"
@@ -302,7 +341,7 @@ export function EditProvider({ id }: { id: string }) {
         <Button
           type="submit"
           variant="secondary"
-          disabled={label.trim() === provider.label && (!custom || baseUrl === (provider.baseUrl ?? ''))}
+          disabled={label.trim() === provider.label && (!editable || baseUrl === (provider.baseUrl ?? ''))}
         >
           {t('chat.save')}
         </Button>

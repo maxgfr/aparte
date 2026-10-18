@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { Catalog, CatalogModel, CatalogProvider } from '../core/ai/catalog.ts'
-import { catalogModelInfo, findModel, findProvider, sortedModels } from '../core/ai/catalog.ts'
+import { catalogEntryOf, catalogModelInfo, findModel, needsProxy, sortedModels } from '../core/ai/catalog.ts'
 import { baseUrlProblem, isLocalEndpoint, LOCAL_PRESETS, type LocalPreset, needsKey } from '../core/ai/endpoints.ts'
 import type { CapabilitiesModule, ModelDescriptor, ProviderConfig, ProviderKind } from '../core/contracts/ai.ts'
 import type { ModelRef, Workspace } from '../core/contracts/workspace.ts'
@@ -8,8 +8,9 @@ import { useProviders, useSession } from './chat.tsx'
 
 /*
  * Model providers for the interface: where a new provider comes from (the bundled catalog of providers a browser can
- * call, a local server preset, or a custom endpoint), whether one needs a key, and how a model reference resolves to
- * the descriptor the chat sends with (spec/DATA-MODEL.md section 3.3).
+ * call, with every other provider of llm-models when the user asks for them, a local server preset, or a custom
+ * endpoint), whether one needs a key, and how a model reference resolves to the descriptor the chat sends with
+ * (spec/DATA-MODEL.md section 3.3).
  *
  * Invariants:
  * - A provider configuration never holds a key: the key is a `provider-key` local record (ProviderKeys), entered on
@@ -42,9 +43,10 @@ export function catalogProviderOf(
   catalog: Catalog | null,
   provider: Pick<ProviderConfig, 'kind' | 'preset'>,
 ): CatalogProvider | undefined {
-  if (catalog === null) return undefined
-  return findProvider(catalog, provider.kind === 'openai-compatible' ? (provider.preset ?? '') : provider.kind)
+  return catalog === null ? undefined : catalogEntryOf(catalog, provider)
 }
+
+export { needsProxy }
 
 /** The service a provider talks to, as the user knows it; null for a custom endpoint. */
 export function serviceName(catalog: Catalog | null, provider: Pick<ProviderConfig, 'kind' | 'preset'>): string | null {

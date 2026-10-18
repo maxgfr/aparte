@@ -190,6 +190,25 @@ export const chat = {
   providerSearch: 'Search providers',
   providerSearchNone: 'No provider matches. A custom endpoint works with any OpenAI-compatible server.',
   providerSearchHint: 'Search to see every provider a browser can call directly.',
+  providerAll: 'Show every provider from the llm-models catalog',
+  providerAllHint:
+    'Adds the providers a browser cannot call directly. They work through a proxy you run, or from the Aparté CLI.',
+  providerAllLoading: 'Loading every provider…',
+  providerAllLegend:
+    '“Needs a proxy”: its API refuses calls from a web page (CORS). “Not supported”: Aparté does not speak its API.',
+  providerBadgeProxy: 'Needs a proxy',
+  providerBadgeNone: 'Not supported',
+  providerProxyExplain:
+    'A browser cannot call {name} directly: its API does not allow calls from a web page (CORS). Set the base URL to a proxy you run that forwards to it, such as LiteLLM or a CORS proxy you control, or use it from the Aparté CLI, which is not a browser.',
+  providerProxyStill:
+    'The base URL is still {name}’s own address, so chats from this browser fail until it names your proxy.',
+  providerProxyBaseUrlHint:
+    'The address of your proxy, such as https://proxy.example.com/v1, or http://localhost:4000/v1 on this computer.',
+  providerForeignExplain:
+    'Aparté cannot call {name}: its API is not one Aparté speaks (OpenAI-compatible, Anthropic, Gemini, Mistral, OpenRouter). A proxy that serves it as an OpenAI-compatible API, such as LiteLLM, can be added as a custom endpoint.',
+  providerCatalogModels: 'Models llm-models lists',
+  providerCatalogMore: 'And {count} more.',
+  providerDocs: 'Provider documentation',
   providerCatalogLoading: 'Loading the list of providers…',
   providerHosted: 'Hosted APIs',
   providerLocal: 'On this computer',

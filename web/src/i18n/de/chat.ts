@@ -198,6 +198,25 @@ export const chat = {
   providerSearch: 'Anbieter durchsuchen',
   providerSearchNone: 'Kein Anbieter passt. Ein eigener Endpunkt funktioniert mit jedem OpenAI-kompatiblen Server.',
   providerSearchHint: 'Suchen Sie, um alle Anbieter zu sehen, die ein Browser direkt aufrufen kann.',
+  providerAll: 'Alle Anbieter des llm-models-Katalogs anzeigen',
+  providerAllHint:
+    'Fügt die Anbieter hinzu, die ein Browser nicht direkt aufrufen kann. Sie funktionieren über einen eigenen Proxy oder mit der Aparté-CLI.',
+  providerAllLoading: 'Alle Anbieter werden geladen…',
+  providerAllLegend:
+    '„Proxy nötig“: Seine API lehnt Aufrufe von einer Webseite ab (CORS). „Nicht unterstützt“: Aparté spricht seine API nicht.',
+  providerBadgeProxy: 'Proxy nötig',
+  providerBadgeNone: 'Nicht unterstützt',
+  providerProxyExplain:
+    'Ein Browser kann {name} nicht direkt aufrufen: Seine API erlaubt keine Aufrufe von einer Webseite (CORS). Setzen Sie die Basis-URL auf einen eigenen Proxy, der an den Anbieter weiterleitet, etwa LiteLLM oder einen CORS-Proxy unter Ihrer Kontrolle, oder nutzen Sie ihn mit der Aparté-CLI, die kein Browser ist.',
+  providerProxyStill:
+    'Die Basis-URL ist noch die eigene Adresse von {name}: Chats aus diesem Browser schlagen fehl, bis sie Ihren Proxy angibt.',
+  providerProxyBaseUrlHint:
+    'Die Adresse Ihres Proxys, zum Beispiel https://proxy.example.com/v1 oder http://localhost:4000/v1 auf diesem Computer.',
+  providerForeignExplain:
+    'Aparté kann {name} nicht aufrufen: Seine API gehört nicht zu denen, die Aparté spricht (OpenAI-kompatibel, Anthropic, Gemini, Mistral, OpenRouter). Ein Proxy, der ihn als OpenAI-kompatible API bereitstellt, etwa LiteLLM, lässt sich als eigener Endpunkt hinzufügen.',
+  providerCatalogModels: 'Von llm-models gelistete Modelle',
+  providerCatalogMore: 'Und {count} weitere.',
+  providerDocs: 'Dokumentation des Anbieters',
   providerCatalogLoading: 'Anbieterliste wird geladen…',
   providerHosted: 'Gehostete APIs',
   providerLocal: 'Auf diesem Computer',

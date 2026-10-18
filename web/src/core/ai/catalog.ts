@@ -4,8 +4,12 @@
  * providers that answered a real CORS preflight from the app's origin, and shipped as `catalog.json` in its own lazily
  * loaded chunk. The catalog never decides what a request may contain on its own: `resolveCapabilities` combines it
  * with the pinned tables and the user's overrides.
+ *
+ * The providers the probe refused, and the ones no adapter of ours speaks to, are written to `catalog-all.json`, a
+ * second lazy chunk loaded only when the user asks to see every provider of llm-models (`allProviders`).
  */
 import type { CatalogModelInfo, ModelCost, ProviderConfig, ProviderKind } from '../contracts/ai.ts'
+import { LOCAL_PRESETS } from './endpoints.ts'
 
 export const CATALOG_VERSION = 1
 
@@ -40,6 +44,22 @@ export interface CatalogProvider {
   /** Base URL, kept only when the kind has no default or the provider's differs from it. */
   readonly api?: string
   readonly doc?: string
+  /**
+   * `proxy` (in `catalog-all.json` only): an adapter of ours speaks its protocol, but a web page cannot call its API
+   * directly. It refused the CORS preflight from the app's origin, asks for a header the adapters never send, or
+   * documents no https address. It is reached through a proxy the user runs, at a base URL they give, or from the CLI.
+   */
+  readonly reach?: 'proxy'
+  readonly models: readonly CatalogModel[]
+}
+
+/** A provider llm-models lists whose protocol no adapter of ours speaks (Azure, Bedrock, Vertex...): never callable. */
+export interface ForeignProvider {
+  readonly id: string
+  readonly name: string
+  /** The AI SDK package models.dev maps it to, which names its protocol. */
+  readonly npm?: string
+  readonly doc?: string
   readonly models: readonly CatalogModel[]
 }
 
@@ -48,7 +68,12 @@ export interface Catalog {
   /** ISO 8601. */
   readonly builtAt: string
   readonly providers: readonly CatalogProvider[]
+  /** Only in `catalog-all.json`, and in a catalog merged with it. */
+  readonly foreign?: readonly ForeignProvider[]
 }
+
+/** How a browser reaches a provider of the list: directly, through a proxy the user runs, or not at all. */
+export type Reach = 'direct' | 'proxy' | 'none'
 
 /** Offered first: the makers' own APIs and the main aggregator. */
 export const RECOMMENDED_PROVIDERS: readonly string[] = ['anthropic', 'openai', 'google', 'openrouter', 'mistral']
@@ -227,17 +252,79 @@ export async function loadBundledCatalog(): Promise<Catalog> {
   return mod.default as Catalog
 }
 
+/**
+ * Every provider llm-models lists, the ones a browser cannot call directly included, in their own chunk. Loaded only
+ * when the user turns on `allProviders` (or a provider of the vault was made from one of them).
+ */
+export async function loadAllCatalog(): Promise<Catalog> {
+  const mod = (await import('./catalog-all.json')) as { default: unknown }
+  return mod.default as Catalog
+}
+
+/**
+ * The bundled catalog with the providers of `catalog-all.json` added: an id the bundled catalog lists keeps its
+ * bundled entry (the one a browser calls directly), and an entry `all` lists twice is kept once.
+ */
+export function mergeCatalogs(bundled: Catalog, all: Catalog): Catalog {
+  const seen = new Set(bundled.providers.map((p) => p.id))
+  const providers = [...bundled.providers]
+  for (const p of all.providers) {
+    if (seen.has(p.id)) continue
+    seen.add(p.id)
+    providers.push(p.reach === 'proxy' ? p : { ...p, reach: 'proxy' })
+  }
+  const foreign: ForeignProvider[] = []
+  for (const p of [...(bundled.foreign ?? []), ...(all.foreign ?? [])]) {
+    if (seen.has(p.id)) continue
+    seen.add(p.id)
+    foreign.push(p)
+  }
+  return { version: bundled.version, builtAt: bundled.builtAt, providers, foreign }
+}
+
+/** Whether a browser calls the provider directly, only through a proxy, or not at all. */
+export function reachOf(p: CatalogProvider | ForeignProvider): Reach {
+  if (!('kind' in p)) return 'none'
+  return p.reach ?? 'direct'
+}
+
+const rank = (id: string) => {
+  const i = RECOMMENDED_PROVIDERS.indexOf(id)
+  return i < 0 ? RECOMMENDED_PROVIDERS.length : i
+}
+
 /** Providers in the order the picker shows them: recommended first, then by name. */
 export function sortedProviders(catalog: Catalog): CatalogProvider[] {
-  const rank = (id: string) => {
-    const i = RECOMMENDED_PROVIDERS.indexOf(id)
-    return i < 0 ? RECOMMENDED_PROVIDERS.length : i
-  }
   return [...catalog.providers].sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name))
 }
 
+/** One row of the provider list: a catalog provider or a foreign one, with how a browser reaches it. */
+export interface ListedProvider {
+  readonly id: string
+  readonly name: string
+  readonly reach: Reach
+}
+
+/**
+ * Every provider of the catalog, the foreign ones included, as the list shows them: recommended first, then the
+ * ones a browser calls directly, then the ones behind a proxy, then the ones no adapter speaks to, each by name.
+ */
+export function listedProviders(catalog: Catalog): ListedProvider[] {
+  const order: Record<Reach, number> = { direct: 0, proxy: 1, none: 2 }
+  const rows = [...catalog.providers, ...(catalog.foreign ?? [])].map((p) => ({
+    id: p.id,
+    name: p.name,
+    reach: reachOf(p),
+  }))
+  return rows.sort((a, b) => rank(a.id) - rank(b.id) || order[a.reach] - order[b.reach] || a.name.localeCompare(b.name))
+}
+
+export function findForeign(catalog: Catalog, id: string): ForeignProvider | undefined {
+  return catalog.foreign?.find((p) => p.id === id)
+}
+
 /** Models in the order the picker shows them: newest first, then by name. */
-export function sortedModels(provider: CatalogProvider): CatalogModel[] {
+export function sortedModels(provider: { readonly models: readonly CatalogModel[] }): CatalogModel[] {
   return [...provider.models].sort(
     (a, b) => (b.released ?? '').localeCompare(a.released ?? '') || a.name.localeCompare(b.name),
   )
@@ -248,16 +335,27 @@ export function findProvider(catalog: Catalog, id: string): CatalogProvider | un
 }
 
 /**
- * The catalog entry of a configured provider's model: through the catalog provider it was created from (its preset,
- * or its kind for a maker's own API).
+ * The catalog provider a configured provider was created from: its preset (an OpenAI-compatible service, or any
+ * provider reached through a proxy), else its kind for a maker's own API.
  */
+export function catalogEntryOf(
+  catalog: Catalog,
+  provider: Pick<ProviderConfig, 'kind' | 'preset'>,
+): CatalogProvider | undefined {
+  // A local server's preset (`ollama`, `lmstudio`) names the app's own preset, never a catalog entry.
+  const local = LOCAL_PRESETS.some((p) => p.id === provider.preset)
+  const preset = provider.preset === undefined || local ? undefined : findProvider(catalog, provider.preset)
+  if (preset !== undefined && preset.kind === provider.kind) return preset
+  return provider.kind === 'openai-compatible' ? undefined : findProvider(catalog, provider.kind)
+}
+
+/** The catalog entry of a configured provider's model, through the catalog provider it was created from. */
 export function findModel(
   catalog: Catalog,
   provider: Pick<ProviderConfig, 'kind' | 'preset'>,
   modelId: string,
 ): CatalogModel | undefined {
-  const entry = findProvider(catalog, provider.kind === 'openai-compatible' ? (provider.preset ?? '') : provider.kind)
-  return entry?.models.find((m) => m.id === modelId)
+  return catalogEntryOf(catalog, provider)?.models.find((m) => m.id === modelId)
 }
 
 /** The configuration fields of a provider created from a catalog entry (no secret: the key is stored apart). */
@@ -269,6 +367,16 @@ export function providerFields(p: CatalogProvider): Pick<ProviderConfig, 'kind' 
     kind: p.kind,
     label: p.name,
     ...(p.api === undefined ? {} : { baseUrl: p.api }),
-    ...(p.kind === 'openai-compatible' ? { preset: p.id } : {}),
+    // A provider behind a proxy keeps its catalog id whatever its kind: its address is the user's, not the catalog's.
+    ...(p.kind === 'openai-compatible' || p.reach === 'proxy' ? { preset: p.id } : {}),
   }
+}
+
+/**
+ * Whether a configured provider made from a catalog entry still calls an address a browser cannot reach: the entry
+ * is behind a proxy and the base URL is still the provider's own (or none), not one the user gave.
+ */
+export function needsProxy(entry: CatalogProvider | undefined, provider: Pick<ProviderConfig, 'baseUrl'>): boolean {
+  if (entry === undefined || entry.reach !== 'proxy') return false
+  return provider.baseUrl === undefined || provider.baseUrl === entry.api
 }

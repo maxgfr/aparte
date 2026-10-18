@@ -41,7 +41,7 @@ const control = (scope: Page | Locator, name: string) =>
   scope.getByRole('link', { name, exact: true }).or(scope.getByRole('button', { name, exact: true }))
 
 /** Clicks the navigation entry `name` ("New chat", "Models", "Chats"). */
-async function navigate(page: Page, name: string): Promise<void> {
+export async function navigate(page: Page, name: string): Promise<void> {
   await control(page.getByRole('navigation').or(page.getByRole('banner')), name)
     .first()
     .click()

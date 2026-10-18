@@ -257,6 +257,11 @@ export interface Settings {
   readonly speechVoice: string
   /** The image model new image turns use, the last one picked. */
   readonly imageModel: ModelRef | null
+  /**
+   * Whether the Models screen lists every provider of llm-models, the ones a browser can only reach through a proxy
+   * and the ones no adapter speaks to included (core/ai/catalog.ts `loadAllCatalog`). A display preference only.
+   */
+  readonly allProviders: boolean
 }
 
 export interface SettingsRepo {

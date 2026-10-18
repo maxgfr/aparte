@@ -1,23 +1,35 @@
 /*
  * The bundled catalog (catalog.json, built by scripts/build-catalog.ts) and its helpers: the adapter each provider is
- * called through, native model ids, the capability fields kept, and the budget of the lazy chunk.
+ * called through, native model ids, the capability fields kept, and the budget of the lazy chunk. Then the full list
+ * (catalog-all.json): the providers a browser reaches only through a proxy, the ones no adapter speaks to, how they
+ * merge into the bundled catalog and the badge each one gets.
  */
 import { describe, expect, test } from 'bun:test'
 import { resolveCapabilities } from './capabilities.ts'
 import {
   type Catalog,
+  type CatalogProvider,
+  catalogEntryOf,
   catalogModelInfo,
+  findForeign,
   findModel,
+  findProvider,
   kindFor,
+  listedProviders,
+  loadAllCatalog,
   loadBundledCatalog,
+  mergeCatalogs,
   nativeModelId,
+  needsProxy,
   providerFields,
+  reachOf,
   sortedProviders,
   toCatalogModels,
 } from './catalog.ts'
 import { baseUrlProblem, customProviderFields, LOCAL_PRESETS, normalizeBaseUrl } from './endpoints.ts'
 
 const catalog: Catalog = await loadBundledCatalog()
+const all: Catalog = await loadAllCatalog()
 
 describe('the bundled catalog', () => {
   test('is version 1, within its gzip budget, and lists the makers first', async () => {
@@ -146,5 +158,135 @@ describe('endpoints', () => {
       preset: 'ollama',
     })
     expect(customProviderFields({ id: 'custom', name: 'Mine', endpoint: 'http://10.0.0.2/v1' })).toBeNull()
+  })
+})
+
+const CALLABLE_KINDS = ['anthropic', 'openai', 'google', 'mistral', 'openrouter', 'openai-compatible']
+
+describe('the full list', () => {
+  test('is version 1, within its gzip budget, and lists no provider of the bundled catalog', async () => {
+    expect(all.version).toBe(1)
+    const bytes = await Bun.file(new URL('catalog-all.json', import.meta.url)).bytes()
+    expect(Bun.gzipSync(bytes).byteLength).toBeLessThanOrEqual(400 * 1024)
+    const bundled = new Set(catalog.providers.map((p) => p.id))
+    for (const p of [...all.providers, ...(all.foreign ?? [])]) expect(bundled.has(p.id)).toBe(false)
+    expect(all.providers.length).toBeGreaterThan(0)
+    expect(all.foreign?.length ?? 0).toBeGreaterThan(0)
+  })
+
+  test('every provider behind a proxy has a callable kind, models, and an https address when it has one', () => {
+    const ids = new Set<string>()
+    for (const p of all.providers) {
+      expect(p.reach).toBe('proxy')
+      expect(CALLABLE_KINDS).toContain(p.kind)
+      expect(p.models.length).toBeGreaterThan(0)
+      if (p.api !== undefined) expect(baseUrlProblem(p.api)).toBeNull()
+      expect(ids.has(p.id)).toBe(false)
+      ids.add(p.id)
+    }
+    // Local servers are the app's own presets, at the user's address.
+    for (const preset of LOCAL_PRESETS) expect(ids.has(preset.id)).toBe(false)
+  })
+
+  test('the foreign providers are the ones no adapter speaks to, with their models', () => {
+    for (const p of all.foreign ?? []) {
+      expect('kind' in p).toBe(false)
+      expect(kindFor({ id: p.id, ...(p.npm === undefined ? {} : { npm: p.npm }) })).toBeUndefined()
+      expect(p.models.length).toBeGreaterThan(0)
+    }
+    expect(findForeign(all, 'azure')?.npm).toBe('@ai-sdk/azure')
+  })
+
+  test('models keep their context, input, reasoning and tools', () => {
+    const models = all.providers.flatMap((p) => p.models)
+    expect(models.some((m) => m.ctx !== undefined && m.ctx > 0)).toBe(true)
+    expect(models.some((m) => m.in?.includes('image'))).toBe(true)
+    expect(models.some((m) => m.r === true)).toBe(true)
+    expect(models.some((m) => m.t === true)).toBe(true)
+  })
+})
+
+describe('merging the full list', () => {
+  const direct: CatalogProvider = {
+    id: 'alpha',
+    name: 'Alpha',
+    kind: 'openai-compatible',
+    api: 'https://a.example/v1',
+    models: [{ id: 'a1', name: 'A1' }],
+  }
+  const behind: CatalogProvider = {
+    id: 'beta',
+    name: 'Beta',
+    kind: 'openai-compatible',
+    api: 'https://b.example/v1',
+    reach: 'proxy',
+    models: [{ id: 'b1', name: 'B1', ctx: 1000, r: true }],
+  }
+  const native: CatalogProvider = {
+    id: 'gamma',
+    name: 'Gamma',
+    kind: 'anthropic',
+    api: 'https://g.example/anthropic/v1',
+    reach: 'proxy',
+    models: [{ id: 'g1', name: 'G1' }],
+  }
+  const bundled: Catalog = { version: 1, builtAt: '2026-10-18T00:00:00.000Z', providers: [direct] }
+  const extra: Catalog = {
+    version: 1,
+    builtAt: '2026-10-18T00:00:00.000Z',
+    providers: [{ ...direct, reach: 'proxy', name: 'Alpha (stale)' }, behind, native, behind],
+    foreign: [
+      { id: 'delta', name: 'Delta', npm: '@ai-sdk/azure', models: [{ id: 'd1', name: 'D1' }] },
+      { id: 'beta', name: 'Beta again', models: [] },
+    ],
+  }
+  const merged = mergeCatalogs(bundled, extra)
+
+  test('the bundled entry wins, each id is kept once, and the added ones are behind a proxy', () => {
+    expect(merged.providers.map((p) => p.id)).toEqual(['alpha', 'beta', 'gamma'])
+    expect(findProvider(merged, 'alpha')).toBe(direct)
+    expect(findProvider(merged, 'beta')?.reach).toBe('proxy')
+    expect(merged.foreign?.map((p) => p.id)).toEqual(['delta'])
+    expect(mergeCatalogs(catalog, all).providers.length).toBe(catalog.providers.length + all.providers.length)
+  })
+
+  test('badges: direct, proxy or none, listed recommended first, then direct, proxy and none', () => {
+    expect(reachOf(direct)).toBe('direct')
+    expect(reachOf(behind)).toBe('proxy')
+    expect(reachOf(findForeign(merged, 'delta') as never)).toBe('none')
+    expect(listedProviders(merged)).toEqual([
+      { id: 'alpha', name: 'Alpha', reach: 'direct' },
+      { id: 'beta', name: 'Beta', reach: 'proxy' },
+      { id: 'gamma', name: 'Gamma', reach: 'proxy' },
+      { id: 'delta', name: 'Delta', reach: 'none' },
+    ])
+    const real = listedProviders(mergeCatalogs(catalog, all))
+    expect(real.slice(0, 5).map((p) => p.id)).toEqual(['anthropic', 'openai', 'google', 'openrouter', 'mistral'])
+    expect(real.find((p) => p.id === 'azure')?.reach).toBe('none')
+  })
+
+  test('a provider behind a proxy keeps its catalog id, and needs a proxy until its base URL names one', () => {
+    expect(providerFields(behind)).toEqual({
+      kind: 'openai-compatible',
+      label: 'Beta',
+      baseUrl: 'https://b.example/v1',
+      preset: 'beta',
+    })
+    expect(providerFields(native)).toMatchObject({ kind: 'anthropic', preset: 'gamma' })
+    expect(needsProxy(behind, { baseUrl: 'https://b.example/v1' })).toBe(true)
+    expect(needsProxy(behind, {})).toBe(true)
+    expect(needsProxy(behind, { baseUrl: 'http://localhost:4000/v1' })).toBe(false)
+    expect(needsProxy(direct, { baseUrl: 'https://a.example/v1' })).toBe(false)
+    expect(needsProxy(undefined, {})).toBe(false)
+  })
+
+  test('a configured provider finds its entry through its preset, whatever its kind', () => {
+    expect(catalogEntryOf(merged, { kind: 'anthropic', preset: 'gamma' })).toBe(native)
+    expect(findModel(merged, { kind: 'anthropic', preset: 'gamma' }, 'g1')?.name).toBe('G1')
+    expect(findModel(merged, { kind: 'openai-compatible', preset: 'beta' }, 'b1')?.ctx).toBe(1000)
+    // A preset of another kind, or a local server's, is not that entry.
+    expect(catalogEntryOf(merged, { kind: 'openai-compatible', preset: 'gamma' })).toBeUndefined()
+    expect(catalogEntryOf(merged, { kind: 'openai-compatible', preset: 'ollama' })).toBeUndefined()
+    expect(catalogEntryOf(catalog, { kind: 'anthropic' })?.id).toBe('anthropic')
   })
 })

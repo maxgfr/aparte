@@ -47,7 +47,7 @@ import type { ConversationFile } from '../core/sandbox/tools.ts'
 import type { SearchIndex } from '../core/search/search.ts'
 import { holdReload } from '../pwa/register.ts'
 import { createMcpHost, type McpHost } from './mcpHost.ts'
-import { resolveModelWith } from './providers.tsx'
+import { LOCAL_PRESETS, resolveModelWith } from './providers.tsx'
 import { useVault } from './vault.tsx'
 
 /*
@@ -210,8 +210,11 @@ async function conversationFiles(workspace: Workspace, blobs: LocalBlobs, id: Id
 async function openSession(vault: Vault): Promise<{
   session: ChatSession
   close: () => Promise<void>
-  /** Resolves with the session once the catalog has loaded (a new object, so readers render again). */
-  withCatalog: Promise<ChatSession>
+  /**
+   * Calls `emit` with the session each time its catalog changes (a new object, so readers render again): once the
+   * bundled catalog has loaded, then whenever the vault starts or stops asking for every provider. Returns the stop.
+   */
+  watchCatalog: (emit: (session: ChatSession) => void) => () => void
 }> {
   const [
     ws,
@@ -464,13 +467,60 @@ async function openSession(vault: Vault): Promise<{
     blobUrl,
     refPart,
   }
-  const withCatalog = import('../core/ai/catalog.ts')
-    .then((m) => m.loadBundledCatalog())
-    .then((loaded) => {
-      catalog = loaded
-      return { ...session, catalog: loaded }
-    })
-  return { session, close, withCatalog }
+  const watchCatalog = (emit: (next: ChatSession) => void) => {
+    let watching = true
+    let bundled: Catalog | null = null
+    let all: Promise<Catalog> | null = null
+    let merged: Catalog | null = null
+    const catalogs = import('../core/ai/catalog.ts')
+    const publish = (next: Catalog) => {
+      if (!watching || next === catalog) return
+      catalog = next
+      emit({ ...session, catalog: next })
+    }
+    // Every provider is loaded while the setting asks for it, or while a provider of the vault was made from one the
+    // bundled catalog does not list (so it keeps its name, its models and its capabilities with the setting off).
+    const wantsAll = (m: typeof import('../core/ai/catalog.ts'), base: Catalog) =>
+      workspace.settings.get('allProviders') ||
+      workspace.providers
+        .list()
+        .some(
+          (p) =>
+            p.preset !== undefined &&
+            p.preset !== 'custom' &&
+            !LOCAL_PRESETS.some((l) => l.id === p.preset) &&
+            m.findProvider(base, p.preset) === undefined,
+        )
+    const refresh = async () => {
+      const m = await catalogs
+      bundled ??= await m.loadBundledCatalog()
+      if (!watching) return
+      if (!wantsAll(m, bundled)) {
+        publish(bundled)
+        return
+      }
+      all ??= m.loadAllCatalog()
+      const extra = await all
+      merged ??= m.mergeCatalogs(bundled, extra)
+      // The vault may have stopped asking meanwhile; the refresh that saw it already published the bundled catalog.
+      if (watching && wantsAll(m, bundled)) publish(merged)
+    }
+    // Without a catalog, models keep their ids as names and the conservative default capabilities.
+    const run = () => {
+      refresh().catch(() => {
+        all = null
+      })
+    }
+    const offSettings = workspace.subscribe('settings', run)
+    const offProviders = workspace.subscribe('providers', run)
+    run()
+    return () => {
+      watching = false
+      offSettings()
+      offProviders()
+    }
+  }
+  return { session, close, watchCatalog }
 }
 
 /** Opens the chat session whenever the vault is unlocked and closes it on lock. */
@@ -486,9 +536,11 @@ export function ChatProvider({ children }: { readonly children: ReactNode }) {
     }
     let live = true
     let close: (() => Promise<void>) | null = null
+    let stopCatalog: (() => void) | null = null
     setState({ status: 'opening' })
     const unregister = vault.onLock(async () => {
       live = false
+      stopCatalog?.()
       setState({ status: 'closed' })
       await close?.()
     })
@@ -500,11 +552,9 @@ export function ChatProvider({ children }: { readonly children: ReactNode }) {
           return
         }
         setState({ status: 'open', session: opened.session })
-        opened.withCatalog.then(
-          (session) => live && setState({ status: 'open', session }),
-          // Without the catalog, models keep their ids as names and the conservative default capabilities.
-          () => undefined,
-        )
+        stopCatalog = opened.watchCatalog((session) => {
+          if (live) setState({ status: 'open', session })
+        })
       },
       (error: unknown) => {
         if (live) setState({ status: 'failed', error })
@@ -512,6 +562,7 @@ export function ChatProvider({ children }: { readonly children: ReactNode }) {
     )
     return () => {
       live = false
+      stopCatalog?.()
       unregister()
       void close?.()
     }

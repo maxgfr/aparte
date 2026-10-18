@@ -14,7 +14,8 @@
       "!coverage",
       "!playwright-report",
       "!test-results",
-      "!src/core/ai/catalog.json"
+      "!src/core/ai/catalog.json",
+      "!src/core/ai/catalog-all.json"
     ]
   },
   "formatter": {
