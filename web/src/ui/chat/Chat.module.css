@@ -634,6 +634,11 @@
   background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
 
+/* The open chat is highlighted across its whole row, its actions button included. */
+.listItem.listItemActive {
+  background: var(--accent-soft);
+}
+
 .listLink {
   display: grid;
   flex: 1;
@@ -644,10 +649,6 @@
   border-radius: var(--radius-control);
   color: var(--ink);
   text-decoration: none;
-}
-
-.listLink[aria-current="page"] {
-  background: var(--accent-soft);
 }
 
 .listTitle {
@@ -666,6 +667,11 @@
 .listMore {
   flex: none;
   color: var(--ink-2);
+}
+
+/* Over the row's own highlight, a shade of it rather than an opaque surface. */
+.listItem .listMore:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
 .listCompact .listTitle {
