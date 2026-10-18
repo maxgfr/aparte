@@ -51,3 +51,14 @@ export function integrityTransform(dir: string | (() => string)): ManifestTransf
     return { manifest, warnings: [] }
   }
 }
+
+/**
+ * A Workbox manifest transform that orders the entries by URL (by UTF-16 code unit, independent of the locale). The
+ * order Workbox hands the entries over is not stable from one build to the next (two builds of one commit on two
+ * machines listed the generated PWA icons in different places), and the manifest is compiled into `sw.js`: without a
+ * fixed order, two builds of the same commit differ, and `scripts/verify-deploy.sh --rebuild` cannot compare them with the live copy.
+ */
+export const sortedManifest: ManifestTransform = async (entries) => ({
+  manifest: [...entries].sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)),
+  warnings: [],
+})

@@ -1,5 +1,5 @@
 import type { VitePWAOptions } from 'vite-plugin-pwa'
-import { integrityTransform } from './build/integrity.ts'
+import { integrityTransform, sortedManifest } from './build/integrity.ts'
 
 /** The precache cap: the app shell is far below it; heavy runtimes over it are fetched on demand, hash-pinned. */
 const MAX_PRECACHED_BYTES = 4 * 1024 * 1024
@@ -85,7 +85,8 @@ export function pwaOptions(base: string): Partial<VitePWAOptions> {
       ],
       // Files over the cap (a WebAssembly runtime, say) are left out of the precache with a build warning.
       maximumFileSizeToCacheInBytes: MAX_PRECACHED_BYTES,
-      manifestTransforms: [integrityTransform(builtFiles)],
+      // Digests first, then a fixed order, so two builds of one commit write the same sw.js.
+      manifestTransforms: [integrityTransform(builtFiles), sortedManifest],
     },
     integration: {
       beforeBuildServiceWorker(options) {

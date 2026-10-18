@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { matchesIntegrity } from '../src/pwa/sri.ts'
-import { integrityTransform } from './integrity.ts'
+import { integrityTransform, sortedManifest } from './integrity.ts'
 
 let dir = ''
 const files: Record<string, Uint8Array<ArrayBuffer>> = {
@@ -79,4 +79,21 @@ test('the output directory may be given lazily, once the build has resolved it',
   resolved = dir
   const { manifest } = await transform([entry('index.html', bytes.byteLength)])
   expect(manifest[0]?.integrity).toBe(expected(bytes))
+})
+
+test('the manifest is ordered by URL, whatever order the build wrote its files in', async () => {
+  const urls = ['pwa-64x64.png', 'assets/b.js', 'index.html', 'assets/a.js']
+  const entries = urls.map((url, i) => entry(url, i + 1))
+  const shuffled = [2, 0, 3, 1].map((i) => entry(urls[i] ?? '', i + 1))
+  const one = await sortedManifest(entries)
+  const two = await sortedManifest(shuffled)
+  expect(one.manifest.map((e) => e.url)).toEqual(['assets/a.js', 'assets/b.js', 'index.html', 'pwa-64x64.png'])
+  expect(two).toEqual(one)
+  expect(one.warnings).toEqual([])
+  // Every entry is kept as it was, and the input is left untouched.
+  expect(one.manifest.find((e) => e.url === 'index.html')).toEqual(entry('index.html', 3))
+  expect(entries.map((e) => e.url)).toEqual(urls)
+  // Code-unit order, not the locale's: upper case sorts before lower case.
+  const mixed = await sortedManifest([entry('a.js', 1), entry('B.js', 1)])
+  expect(mixed.manifest.map((e) => e.url)).toEqual(['B.js', 'a.js'])
 })
