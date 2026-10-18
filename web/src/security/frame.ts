@@ -12,12 +12,21 @@ export type Isolation = 'framed' | 'opened' | null
 export interface WindowLike {
   readonly top: unknown
   readonly self: unknown
+  readonly window: unknown
   readonly opener: unknown
 }
 
-/** Comparing window proxies is allowed across origins; reading anything else from a cross-origin parent is not. */
+/**
+ * Comparing window proxies is allowed across origins; reading anything else from a cross-origin parent is not.
+ *
+ * `top` and `window` are [LegacyUnforgeable]: no script can redefine them. `self` is [Replaceable], so a framing page
+ * of the same origin (another site of the shared origin) can assign the frame's `self` before the app runs; the check
+ * therefore compares `top` with `window` too. `opener` is settable as well: a same-origin opener can set it to null and
+ * keep its handle on the window, which no check in the page can see. Against that, only the service worker's
+ * Cross-Origin-Opener-Policy helps (docs/security-model.md, "Shared origin").
+ */
 export function isolation(win: WindowLike): Isolation {
-  if (win.top !== win.self) return 'framed'
+  if (win.top !== win.self || win.top !== win.window) return 'framed'
   if (win.opener !== null && win.opener !== undefined) return 'opened'
   return null
 }

@@ -55,7 +55,7 @@ describe('initSecurity', () => {
     const tt = fakeTrustedTypes()
     const doc = fakeDocument()
     Object.assign(g, {
-      window: { top: self, self, opener: null },
+      window: { top: self, self, window: self, opener: null },
       document: doc,
       // Under bun test import.meta.env.BASE_URL is unset, so the base is '/'.
       location: new URL('https://maxgfr.github.io/'),
@@ -88,7 +88,7 @@ describe('initSecurity', () => {
     const self = {}
     const doc = fakeDocument()
     Object.assign(g, {
-      window: { top: shape.top ?? self, self, opener: shape.opener },
+      window: { top: shape.top ?? self, self, window: self, opener: shape.opener },
       document: doc,
       location: new URL('https://maxgfr.github.io/aparte/#/import?key=attacker'),
     })

@@ -5,16 +5,23 @@ describe('isolation', () => {
   const self = {}
 
   test('lets a top-level window nobody opened run', () => {
-    expect(isolation({ top: self, self, opener: null })).toBeNull()
+    expect(isolation({ top: self, self, window: self, opener: null })).toBeNull()
   })
 
   test('refuses a framed window, whoever opened it', () => {
-    expect(isolation({ top: {}, self, opener: null })).toBe('framed')
-    expect(isolation({ top: {}, self, opener: {} })).toBe('framed')
+    expect(isolation({ top: {}, self, window: self, opener: null })).toBe('framed')
+    expect(isolation({ top: {}, self, window: self, opener: {} })).toBe('framed')
+  })
+
+  test('refuses a framed window whose `self` the page around it replaced with its own window', () => {
+    // `self` is [Replaceable]: a framing page of the same origin can assign it before the app's script runs, and a
+    // check on `self` alone would then see a top-level window. `window` is [LegacyUnforgeable] and cannot be.
+    const parent = {}
+    expect(isolation({ top: parent, self: parent, window: self, opener: null })).toBe('framed')
   })
 
   test('refuses a window another page opened', () => {
-    expect(isolation({ top: self, self, opener: {} })).toBe('opened')
+    expect(isolation({ top: self, self, window: self, opener: {} })).toBe('opened')
   })
 })
 

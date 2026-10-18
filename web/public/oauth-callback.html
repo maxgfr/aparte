@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'sha256-19f8jMDfiDnhWVmUdv5fLrSc5TGvrIjnw/66t0zLXBA='; style-src 'sha256-wGh4PFHbbncqo8mSdsN1XkR6gIMP9KndkJTm8meuyag='; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
+      content="default-src 'none'; script-src 'sha256-BN/c9/gEN6un2+vImHfOcZhNgKfXq8jPXi9JxpYWXzo='; style-src 'sha256-wGh4PFHbbncqo8mSdsN1XkR6gIMP9KndkJTm8meuyag='; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
     />
     <meta name="referrer" content="no-referrer" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -36,7 +36,7 @@ p{margin:0;line-height:1.5}</style>
   const say = (text) => {
     if (status) status.textContent = text
   }
-  if (window.top !== window.self) {
+  if (window.top !== window.self || window.top !== window) {
     say('This page cannot run inside another page.')
     return
   }

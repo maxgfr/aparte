@@ -46,6 +46,8 @@ describe('oauth-callback.html', () => {
     expect(script).toContain('/^[A-Za-z0-9_-]{43}$/')
     expect(script).toContain("window.history.replaceState(null, '', window.location.pathname)")
     expect(script).toContain('window.top !== window.self')
+    // `self` is replaceable by a framing page of the same origin; `window` is not (src/security/frame.ts).
+    expect(script).toContain('window.top !== window.self || window.top !== window)')
     for (const banned of [
       'innerHTML',
       'outerHTML',
