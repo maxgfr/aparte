@@ -289,3 +289,19 @@ export async function declineCall(card: Locator): Promise<void> {
 /** The sources of an answer, as buttons. */
 export const sourcesOf = (answer: Locator) =>
   answer.getByRole('region', { name: tools.sources, exact: true }).getByRole('button')
+
+/**
+ * Expects `target`, a control in the thread, to take a pointer wherever it scrolls into view (start, centre, end or
+ * nearest edge): never under the sticky header or the composer dock, which on a phone covers half the screen.
+ */
+export async function expectUncovered(target: Locator): Promise<void> {
+  for (const block of ['start', 'center', 'end', 'nearest'] as const) {
+    const hit = await target.evaluate((el, at) => {
+      el.scrollIntoView({ block: at, behavior: 'instant' })
+      const r = el.getBoundingClientRect()
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      return top !== null && el.contains(top)
+    }, block)
+    expect(hit, `covered once scrolled into view with block: '${block}'`).toBe(true)
+  }
+}

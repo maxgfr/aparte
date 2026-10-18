@@ -3,7 +3,17 @@ import { chat } from '../src/i18n/en/chat.ts'
 import { compare } from '../src/i18n/en/compare.ts'
 import { shell } from '../src/i18n/en/shell.ts'
 import { stats } from '../src/i18n/en/stats.ts'
-import { ANSWER_WAIT, answers, branchOf, composer, content, send, settled, startChat } from './fixtures/chat-ui.ts'
+import {
+  ANSWER_WAIT,
+  answers,
+  branchOf,
+  composer,
+  content,
+  expectUncovered,
+  send,
+  settled,
+  startChat,
+} from './fixtures/chat-ui.ts'
 import { anthropicText } from './fixtures/sse.ts'
 import { expect, test } from './fixtures/test.ts'
 import { accessible } from './gates.ts'
@@ -68,6 +78,7 @@ test('Beam: one message, two models side by side, keep one, then merge', async (
   // Keep the second: the comparison closes and the kept answer is version 2 of 2.
   const second = candidates(page).nth(1)
   const kept = (await second.locator('[data-candidate-content]').innerText()).trim()
+  await expectUncovered(second.getByRole('button', { name: compare.beamKeep }))
   await second.getByRole('button', { name: compare.beamKeep }).click()
   await expect(candidates(page)).toHaveCount(0)
   await expect(content(answers(page).last())).toHaveText(kept)

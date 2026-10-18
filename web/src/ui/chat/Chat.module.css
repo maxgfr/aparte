@@ -110,6 +110,17 @@
   padding: var(--space-5) var(--gutter) var(--space-6);
 }
 
+/*
+ * What scrolls into view in the thread (a control reached with Tab, a match) lands clear of the sticky header and
+ * composer dock, which on a phone can cover half the screen: the screen writes their heights to --sticky-top and
+ * --sticky-bottom. A margin on the thread's content rather than a padding on the page, so the dock's own controls
+ * never scroll the thread when they take focus; sheets keep their own scrolling.
+ */
+.thread :not(dialog, dialog *) {
+  scroll-margin-top: var(--sticky-top, 0px);
+  scroll-margin-bottom: var(--sticky-bottom, 0px);
+}
+
 .empty {
   display: grid;
   justify-items: start;

@@ -94,6 +94,37 @@ function useFollow(trigger: string) {
 }
 
 /**
+ * Keeps what scrolls into view in the thread clear of the sticky header and composer dock, which on a phone can cover
+ * half the screen: their heights go to `--sticky-top` and `--sticky-bottom` on <html>, which the scroll margin of the
+ * thread's content adds (Chat.module.css).
+ */
+function useStickyClearance(): {
+  readonly header: (el: HTMLElement | null) => void
+  readonly dock: (el: HTMLElement | null) => void
+} {
+  return useMemo(() => {
+    const track = (property: string) => {
+      let observer: ResizeObserver | null = null
+      return (el: HTMLElement | null) => {
+        observer?.disconnect()
+        observer = null
+        const root = document.documentElement
+        if (el === null) {
+          root.style.removeProperty(property)
+          return
+        }
+        const write = () => root.style.setProperty(property, `${Math.ceil(el.getBoundingClientRect().height)}px`)
+        write()
+        if (typeof ResizeObserver === 'undefined') return
+        observer = new ResizeObserver(write)
+        observer.observe(el)
+      }
+    }
+    return { header: track('--sticky-top'), dock: track('--sticky-bottom') }
+  }, [])
+}
+
+/**
  * A stream's parts change at every delta; React renders them at most once per animation frame. A stream that starts
  * or ends shows at once, so its answer appears together with the message that started it.
  */
@@ -264,6 +295,7 @@ function ChatView({ id }: { id: Id | null }) {
   const follow = useFollow(
     `${visible.length}|${stream?.parts.length ?? 0}|${streamed}|${calls}|${beamed}|${imageTurn?.messageId ?? ''}`,
   )
+  const sticky = useStickyClearance()
   const busy = rawStream !== null || beam?.running === true || imageTurn !== null
   const research = useResearchProgress(path, rawStream)
 
@@ -597,7 +629,7 @@ function ChatView({ id }: { id: Id | null }) {
 
   return (
     <div className={styles.chat}>
-      <header className={styles.chatHeader}>
+      <header className={styles.chatHeader} ref={sticky.header}>
         <Link href={paths.conversations} className={styles.headerBack}>
           <ChevronLeft size={20} strokeWidth={2} aria-hidden="true" />
           <span>{t('chat.backToChats')}</span>
@@ -672,7 +704,7 @@ function ChatView({ id }: { id: Id | null }) {
         )}
       </div>
 
-      <div className={styles.composerDock}>
+      <div className={styles.composerDock} ref={sticky.dock}>
         <QuickRepliesBar disabled={beam?.running === true} onSend={(text) => void onSend([{ type: 'text', text }])} />
         <Composer
           modelRef={modelRef}
