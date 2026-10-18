@@ -67,12 +67,17 @@ fn ctx() -> ToolContext {
     }
 }
 
+/// A killed process the system has not reaped yet is a zombie: `kill -0` still finds it, `ps` shows its state as `Z`.
 fn alive(pid: &str) -> bool {
-    std::process::Command::new("kill")
-        .args(["-0", pid])
+    std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", pid])
         .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
+        .output()
+        .is_ok_and(|out| {
+            let state = String::from_utf8_lossy(&out.stdout);
+            let state = state.trim();
+            !state.is_empty() && !state.starts_with('Z')
+        })
 }
 
 #[tokio::test]
