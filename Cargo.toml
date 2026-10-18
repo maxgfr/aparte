@@ -4,7 +4,7 @@ members = ["crates/*"]
 
 [workspace.package]
 # The release workflow stamps this line (scripts/cli-version.sh) before building; main keeps the last release.
-version = "1.5.2"
+version = "1.6.0"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
