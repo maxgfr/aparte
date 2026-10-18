@@ -11,6 +11,14 @@ paths = [
   '''(^|/)spec/vectors/[^/]+\.json$''',
 ]
 
+# SHA-256 digests of the pinned, public files the app downloads at runtime (model weights, WebGPU libraries, embedding
+# models). They identify public files and grant nothing.
+[[allowlists]]
+description = "Digests of pinned public downloads"
+paths = [
+  '''(^|/)web/src/workers/[^/]+-(files|pins)\.json$''',
+]
+
 # Unit and end-to-end tests use made-up API keys with an `sk-test-` or `sk-secret-` prefix. Both conditions must hold:
 # a real key in a test file, or a fake-looking key anywhere else, is still reported.
 [[allowlists]]
