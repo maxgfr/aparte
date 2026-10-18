@@ -305,6 +305,138 @@ fn a_user_invocation_sends_the_skill_and_untrusted_project_skills_stay_out() {
         .stderr(predicates::str::contains("no skill named"));
 }
 
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("mkdir");
+    for entry in std::fs::read_dir(from).expect("read dir") {
+        let entry = entry.expect("entry");
+        let target = to.join(entry.file_name());
+        if entry.file_type().expect("type").is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).expect("copy");
+        }
+    }
+}
+
+/// Stands in for the skill's engine (`scripts/ultrasearch.mjs`, a large Node bundle that searches the web): it prints
+/// its command line and writes where the real one keeps its default run directory, the temporary directory.
+const ULTRASEARCH_STUB: &str = r#"import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const [command, ...flags] = process.argv.slice(2);
+const run = join(tmpdir(), "ultrasearch", "stub");
+mkdirSync(run, { recursive: true });
+writeFileSync(join(run, "manifest.json"), "{}");
+console.log(`ultrasearch ${command}: ${flags.join(" ")}`);
+console.log(`run: ${run}`);
+"#;
+
+/// The ultrasearch skill (the shared copy the web app reads too) as `npx skills add maxgfr/ultrasearch` installs it in
+/// a project: the files under `.agents/skills/ultrasearch`, and a relative link to them from `.claude/skills`.
+#[cfg(unix)]
+#[test]
+fn ultrasearch_installed_by_npx_skills_add_runs_natively() {
+    let env = Env::new();
+    let installed = env.project().join(".agents/skills/ultrasearch");
+    copy_dir(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web/src/core/skills/fixtures/ultrasearch"),
+        &installed,
+    );
+    std::fs::create_dir_all(installed.join("scripts")).expect("mkdir");
+    std::fs::write(installed.join("scripts/ultrasearch.mjs"), ULTRASEARCH_STUB).expect("script");
+    std::fs::create_dir_all(env.project().join(".claude/skills")).expect("mkdir");
+    std::os::unix::fs::symlink(
+        "../../.agents/skills/ultrasearch",
+        env.project().join(".claude/skills/ultrasearch"),
+    )
+    .expect("link");
+    let dir = installed.canonicalize().expect("canonical");
+
+    // Discovered once despite the link, as a project skill that waits for trust.
+    let listed = env.json(&["skills", "list", "--all"]);
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert_eq!(listed[0]["name"], "ultrasearch");
+    assert_eq!(listed[0]["scope"], "project");
+    assert_eq!(listed[0]["offered"], false);
+    env.cmd().arg("trust").assert().code(0);
+    let listed = env.json(&["skills", "list"]);
+    assert_eq!(listed[0]["offered"], true, "{listed:?}");
+    assert_eq!(listed[0]["version"], "1.41.1", "{listed:?}");
+
+    // The model sees the skill, loads its instructions, then one reference, then runs its engine once approved.
+    let reference = "references/citation-format.md";
+    let command = format!(
+        "node {}/scripts/ultrasearch.mjs queries --q \"What is a CRDT?\" --mode topic --depth summary",
+        dir.display()
+    );
+    let (url, server) = mock(vec![
+        tool_use("skill", &json!({"name": "ultrasearch"})),
+        tool_use("skill", &json!({"name": "ultrasearch", "path": reference})),
+        tool_use("bash", &json!({"command": command})),
+        text(),
+    ]);
+    let out = env
+        .cmd()
+        .args(["--base-url", &url, "--yes"])
+        .args(sandbox_flags())
+        .args(["-p", "Use ultrasearch: what is a CRDT?"])
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    let seen = server.join().expect("server");
+    assert_eq!(seen.len(), 4);
+
+    let system = seen[0]["system"].to_string();
+    assert!(
+        system.contains("<available_skills>")
+            && system.contains("<name>ultrasearch</name>")
+            && system.contains("Research a web topic"),
+        "{system}"
+    );
+    assert!(
+        !system.contains("deep-research-playbook"),
+        "only the name and description are in the prompt"
+    );
+
+    let loaded = last_result(&seen[1]);
+    let instructions = loaded["content"].as_str().expect("instructions");
+    assert!(
+        instructions.contains(&format!("node {}/scripts/ultrasearch.mjs <command>", dir.display())),
+        "{instructions}"
+    );
+    assert!(!instructions.contains("<skill-dir>"), "every placeholder is filled in");
+    assert!(instructions.contains(&format!("- {reference}")) && instructions.contains("- scripts/ultrasearch.mjs"));
+
+    let read = last_result(&seen[2]);
+    let expected = std::fs::read_to_string(dir.join(reference)).expect("reference");
+    assert_eq!(read["content"].as_str(), Some(expected.as_str()));
+
+    let ran = last_result(&seen[3]);
+    assert_ne!(ran["is_error"], true, "{ran}");
+    let output = ran["content"].as_str().expect("output");
+    assert!(
+        output.starts_with("ultrasearch queries: --q What is a CRDT? --mode topic --depth summary\nrun: "),
+        "{output}"
+    );
+    // The engine's default run directory lands in the private temporary directory of `bash`, which the sandbox lets it
+    // write and which is removed when the session ends (a dossier to keep goes in the project, with `--out`).
+    let run = PathBuf::from(
+        output
+            .lines()
+            .nth(1)
+            .and_then(|l| l.strip_prefix("run: "))
+            .expect("run line"),
+    );
+    assert!(run.ends_with("tmp/ultrasearch/stub"), "{}", run.display());
+    assert!(
+        run.components()
+            .any(|c| c.as_os_str().to_string_lossy().starts_with("aparte-")),
+        "{}",
+        run.display()
+    );
+    assert!(!run.exists(), "{} outlived the session", run.display());
+}
+
 /// The stdio mock of `aparte-mcp`, built with the workspace's examples (built here if missing).
 fn mock_server() -> PathBuf {
     let exe = std::env::current_exe().expect("exe");
