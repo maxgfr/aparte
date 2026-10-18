@@ -58,7 +58,8 @@ fn error_object(data: &Value) -> (Option<String>, Option<String>, Option<String>
     let s = |v: Option<&Value>| v.and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned);
     let message = s(inner.get("message"))
         .or_else(|| s(root.get("message")))
-        .or_else(|| s(root.get("error")));
+        .or_else(|| s(root.get("error")))
+        .or_else(|| s(root.get("msg")));
     let kind = s(inner.get("type")).or_else(|| s(inner.get("status")));
     let code = s(inner.get("code"));
     (kind, code, message)
@@ -113,6 +114,27 @@ pub fn from_stream(data: &Value, key: Option<&str>) -> ChatError {
     ChatError::new(ec, scrub(&message, key), None)
 }
 
+/// A success status whose body is not an event stream (a gateway that answers errors as `200` JSON, a wrong base
+/// URL). The provider's own message is kept when the body has one, else the start of the body.
+pub fn not_a_stream(body: &str, key: Option<&str>) -> ChatError {
+    let data = serde_json::from_str::<Value>(body).unwrap_or(Value::Null);
+    let (kind, code, message) = error_object(&data);
+    let ec = kind
+        .as_deref()
+        .and_then(named)
+        .or_else(|| code.as_deref().and_then(named))
+        .unwrap_or(ErrorCode::Unknown);
+    let message = message.unwrap_or_else(|| {
+        let start: String = body.trim().chars().take(200).collect();
+        if start.is_empty() {
+            "the provider answered without an event stream".to_owned()
+        } else {
+            start
+        }
+    });
+    ChatError::new(ec, scrub(&message, key), None)
+}
+
 /// The error of a stream that stopped without its finish event.
 pub fn truncated() -> ChatError {
     ChatError::new(ErrorCode::Truncated, "", None)
@@ -121,6 +143,27 @@ pub fn truncated() -> ChatError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_json_body_on_a_success_status_is_an_error_with_the_providers_message() {
+        let e = not_a_stream(r#"{"code":500,"msg":"404 NOT_FOUND","success":false}"#, None);
+        assert_eq!(
+            (e.code, e.message.as_str(), e.status),
+            (ErrorCode::Unknown, "404 NOT_FOUND", None)
+        );
+        let e = not_a_stream(
+            r#"{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            None,
+        );
+        assert_eq!((e.code, e.message.as_str()), (ErrorCode::RateLimit, "slow down"));
+        assert_eq!(
+            not_a_stream("<html>gateway</html>", None).message,
+            "<html>gateway</html>"
+        );
+        assert!(!not_a_stream("", None).message.is_empty());
+        let e = not_a_stream(r#"{"error":"bad key sk-secret-xyz"}"#, Some("sk-secret-xyz"));
+        assert!(!e.message.contains("sk-secret-xyz"));
+    }
 
     #[test]
     fn statuses_and_types_map_like_the_web_app() {

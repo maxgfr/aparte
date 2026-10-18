@@ -170,6 +170,28 @@ impl Client {
     }
 }
 
+/// A response body is read as an event stream unless it declares another type (a missing type is given the benefit of
+/// the doubt).
+fn is_event_stream(resp: &reqwest::Response) -> bool {
+    resp.headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_none_or(|t| t.to_ascii_lowercase().contains("event-stream"))
+}
+
+/// The start of a body that is not a stream, up to [`MAX_ERROR_BODY`].
+async fn read_capped(resp: reqwest::Response) -> Vec<u8> {
+    let mut body = Vec::new();
+    let mut s = resp.bytes_stream();
+    while let Some(Ok(chunk)) = s.next().await {
+        body.extend_from_slice(&chunk);
+        if body.len() > MAX_ERROR_BODY {
+            break;
+        }
+    }
+    body
+}
+
 fn network(e: &reqwest::Error, key: Option<&str>) -> ChatError {
     let what = if e.is_timeout() { "timed out" } else { "no answer" };
     ChatError::new(ErrorCode::Network, errors::scrub(&format!("{what}: {e}"), key), None)
@@ -206,16 +228,16 @@ impl State {
                     Err(e) => self.fail(network(&e, self.key.as_deref())),
                     Ok(resp) if !resp.status().is_success() => {
                         let status = resp.status().as_u16();
-                        let mut body = Vec::new();
-                        let mut s = resp.bytes_stream();
-                        while let Some(Ok(chunk)) = s.next().await {
-                            body.extend_from_slice(&chunk);
-                            if body.len() > MAX_ERROR_BODY {
-                                break;
-                            }
-                        }
+                        let body = read_capped(resp).await;
                         let text = String::from_utf8_lossy(&body);
                         self.fail(errors::from_http(status, &text, self.key.as_deref()));
+                    }
+                    Ok(resp) if !is_event_stream(&resp) => {
+                        let body = read_capped(resp).await;
+                        self.fail(errors::not_a_stream(
+                            &String::from_utf8_lossy(&body),
+                            self.key.as_deref(),
+                        ));
                     }
                     Ok(resp) => {
                         let s = resp.bytes_stream().map(|r| r.map(|b| b.to_vec()));
