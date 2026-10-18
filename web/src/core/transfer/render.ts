@@ -154,6 +154,15 @@ details{color:var(--ink-2);font-size:.9375rem;margin:0 0 .5rem}
 
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
 
+/** The style and the Content-Security-Policy of an exported document, for other self-contained exports. */
+export const EXPORT_STYLE = STYLE
+export const EXPORT_CSP = CSP
+
+/** Untrusted Markdown as HTML an export may hold: raw HTML shown as text, links only to http, https and mailto. */
+export function markdownHtml(text: string): string {
+  return marked.parse(text, { async: false }) as string
+}
+
 /** The conversation's branch as one HTML file that needs nothing else to be read. */
 export async function toHtml(conversation: Conversation, path: readonly Message[], deps: RenderDeps) {
   const { labels } = deps
@@ -181,11 +190,7 @@ export async function toHtml(conversation: Conversation, path: readonly Message[
     const text = visibleText(m.parts)
     if (text !== '') {
       // The user's own words are shown as typed; answers are Markdown.
-      body.push(
-        m.role === 'assistant'
-          ? (marked.parse(text, { async: false }) as string)
-          : `<p class="plain">${escapeHtml(text)}</p>`,
-      )
+      body.push(m.role === 'assistant' ? markdownHtml(text) : `<p class="plain">${escapeHtml(text)}</p>`)
     }
     for (const p of m.parts) {
       if (p.type === 'tool-call') body.push(`<p class="note">${escapeHtml(`${labels.tool}: ${p.name}`)}</p>`)

@@ -26,11 +26,28 @@ export function textOf(parts: readonly Part[]): string {
   return out.join('\n\n')
 }
 
-/** The injected parts of a message, as text. */
+/** What added a part to a message (contracts/extras.ts `Injected`), or null for a part the user wrote. */
+export function injectedKind(part: Part): string | null {
+  const v = part.type === 'text' ? (part as { injected?: unknown }).injected : undefined
+  return typeof v === 'string' ? v : null
+}
+
+/** Injected parts the view never shows as text: the skills list and the research playbook, both app-written. */
+const APP_INJECTED: ReadonlySet<string> = new Set(['skills', 'research'])
+
+/** The injected context of a message a reader may open (roleplay), as text. */
 export function injectedTextOf(parts: readonly Part[]): string {
   const out: string[] = []
-  for (const p of parts) if (p.type === 'text' && isInjected(p) && p.text.trim() !== '') out.push(p.text)
+  for (const p of parts) {
+    const kind = injectedKind(p)
+    if (p.type === 'text' && kind !== null && !APP_INJECTED.has(kind) && p.text.trim() !== '') out.push(p.text)
+  }
   return out.join('\n\n')
+}
+
+/** Whether a user message started a Deep research turn (it carries the research playbook). */
+export function isResearchMessage(parts: readonly Part[]): boolean {
+  return parts.some((p) => injectedKind(p) === 'research')
 }
 
 /** The reasoning parts of a message, joined: shown collapsed above the answer. */

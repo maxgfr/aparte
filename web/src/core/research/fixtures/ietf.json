@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "limit": 2,
+    "next": "/api/v1/doc/document/?format=json&title__icontains=oauth&type=rfc&limit=2&offset=2",
+    "offset": 0,
+    "previous": null,
+    "total_count": 33
+  },
+  "objects": [
+    {
+      "abstract": "OAuth provides a method for clients to access server resources on behalf of a resource owner (such as a different client or an end-user).  It also provides a process for end-users to authorize third-party access to their server resources without sharing their credentials (typically, a username and password pair), using user-agent redirections.  This document is not an Internet Standards Track specification; it is published for informational purposes.",
+      "name": "rfc5849",
+      "rfc": "5849",
+      "rfc_number": 5849,
+      "title": "The OAuth 1.0 Protocol",
+      "time": "2026-05-20T15:34:37Z",
+      "type": "/api/v1/name/doctypename/rfc/"
+    },
+    {
+      "abstract": "The OAuth 2.0 authorization framework enables a third-party application to obtain limited access to an HTTP service, either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP service, or by allowing the third-party application to obtain access on its own behalf.  This specification replaces and obsoletes the OAuth 1.0 protocol described in RFC 5849. [STANDARDS-TRACK]",
+      "name": "rfc6749",
+      "rfc": "6749",
+      "rfc_number": 6749,
+      "title": "The OAuth 2.0 Authorization Framework",
+      "time": "2026-05-20T15:36:53Z",
+      "type": "/api/v1/name/doctypename/rfc/"
+    }
+  ]
+}

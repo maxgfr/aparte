@@ -1,6 +1,6 @@
-import { ChevronLeft, ChevronRight, Pencil, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pencil, RefreshCw, Telescope } from 'lucide-react'
 import { memo, useEffect, useId, useMemo, useState } from 'react'
-import { useResolvedParts, useSession } from '../../app/chat.tsx'
+import { useConversation, useResolvedParts, useSession } from '../../app/chat.tsx'
 import type { ModelDescriptor } from '../../core/contracts/ai.ts'
 import type { StreamState, ToolCallState } from '../../core/contracts/chat.ts'
 import type { ImageTurnState } from '../../core/contracts/media.ts'
@@ -16,6 +16,8 @@ import { IconButton } from '../components/IconButton.tsx'
 import { ContextChip, KnowledgeSources, useKnownPassages } from '../knowledge/Sources.tsx'
 import { splitBlocks } from '../render/markdown.ts'
 import { CopyButton, Markdown } from '../render/Sanitized.tsx'
+import researchStyles from '../research/Research.module.css'
+import { ResearchReportPanel, useResearchReport } from '../research/Research.tsx'
 import { useDisplayText } from '../roleplay/hooks.ts'
 import roleplayStyles from '../roleplay/Roleplay.module.css'
 import { SpeakButton } from '../voice/SpeakButton.tsx'
@@ -23,7 +25,7 @@ import { ArtifactCard } from './Artifact.tsx'
 import styles from './Chat.module.css'
 import { useEffortLabel } from './ModelPicker.tsx'
 import { isWebSearchCall, SourcesList, ToolCallCard, WebSearchNote } from './Tools.tsx'
-import { costOf, type ImagePart, imagesOf, injectedTextOf, reasoningOf, textOf } from './view.ts'
+import { costOf, type ImagePart, imagesOf, injectedTextOf, isResearchMessage, reasoningOf, textOf } from './view.ts'
 
 /** Marks the element that holds a message's rendered text, apart from its reasoning, notes and controls. */
 const CONTENT = { 'data-message-content': '' } as const
@@ -258,6 +260,12 @@ function UserMessage({ thread, message, actions }: { thread: Thread; message: Me
         </details>
       )}
       {!editing && context !== undefined && <ContextChip part={context} />}
+      {!editing && isResearchMessage(parts) && (
+        <p className={researchStyles.chip} data-research-message="">
+          <Telescope size={14} strokeWidth={1.75} aria-hidden="true" />
+          {t('research.chip')}
+        </p>
+      )}
       {!editing && (
         <div className={styles.actions}>
           <BranchNav thread={thread} message={message} onBranch={actions.onBranch} />
@@ -408,6 +416,9 @@ function AssistantMessage({
   const t = useT()
   const session = useSession()
   const model = message.model === null ? null : (session?.resolveModel(message.model) ?? null)
+  const conversation = useConversation(message.conv)
+  // A Deep research report: its citation check, recomputed from the branch it ends.
+  const research = useResearchReport(thread, message)
   const parts = useResolvedParts(message.parts)
   const hasCalls = message.parts.some((p) => p.type === 'tool-call')
   const toolMessage = hasCalls ? thread.children(message.id).find((m) => m.role === 'tool') : undefined
@@ -444,6 +455,13 @@ function AssistantMessage({
       {shown !== '' && <AnswerArtifacts text={shown} />}
       <ToolWork parts={parts} results={results} live={live} streaming={false} onApprove={actions.onApprove} />
       <KnowledgeSources sources={cited.sources} />
+      {research !== null && (
+        <ResearchReportPanel
+          result={research}
+          title={conversation?.title || t('chat.untitled')}
+          modelName={model?.name ?? message.model?.id ?? t('chat.modelUnknown')}
+        />
+      )}
       <AnswerNote message={message} />
       <div className={styles.answerFooter}>
         <UsageLine message={message} model={model} />

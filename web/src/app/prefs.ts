@@ -31,6 +31,9 @@ export type ReadAloud = 'device' | 'api'
 const DICTATIONS: readonly Dictation[] = ['local', 'api', 'browser']
 const READ_ALOUDS: readonly ReadAloud[] = ['device', 'api']
 
+/** Backend ids, comma-separated: lowercase words only, never free text. */
+const RESEARCH_SOURCES = /^[a-z]{2,24}(?:,[a-z]{2,24}){0,31}$/
+
 const flag = (raw: string): boolean | undefined => (raw === '1' ? true : raw === '0' ? false : undefined)
 
 /** Every preference this device may keep, with its type. */
@@ -47,6 +50,11 @@ interface Prefs {
   readAloud: ReadAloud
   /** A notification says an answer is ready when the app is in the background. */
   notifyAnswers: boolean
+  /**
+   * The Deep research backends the user turned on (core/contracts/research.ts ids, comma-separated, sorted); '' for
+   * the default set. Which public search services this device sends queries to, never a query itself.
+   */
+  researchSources: string
 }
 
 export type PrefName = keyof Prefs
@@ -65,6 +73,11 @@ const PREFS: { readonly [N in PrefName]: PrefSpec<Prefs[N]> } = {
   pushToTalk: { key: 'aparte:push-to-talk', fallback: false, parse: flag },
   readAloud: { key: 'aparte:read-aloud', fallback: 'device', parse: (raw) => READ_ALOUDS.find((r) => r === raw) },
   notifyAnswers: { key: 'aparte:notify-answers', fallback: false, parse: flag },
+  researchSources: {
+    key: 'aparte:research-sources',
+    fallback: '',
+    parse: (raw) => (RESEARCH_SOURCES.test(raw) ? raw : undefined),
+  },
 }
 
 /** The subset of Storage used here, so tests pass an in-memory one. */

@@ -6,9 +6,11 @@ import type { knowledge } from './en/knowledge.ts'
 import type { local } from './en/local.ts'
 import type { mcp } from './en/mcp.ts'
 import type { media } from './en/media.ts'
+import type { research } from './en/research.ts'
 import type { roleplay } from './en/roleplay.ts'
 import type { sandbox } from './en/sandbox.ts'
 import type { shell } from './en/shell.ts'
+import type { skills } from './en/skills.ts'
 import type { stats } from './en/stats.ts'
 import type { sync } from './en/sync.ts'
 import type { tools } from './en/tools.ts'
@@ -45,6 +47,8 @@ type Source = {
   readonly knowledge: typeof knowledge
   readonly sandbox: typeof sandbox
   readonly media: typeof media
+  readonly skills: typeof skills
+  readonly research: typeof research
 }
 export type Namespace = keyof Source
 const NAMESPACES: readonly Namespace[] = [
@@ -64,6 +68,8 @@ const NAMESPACES: readonly Namespace[] = [
   'knowledge',
   'sandbox',
   'media',
+  'skills',
+  'research',
 ]
 export type Catalog = { readonly [N in Namespace]: Shape<Source[N]> }
 
@@ -100,6 +106,8 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       knowledge,
       sandbox,
       media,
+      skills,
+      research,
     ] = await Promise.all([
       import('./en/common.ts'),
       import('./en/shell.ts'),
@@ -117,6 +125,8 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       import('./en/knowledge.ts'),
       import('./en/sandbox.ts'),
       import('./en/media.ts'),
+      import('./en/skills.ts'),
+      import('./en/research.ts'),
     ])
     return {
       common: common.common,
@@ -135,6 +145,8 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       knowledge: knowledge.knowledge,
       sandbox: sandbox.sandbox,
       media: media.media,
+      skills: skills.skills,
+      research: research.research,
     }
   },
   pseudo: async () => {

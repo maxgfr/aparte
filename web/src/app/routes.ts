@@ -38,6 +38,8 @@ export const paths = {
   arena: '/arena',
   /** Tokens and cost over time. */
   stats: '/stats',
+  /** The installed skills and their imports. */
+  skills: '/skills',
   /** The knowledge bases. */
   knowledge: '/knowledge',
   /** One knowledge base: `/knowledge/<knowledge base id>`. */

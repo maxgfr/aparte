@@ -148,7 +148,7 @@ describe('spec/network-allowlist.json', () => {
     expect(purposes.sort()).toEqual([...NET_PURPOSES].sort())
   })
 
-  test('lets the app contact its own origin, the default provider hosts, the pinned download hosts and the GitHub API, and nothing else', () => {
+  test('lets the app contact its own origin, the default provider hosts, the pinned download hosts, the GitHub API, the skill import and research hosts, and nothing else', () => {
     expect(allowlist.app).toEqual(['self'])
     expect(allowlist.provider).toEqual([
       'https://api.anthropic.com',
@@ -170,8 +170,26 @@ describe('spec/network-allowlist.json', () => {
       'https://cdn.jsdelivr.net',
     ])
     expect(allowlist.sync).toEqual(['https://api.github.com'])
+    // Skill imports (M5c): public GitHub repositories, unauthenticated.
+    expect(allowlist.skills).toEqual(['https://api.github.com', 'https://raw.githubusercontent.com'])
+    // Deep research (M5c): the keyless search backends a browser can reach, each probed for CORS.
+    expect(allowlist.research).toEqual([
+      ...['en', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'pl', 'ja', 'zh'].map((l) => `https://${l}.wikipedia.org`),
+      'https://api.marginalia-search.com',
+      'https://www.mojeek.com',
+      'https://hn.algolia.com',
+      'https://api.stackexchange.com',
+      'https://api.github.com',
+      'https://api.openalex.org',
+      'https://api.crossref.org',
+      'https://www.ebi.ac.uk',
+      'https://eutils.ncbi.nlm.nih.gov',
+      'https://clinicaltrials.gov',
+      'https://datatracker.ietf.org',
+      'https://www.rfc-editor.org',
+    ])
     for (const purpose of NET_PURPOSES.filter(
-      (p) => p !== 'app' && p !== 'provider' && p !== 'download' && p !== 'sync',
+      (p) => p !== 'app' && p !== 'provider' && p !== 'download' && p !== 'sync' && p !== 'skills' && p !== 'research',
     ))
       expect(allowlist[purpose]).toEqual([])
   })

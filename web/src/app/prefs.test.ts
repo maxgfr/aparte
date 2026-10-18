@@ -62,6 +62,18 @@ describe('prefs', () => {
     expect(readPref('notifyAnswers', s)).toBe(false)
   })
 
+  test('the Deep research sources are a list of backend ids, never free text', () => {
+    const s = memory()
+    expect(readPref('researchSources', s)).toBe('')
+    writePref('researchSources', 'openalex,wikipedia', s)
+    expect(s.data.get('aparte:research-sources')).toBe('openalex,wikipedia')
+    expect(readPref('researchSources', s)).toBe('openalex,wikipedia')
+    for (const bad of ['rate limiting', 'wikipedia,', 'Wikipedia', 'a,b', 'wikipedia;openalex']) {
+      s.data.set('aparte:research-sources', bad)
+      expect(readPref('researchSources', s)).toBe('')
+    }
+  })
+
   test('a storage that throws never breaks a read or a write', () => {
     const broken: PrefStorage = {
       getItem: () => {

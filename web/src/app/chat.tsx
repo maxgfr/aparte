@@ -26,6 +26,7 @@ import type { CollectionName, CollectionTypes } from '../core/contracts/extras.t
 import type { KnowledgeService } from '../core/contracts/knowledge.ts'
 import type { ImageTurnState, ImageTurns } from '../core/contracts/media.ts'
 import type { RuntimeFetcher } from '../core/contracts/sandbox.ts'
+import type { SkillCatalog } from '../core/contracts/skills.ts'
 import type { RegisteredTool, ToolApproval, ToolRegistry } from '../core/contracts/tools.ts'
 import type { Vault } from '../core/contracts/vault.ts'
 import type {
@@ -73,6 +74,8 @@ import { useVault } from './vault.tsx'
  *   is removed on lock, with every run in flight.
  * - The knowledge service (app/knowledge.ts) holds decrypted document indexes for the session only; on lock it drops
  *   them and its document workers terminate.
+ * - The `skill` tool (core/skills/tool.ts) and the research tools (app/research.ts) are registered with the others; the
+ *   decrypted skill files the catalog caches are dropped on lock.
  * - Image turns (core/media/imageTurn.ts) hold the vault lock and the PWA reload as streams do, and are stopped and
  *   committed on lock like them. Voice (app/voice.ts) is released on lock: a recording is dropped, speech stops and
  *   the speech worker terminates.
@@ -110,6 +113,8 @@ export interface ChatSession {
   readonly runtimes: RuntimeFetcher
   /** Images a provider generates into a conversation (contracts/media.ts). */
   readonly images: ImageTurns
+  /** The installed skills and their files (contracts/skills.ts), decrypted on demand. */
+  readonly skills: SkillCatalog
   readonly modules: ChatModules
   /** The bundled model catalog, null until its chunk has loaded (the session opens without waiting for it). */
   readonly catalog: Catalog | null
@@ -234,6 +239,9 @@ async function openSession(vault: Vault): Promise<{
     sandboxRuntime,
     imageTurnModule,
     voice,
+    skillStore,
+    skillToolModule,
+    researchModule,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -260,6 +268,9 @@ async function openSession(vault: Vault): Promise<{
     import('../sandbox/runtime.ts'),
     import('../core/media/imageTurn.ts'),
     import('./voice.ts'),
+    import('../core/skills/store.ts'),
+    import('../core/skills/tool.ts'),
+    import('./research.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
@@ -313,6 +324,15 @@ async function openSession(vault: Vault): Promise<{
   const runner = sandboxHost.createSandboxRunner({ fetcher: runtimes })
   const files = (conversationId: Id) => conversationFiles(workspace, blobs, conversationId)
   for (const tool of sandboxToolsModule.sandboxTools({ runner, files })) await tools.register(tool)
+  const skills = skillStore.createSkillCatalog({ workspace, blobs })
+  await tools.register(skillToolModule.skillTool(skills))
+  for (const tool of researchModule.sessionResearchTools({
+    workspace,
+    blobs,
+    resolveModel,
+    pickEffort: request.pickEffort,
+  }))
+    await tools.register(tool)
   const chat = controller.createChatController({
     workspace,
     holdLock: (reason: string) => vault.holdLock(reason),
@@ -408,6 +428,7 @@ async function openSession(vault: Vault): Promise<{
       // The model workers hold the conversation in memory (its prompt, its cache on the GPU): they go with the lock.
       local.releaseLocal()
       knowledge.dispose()
+      skills.clear()
       knowledgeModule.releaseKnowledge()
       runner.reset()
       voice.releaseVoice()
@@ -436,6 +457,7 @@ async function openSession(vault: Vault): Promise<{
     knowledge,
     runtimes,
     images,
+    skills,
     modules,
     catalog,
     resolveModel,

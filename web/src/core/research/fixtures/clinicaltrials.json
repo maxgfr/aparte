@@ -1,0 +1,46 @@
+{
+  "studies": [
+    {
+      "protocolSection": {
+        "identificationModule": {
+          "nctId": "NCT00311402",
+          "briefTitle": "JASAP: Japanese Aggrenox Stroke Prevention vs. Aspirin Programme",
+          "officialTitle": "JASAP: Japanese Aggrenox Stroke Prevention vs. Aspirin Programme, Phase III Study to Compare the Preventive Effect of Recurrent Brain Infarction and Safety of Aggrenox (Combination Drug Containing Sustained-release Dipyridamole 200 mg/Acetylsalicylic Acid 25 mg) Twice Daily vs. Acetylsalicylic Acid 81 mg Once Daily"
+        },
+        "statusModule": {
+          "overallStatus": "COMPLETED",
+          "startDateStruct": {
+            "date": "2006-04"
+          }
+        },
+        "descriptionModule": {
+          "briefSummary": "Phase III study to compare the preventive effect of recurrent brain infarction and safety of Aggrenox (combination drug containing sustained-release dipyridamole 200 mg/acetylsalicylic acid 25 mg) twice daily vs. acetylsalicylic acid 81 mg once daily"
+        },
+        "conditionsModule": {
+          "conditions": ["Cerebrovascular Accident"]
+        }
+      }
+    },
+    {
+      "protocolSection": {
+        "identificationModule": {
+          "nctId": "NCT02689037",
+          "briefTitle": "Angioplasty and Stenting for Patients With Symptomatic Intracranial Atherosclerosis",
+          "officialTitle": "Angioplasty and Stenting for Patients With Symptomatic Intracranial Atherosclerosis: Study Protocol of a Randomized Controlled Trial"
+        },
+        "statusModule": {
+          "overallStatus": "UNKNOWN",
+          "startDateStruct": {
+            "date": "2016-04"
+          }
+        },
+        "descriptionModule": {
+          "briefSummary": "Background: Effectiveness of Percutaneous transluminal angioplasty and stenting (PTAS) on prevention of events of stroke and death in patients with symptomatic intracranial atherosclerosis (ICAS) is controversial.\n\nAim: to determine whether PTAS plus medical treatment (MT) are superior to MT alone in preventing events of stroke and death in patients with symptomatic ICAS.\n\nMethods: The investigato"
+        },
+        "conditionsModule": {
+          "conditions": ["Intracranial Atherosclerosis"]
+        }
+      }
+    }
+  ]
+}

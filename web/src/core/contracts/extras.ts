@@ -16,6 +16,7 @@
  * - Arena ratings are not stored: they are recomputed from the votes, so two devices voting at once never conflict.
  */
 
+import type { Skill } from './skills.ts'
 import type { Id, ModelRef } from './workspace.ts'
 
 /**
@@ -134,6 +135,8 @@ export interface CollectionTypes {
   readonly regexRules: RegexRule
   readonly chatOptions: ChatOptions
   readonly arenaVotes: ArenaVote
+  /** The skills map the data model names in its section 3 (contracts/skills.ts), stored like the collections. */
+  readonly skills: Skill
 }
 
 export type CollectionName = keyof CollectionTypes
@@ -145,7 +148,11 @@ export const COLLECTIONS: readonly CollectionName[] = [
   'regexRules',
   'chatOptions',
   'arenaVotes',
+  'skills',
 ]
 
-/** The `injected` member of a text part a feature added to a user message (spec/DATA-MODEL.md section 3.6). */
-export type Injected = 'lorebook' | 'authors-note' | 'character'
+/**
+ * The `injected` member of a text part a feature added to a user message (spec/DATA-MODEL.md section 3.6): roleplay
+ * context, the list of available skills (contracts/skills.ts) and the Deep research playbook (contracts/research.ts).
+ */
+export type Injected = 'lorebook' | 'authors-note' | 'character' | 'skills' | 'research'

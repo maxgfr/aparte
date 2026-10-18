@@ -117,6 +117,11 @@ export class ZipReader {
     return this.entries.has(name.toLowerCase())
   }
 
+  /** A part's inflated size as its header declares it (reading still checks it); null when absent. */
+  size(name: string): number | null {
+    return this.entries.get(name.toLowerCase())?.size ?? null
+  }
+
   /** Part names, as stored. */
   names(): string[] {
     return [...this.entries.values()].map((e) => e.name)

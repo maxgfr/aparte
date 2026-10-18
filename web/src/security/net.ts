@@ -8,11 +8,22 @@
 
 /**
  * Why a request is made. `app` is the app's own origin (its files, its manifest); `tool` is a tool the user approved
- * (the built-in `fetch_url`); the rest reach other hosts.
+ * (the built-in `fetch_url`, the pages Deep research reads); `skills` imports a skill from GitHub; `research` is a
+ * Deep research search backend; the rest reach other hosts.
  */
-export type NetPurpose = 'provider' | 'mcp' | 'tool' | 'sync' | 'download' | 'catalog' | 'app'
+export type NetPurpose = 'provider' | 'mcp' | 'tool' | 'sync' | 'download' | 'catalog' | 'skills' | 'research' | 'app'
 
-export const NET_PURPOSES: readonly NetPurpose[] = ['provider', 'mcp', 'tool', 'sync', 'download', 'catalog', 'app']
+export const NET_PURPOSES: readonly NetPurpose[] = [
+  'provider',
+  'mcp',
+  'tool',
+  'sync',
+  'download',
+  'catalog',
+  'skills',
+  'research',
+  'app',
+]
 
 /** One origin contacted for one purpose. */
 export interface NetEntry {

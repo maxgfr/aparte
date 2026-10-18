@@ -1,0 +1,44 @@
+{
+  "status": "ok",
+  "message-type": "work-list",
+  "message": {
+    "total-results": 627568,
+    "items": [
+      {
+        "DOI": "10.1515/iupac.68.0150",
+        "type": "dataset",
+        "title": ["Rate-Determining Step, Rate-Limiting Step"],
+        "container-title": ["IUPAC Standards Online"],
+        "published": {
+          "date-parts": [[2016, 2, 28]]
+        },
+        "issued": {
+          "date-parts": [[2016, 2, 28]]
+        },
+        "URL": "https://doi.org/10.1515/iupac.68.0150",
+        "author": [
+          {
+            "given": "Keith J.",
+            "family": "Laidler"
+          }
+        ]
+      },
+      {
+        "DOI": "10.53846/goediss-10867",
+        "type": "dissertation",
+        "title": ["Rate-limiting steps of autophagy initiation"],
+        "issued": {
+          "date-parts": [[null]]
+        },
+        "URL": "https://doi.org/10.53846/goediss-10867",
+        "author": [
+          {},
+          {
+            "given": "Anoshi",
+            "family": "Patel"
+          }
+        ]
+      }
+    ]
+  }
+}

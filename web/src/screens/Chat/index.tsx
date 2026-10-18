@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Link, Redirect, useLocation } from 'wouter'
 import {
   useBeam,
+  useCollection,
   useConversation,
   useImageTurn,
   useKeyedProviders,
@@ -15,6 +16,7 @@ import {
   useThread,
 } from '../../app/chat.tsx'
 import { needsKey, useModelChoices } from '../../app/providers.tsx'
+import { enabledBackends } from '../../app/research.ts'
 import { chatPath, paths } from '../../app/routes.ts'
 import { useToast } from '../../app/toast.tsx'
 import { useVault } from '../../app/vault.tsx'
@@ -22,20 +24,26 @@ import { mediaOffer } from '../../core/ai/mediaOffer.ts'
 import type { Effort } from '../../core/contracts/ai.ts'
 import type { StreamState } from '../../core/contracts/chat.ts'
 import { InvalidInputError, InvalidStateError } from '../../core/contracts/crypto.ts'
+import { RESEARCH_READ, RESEARCH_SEARCH } from '../../core/contracts/research.ts'
+import { SKILL_TOOL } from '../../core/contracts/skills.ts'
 import { type ApprovalDecision, WEB_SEARCH } from '../../core/contracts/tools.ts'
-import type { Id, ModelRef, Part } from '../../core/contracts/workspace.ts'
+import type { Id, Message, ModelRef, Part } from '../../core/contracts/workspace.ts'
+import { BACKENDS } from '../../core/research/backends.ts'
+import { researchDepth, researchPart } from '../../core/research/plan.ts'
+import { offeredSkills, skillsPart } from '../../core/skills/context.ts'
 import { useT } from '../../i18n/react.tsx'
 import styles from '../../ui/chat/Chat.module.css'
 import { Composer, type ImageControls } from '../../ui/chat/Composer.tsx'
 import { ConversationActions } from '../../ui/chat/ConversationList.tsx'
 import { ImageTurnRow, type MessageActions, MessageRow, StreamingAnswer } from '../../ui/chat/Messages.tsx'
 import { ToolsButton } from '../../ui/chat/Tools.tsx'
-import { visibleMessages, windowOf } from '../../ui/chat/view.ts'
+import { isResearchMessage, visibleMessages, windowOf } from '../../ui/chat/view.ts'
 import { BeamButton, BeamPanel, useBeamSelection } from '../../ui/compare/Beam.tsx'
 import { Button, buttonClass } from '../../ui/components/Button.tsx'
 import { EmptyState } from '../../ui/components/EmptyState.tsx'
 import { IconButton } from '../../ui/components/IconButton.tsx'
 import { AttachButton } from '../../ui/knowledge/AttachButton.tsx'
+import { ResearchButton, ResearchProgressPanel, useResearchProgress } from '../../ui/research/Research.tsx'
 import { QuickRepliesBar, RoleplayButton, useRoleplay } from '../../ui/roleplay/RoleplayButton.tsx'
 
 /*
@@ -43,6 +51,12 @@ import { QuickRepliesBar, RoleplayButton, useRoleplay } from '../../ui/roleplay/
  * chat: nothing is stored until its first message, which creates the conversation with the model, effort and system
  * prompt chosen here.
  */
+
+/** The tools Deep research adds to a chat: its own switch controls them, not the Tools sheet. */
+const RESEARCH_TOOLS: ReadonlySet<string> = new Set([RESEARCH_SEARCH, RESEARCH_READ])
+
+/** An MCP tool that searches, which a Deep research chat may offer the model for searching. */
+const SEARCHING = /search|find|lookup|query/i
 
 /** Distance from the bottom under which the thread keeps following a streaming answer. */
 const STICK_PX = 160
@@ -177,6 +191,10 @@ function ChatView({ id }: { id: Id | null }) {
   }>({ model: null, effort: null, system: null, tools: null, webSearch: false, knowledge: [] })
   const [retrieving, setRetrieving] = useState(false)
   const registered = useRegisteredTools()
+  const installedSkills = useCollection('skills')
+  const offered = useMemo(() => offeredSkills(installedSkills), [installedSkills])
+  // Deep research in a chat that has its tools: on for every message unless switched off for the next ones.
+  const [researchTurns, setResearchTurns] = useState(true)
   const fallbackModel = defaultModel ?? choices[0]?.model.ref ?? null
   const modelRef = conversation?.model ?? (id === null ? (draft.model ?? fallbackModel) : null)
   const model = modelRef === null || session === null ? null : session.resolveModel(modelRef)
@@ -197,14 +215,30 @@ function ChatView({ id }: { id: Id | null }) {
   const toolNames = useMemo(() => {
     if (conversation !== undefined)
       return new Set(conversation.tools.filter((e) => e.source !== 'provider').map((e) => e.name))
-    return new Set(draft.tools ?? registered.filter((r) => r.tool.source !== 'sandbox').map((r) => r.tool.name))
-  }, [conversation, draft.tools, registered])
+    // A new chat starts with the built-in tools; the sandboxes are opt-in, research has its own switch, and the Skills
+    // tool comes only when a skill is there to load.
+    const defaults = registered.filter(
+      (r) =>
+        r.tool.source !== 'sandbox' &&
+        !RESEARCH_TOOLS.has(r.tool.name) &&
+        (r.tool.name !== SKILL_TOOL || offered.length > 0),
+    )
+    return new Set(draft.tools ?? defaults.map((r) => r.tool.name))
+  }, [conversation, draft.tools, registered, offered.length])
   const webSearch =
     conversation !== undefined
       ? conversation.tools.some((e) => e.source === 'provider' && e.name === WEB_SEARCH)
       : draft.webSearch
   // Cheap, and read again on every render: a registry change re-renders through useRegisteredTools.
   const resolved = conversation === undefined || session === null ? null : session.tools.resolve(conversation.tools)
+  const declares = (name: string) =>
+    resolved === null ? toolNames.has(name) : resolved.declared.some((r) => r.tool.name === name)
+  // Deep research: its tools are in the chat's set (fixed by the first message), and it is on for the next message.
+  const researchTools = toolNames.has(RESEARCH_SEARCH) && toolNames.has(RESEARCH_READ)
+  const researchOn = researchTools && (!started || researchTurns)
+  const depth = researchDepth(effort)
+  const searchTools = registered.filter((r) => r.tool.source === 'mcp' && SEARCHING.test(r.tool.name))
+  const sheetSelected = useMemo(() => new Set([...toolNames].filter((n) => !RESEARCH_TOOLS.has(n))), [toolNames])
 
   const path = thread.status === 'ready' ? thread.path : []
   // A regenerated answer streams as a sibling of the one on screen: the branch shows up to its parent meanwhile.
@@ -231,6 +265,7 @@ function ChatView({ id }: { id: Id | null }) {
     `${visible.length}|${stream?.parts.length ?? 0}|${streamed}|${calls}|${beamed}|${imageTurn?.messageId ?? ''}`,
   )
   const busy = rawStream !== null || beam?.running === true || imageTurn !== null
+  const research = useResearchProgress(path, rawStream)
 
   // Esc stops the answer from anywhere on the screen, unless a dialog is open (Esc closes it instead).
   useEffect(() => {
@@ -347,6 +382,50 @@ function ChatView({ id }: { id: Id | null }) {
     [session],
   )
 
+  /**
+   * What the app adds to a user message for the model, after the user's own parts: the list of available skills when
+   * the chat has the Skills tool and the list changed since the branch last carried it, and the Deep research playbook
+   * when research is on. Both are injected text parts of this message: the frozen prefix is never touched.
+   */
+  const withAgentContext = (parts: readonly Part[], branch: readonly Message[], researching: boolean): Part[] => {
+    const out = [...parts]
+    if (declares(SKILL_TOOL)) {
+      const list = skillsPart(branch, offered)
+      if (list !== null) out.unshift(list)
+    }
+    if (researching) {
+      const on = new Set(enabledBackends() ?? BACKENDS.filter((b) => b.byDefault).map((b) => b.id))
+      out.push(
+        researchPart({
+          depth,
+          backends: BACKENDS.filter((b) => on.has(b.id)),
+          webSearch: webSearch && model?.capabilities.webSearch != null,
+          searchTools: searchTools.filter((r) => declares(r.tool.name)).map((r) => r.tool.name),
+        }),
+      )
+    }
+    return out
+  }
+
+  /**
+   * Starting Deep research allows its two tools for this chat (stored like any "for this chat" approval): they read
+   * only what this chat's searches found, so a page cannot steer them. Every other tool still asks.
+   */
+  const allowResearch = (conversationId: Id) => {
+    if (session === null) return
+    for (const name of RESEARCH_TOOLS) {
+      const tool = session.tools.get(name)
+      if (tool === undefined) continue
+      const held = session.workspace.toolApprovals.get(tool.approvalKey, conversationId)
+      if (held?.fingerprint === tool.fingerprint) continue
+      session.workspace.toolApprovals.grant({
+        approvalKey: tool.approvalKey,
+        fingerprint: tool.fingerprint,
+        conversation: conversationId,
+      })
+    }
+  }
+
   const onSend = async (input: readonly Part[]): Promise<boolean> => {
     if (session === null) return false
     if (modelRef === null || model === null) {
@@ -381,6 +460,8 @@ function ChatView({ id }: { id: Id | null }) {
     }
     try {
       parts = await roleplay.prepare(target, parts)
+      parts = withAgentContext(parts, thread.status === 'ready' && !created ? thread.path : [], researchOn)
+      if (researchOn) allowResearch(target)
       if (beamModels.length >= 2) {
         if (session.chat.stream(target) !== null) {
           toast(t('chat.sendFailed'))
@@ -412,8 +493,13 @@ function ChatView({ id }: { id: Id | null }) {
         try {
           // An edited message is a new message: it gets the passages of its own text.
           const parts = await withKnowledge(input, session.workspace.conversations.get(id)?.knowledge ?? [])
-          const parent = tree.get(messageId)?.parent ?? null
-          await session.chat.edit(id, messageId, await roleplayRef.current.prepare(id, parts, parent))
+          const original = tree.get(messageId)
+          const parent = original?.parent ?? null
+          const prepared = await roleplayRef.current.prepare(id, parts, parent)
+          // The new version carries what the original did: the research playbook, the skills list of its branch.
+          const researching = original !== undefined && isResearchMessage(original.parts)
+          const branch = parent === null ? [] : tree.path(parent)
+          await session.chat.edit(id, messageId, contextRef.current(prepared, branch, researching))
         } catch (error) {
           explain(error)
         }
@@ -433,6 +519,8 @@ function ChatView({ id }: { id: Id | null }) {
       },
     }
   }, [session, id, tree, busy, explain, withKnowledge])
+  const contextRef = useRef(withAgentContext)
+  contextRef.current = withAgentContext
 
   // Whether the model takes tools is the catalog's say; the user may correct it for a model the catalog does not know.
   const provider =
@@ -574,6 +662,9 @@ function ChatView({ id }: { id: Id | null }) {
           </p>
         )}
         {imageTurn !== null && <ImageTurnRow turn={imageTurn} />}
+        {research !== null && id !== null && (
+          <ResearchProgressPanel progress={research} onStop={() => session?.chat.stop(id)} />
+        )}
         {stream !== null && stream.phase === 'tools' && (
           <p className={styles.caption} role="status" aria-live="polite">
             {stream.tools.some((c) => c.status === 'approval') ? t('tools.approvalPending') : t('tools.runningTools')}
@@ -595,13 +686,15 @@ function ChatView({ id }: { id: Id | null }) {
           tools={
             <>
               <ToolsButton
-                options={registered.map((r) => ({
-                  name: r.tool.name,
-                  source: r.tool.source,
-                  ...(r.tool.title === undefined ? {} : { title: r.tool.title }),
-                  ...(r.tool.origin === undefined ? {} : { origin: r.tool.origin }),
-                }))}
-                selected={toolNames}
+                options={registered
+                  .filter((r) => !RESEARCH_TOOLS.has(r.tool.name))
+                  .map((r) => ({
+                    name: r.tool.name,
+                    source: r.tool.source,
+                    ...(r.tool.title === undefined ? {} : { title: r.tool.title }),
+                    ...(r.tool.origin === undefined ? {} : { origin: r.tool.origin }),
+                  }))}
+                selected={sheetSelected}
                 webSearch={webSearch}
                 frozen={started}
                 model={model}
@@ -616,6 +709,34 @@ function ChatView({ id }: { id: Id | null }) {
                 onWebSearch={(on) => setTools(toolNames, on)}
                 onRevoke={(key) => session?.workspace.toolApprovals.revoke(key, null)}
                 modelTools={modelTools}
+              />
+              <ResearchButton
+                on={researchOn}
+                unavailable={started && !researchTools}
+                model={model}
+                depth={depth}
+                searchTools={searchTools.map((r) => ({ name: r.tool.name, title: r.tool.title ?? r.tool.name }))}
+                selectedSearchTools={toolNames}
+                frozen={started}
+                onChange={(on) => {
+                  if (started) {
+                    setResearchTurns(on)
+                    return
+                  }
+                  const next = new Set(toolNames)
+                  for (const name of RESEARCH_TOOLS) {
+                    if (on) next.add(name)
+                    else next.delete(name)
+                  }
+                  // Research searches with the model's own web search first, where it has one.
+                  setTools(next, on ? webSearch || model?.capabilities.webSearch != null : webSearch)
+                }}
+                onSearchTool={(name, on) => {
+                  const next = new Set(toolNames)
+                  if (on) next.add(name)
+                  else next.delete(name)
+                  setTools(next, webSearch)
+                }}
               />
               <BeamButton models={beamModels} onChange={setBeamModels} />
               <RoleplayButton roleplay={roleplay} started={started} />

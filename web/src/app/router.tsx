@@ -29,6 +29,7 @@ const Arena = lazyChunk(() => import('../screens/Arena/index.tsx').then((m) => m
 const Stats = lazyChunk(() => import('../screens/Stats/index.tsx').then((m) => m.default))
 const Knowledge = lazyChunk(() => import('../screens/Knowledge/index.tsx').then((m) => m.default))
 const KnowledgeBase = lazyChunk(() => import('../screens/Knowledge/Base.tsx').then((m) => m.default))
+const Skills = lazyChunk(() => import('../screens/Skills/index.tsx').then((m) => m.default))
 const Voice = lazyChunk(() => import('../screens/Voice/index.tsx').then((m) => m.default))
 const Share = lazyChunk(() => import('../screens/Share/index.tsx').then((m) => m.default))
 
@@ -70,6 +71,7 @@ export function Routes() {
           <Route path={paths.stats} component={Stats} />
           <Route path={paths.knowledge} component={Knowledge} />
           <Route path={paths.knowledgeBase} component={KnowledgeBase} />
+          <Route path={paths.skills} component={Skills} />
           <Route path={paths.voice} component={Voice} />
           <Route path={paths.share} component={Share} />
           {/* Recovery is a screen of the lock gate; once the vault is open, its address leads home. */}

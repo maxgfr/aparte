@@ -1,0 +1,24 @@
+{
+  "id": 8863,
+  "created_at": "2007-04-04T19:16:40.000Z",
+  "author": "dhouston",
+  "title": "My YC app: Dropbox - Throw away your USB drive",
+  "url": "http://www.getdropbox.com/u/2/screencast.html",
+  "text": null,
+  "type": "story",
+  "points": 104,
+  "children": [
+    {
+      "id": 8865,
+      "author": "dhouston",
+      "text": "oh, and a mac port is coming :)",
+      "type": "comment"
+    },
+    {
+      "id": 8869,
+      "author": "zaidf",
+      "text": "This has great potential!<p>Only suggestion I would have is go slower on the demo. I know you lost me very early into it switching between windows.<p>If you are looking for a wider audience than those who already know the context of dropbox, make a video where you lay out the case for use of dropbox using simple examples from user point of view(think a college student) and then in the demo show just the basic features. I got the feeling you tried to show too many features too quickly.<p>In general, I have realized it is much better to launch with something that does a few things REALLY well rather than a lot of things with little focus. When you launch with whole lot of features people assume you are competing with the big companies. When you launch small and do it well, it is easier to attract a user-base and THEN keep feeding it more advance features in form of updates.<p>Good luck! Looks slick from the UI.\n",
+      "type": "comment"
+    }
+  ]
+}

@@ -45,7 +45,7 @@ Top-level `Y.Map`s, each `id -> Y.Map` of one entity whose fields are `Any` valu
 | `prompts` | `{id, title, body: string, tags: string[]}` |
 | `providers` | [3.3](#33-provider) |
 | `mcp` | [3.5](#35-mcp-server) |
-| `skills` | `{id, name, description, source: object, files?: blob ref, enabled: boolean}` |
+| `skills` | [3.8](#38-skills): `{id, name, description, source: object, files?: blob ref, enabled: boolean}` |
 | `knowledge` | [3.7](#37-knowledge-bases): `{id, name, documents: {blob: blob ref, name, mediaType, size?, index?: blob ref, chunks?, addedAt?}[], embedder: EmbedderRef \| null}` |
 | `settings` | not entities: `settingName -> Any`, synced preferences: `defaultModel: ModelRef \| null`, `defaultEffort: Effort \| null`, `defaultSystem: string`, `transcriptionModel: ModelRef \| null`, `speechModel: ModelRef \| null`, `speechVoice: string`, `imageModel: ModelRef \| null`... |
 | `toolApprovals` | not entities: `approvalKey -> Any`, the tool approvals that outlive a call ([3.4](#34-tool-approvals)) |
@@ -154,7 +154,9 @@ shapes are in `web/src/core/contracts/extras.ts`.
 
 None of them rewrites a conversation. What a character, a lorebook or the Author's Note adds to a turn is committed in
 the user message it goes with, as `text` parts carrying `injected: 'lorebook' | 'authors-note' | 'character'` (an
-extra member, replayed as text; the interface does not show it as the user's words). A character chosen after the
+extra member, replayed as text; the interface does not show it as the user's words). Milestone M5c adds two more
+values the same way: `injected: 'skills'`, the list of skills a model may load ([3.8](#38-skills)), and
+`injected: 'research'`, the Deep research playbook of a research turn (`web/src/core/contracts/research.ts`). A character chosen after the
 first message is a `system` message (section 5, rule 1). A Beam or Arena answer is an ordinary assistant sibling; an
 answer merged from others keeps only its `text` and `source` parts, since it was produced over a request that is not
 the stored path.
@@ -186,6 +188,37 @@ keywords only. Vectors of two different `embedder` values are never compared; a 
 base's current one is searched by keywords until it is indexed again.
 
 A passage is named `<the first 6 characters of the document's blob id>-<1-based chunk number>`: the id a model cites.
+
+### 3.8 Skills
+
+A skill (milestone M5c, `web/src/core/contracts/skills.ts`) is an Agent Skill: a directory holding a `SKILL.md`, YAML
+frontmatter then Markdown instructions, and the files those instructions point to. It is read by the rules of the CLI
+(`crates/aparte-skills`): `name` (1 to 64 lowercase letters, digits and single hyphens, defaulting to the directory's
+name) and `description` (whitespace collapsed) are required, `disable-model-invocation`, `allowed-tools`, `license`
+and `metadata.version` are kept.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name`, `description` | string | from the frontmatter |
+| `source` | object | where it was imported from: `{kind: 'github', repo: 'owner/name', path, ref, commit}` (read at `commit`, the commit `ref` pointed to), `{kind: 'zip', name, path}` or `{kind: 'folder', name, path}`; `path` is the skill's directory inside the source, `''` for its root |
+| `files` | `{blob: blob ref, size, count}` | the bundle of its files, `SKILL.md` included |
+| `enabled` | boolean | offered to models; off keeps it installed |
+| `disableModelInvocation?` | boolean | only the user may invoke it; never offered to a model |
+| `allowedTools?` | string[] | `allowed-tools` as written: shown, never used to skip an approval |
+| `license?`, `version?` | string | |
+| `warnings?` | string[] | what was off but not fatal at import |
+
+The bundle blob has media type `application/vnd.aparte.skill+json` and holds UTF-8 JSON
+`{"v": 1, "files": [{"path": "SKILL.md", "text": "..."}, {"path": "assets/logo.png", "base64": "..."}]}`, files sorted
+by `path` (relative to the skill's directory, `/`-separated, never `..`): `text` for a file that is UTF-8 without NUL,
+`base64` (standard alphabet, padded) for any other. Hidden files, `node_modules`, `__pycache__` and `target` are left
+out, as are directories more than three levels deep.
+
+Progressive disclosure keeps the conversation's prefix frozen ([5](#5-provider-replay-rules)): the `skill` tool has one
+fixed definition whatever is installed, and the list of skills a model may load travels as an `injected: 'skills'`
+text part of a user message, appended again only when the list differs from the last one on the branch. A skill's
+scripts never run in the app: a model may only pass their code to the sandboxes' `run_js` and `run_python`, which ask
+first.
 
 ## 4. Conversation shard documents
 

@@ -1,0 +1,154 @@
+/* The skills screen: installed skills as cards on the grouped surface, then the imports. */
+
+.stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 650;
+}
+
+.skills {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skill {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  box-shadow: var(--lift);
+  min-width: 0;
+}
+
+.skillHead {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.skillName {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  margin: 0;
+  color: var(--ink);
+  max-width: var(--measure-prose);
+  overflow-wrap: anywhere;
+}
+
+.meta,
+.note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+  overflow-wrap: anywhere;
+}
+
+.label {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.details {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.details > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.details[open] {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.plainList {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+}
+
+.fileList {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--surface-pressed);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.form > button {
+  justify-self: start;
+}
+
+/* A file input is the real control, visually replaced by the button-styled label beside it. */
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fileInput:focus-visible + label {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.done {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: var(--text-footnote);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-footnote);
+}

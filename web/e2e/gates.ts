@@ -25,6 +25,8 @@ const PURPOSES = [
   'sync',
   'download',
   'catalog',
+  'skills',
+  'research',
   'app',
 ] as const satisfies readonly NetPurpose[]
 const purposesComplete: [Exclude<NetPurpose, (typeof PURPOSES)[number]>] extends [never] ? true : false = true

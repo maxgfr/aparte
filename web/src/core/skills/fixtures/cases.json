@@ -1,0 +1,351 @@
+{
+  "frontmatter": [
+    {
+      "name": "scalars quotes and comments",
+      "src": "name: ultrasearch # the name\ndescription: \"Say \\\"hi\\\": now\"\nquote: 'it''s'\nempty:\nflag: true\nurl: https://x.y/z#frag\n",
+      "value": {
+        "map": [
+          ["name", "ultrasearch"],
+          ["description", "Say \"hi\": now"],
+          ["quote", "it's"],
+          ["empty", null],
+          ["flag", "true"],
+          ["url", "https://x.y/z#frag"]
+        ]
+      }
+    },
+    {
+      "name": "block scalars",
+      "src": "a: >-\n  one\n  two\n\n  three\nb: |\n  line 1\n  line 2\nc: x\n",
+      "value": {
+        "map": [["a", "one two\nthree"], ["b", "line 1\nline 2\n"], ["c", "x"]]
+      }
+    },
+    {
+      "name": "nested maps and lists",
+      "src": "metadata:\n  version: 1.41.1\n  opencode/autoinvoke: 'true'\nallowed-tools:\n  - Bash(git:*)\n  - Read\nflow: [a, \"b, c\", Bash(x, y)]\nitems:\n- k: v\n  j: w\n",
+      "value": {
+        "map": [
+          [
+            "metadata",
+            {
+              "map": [["version", "1.41.1"], ["opencode/autoinvoke", "true"]]
+            }
+          ],
+          ["allowed-tools", ["Bash(git:*)", "Read"]],
+          ["flow", ["a", "b, c", "Bash(x, y)"]],
+          [
+            "items",
+            [
+              {
+                "map": [["k", "v"], ["j", "w"]]
+              }
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "name": "plain continuation",
+      "src": "description: Research a topic\n  and write a report.\nname: x\n",
+      "value": {
+        "map": [["description", "Research a topic and write a report."], ["name", "x"]]
+      }
+    },
+    {
+      "name": "crlf",
+      "src": "name: x\r\ndescription: |\r\n  one\r\n  two\r\n",
+      "value": {
+        "map": [["name", "x"], ["description", "one\ntwo\n"]]
+      }
+    },
+    {
+      "name": "strip chomping",
+      "src": "a: |-\n  x\n\n\nb: 1\n",
+      "value": {
+        "map": [["a", "x"], ["b", "1"]]
+      }
+    },
+    {
+      "name": "clip chomping",
+      "src": "a: |\n  x\n\n\nb: 1\n",
+      "value": {
+        "map": [["a", "x\n"], ["b", "1"]]
+      }
+    },
+    {
+      "name": "keep chomping",
+      "src": "a: |+\n  x\n\n\nb: 1\n",
+      "value": {
+        "map": [["a", "x\n\n\n"], ["b", "1"]]
+      }
+    },
+    {
+      "name": "folded with a more-indented line",
+      "src": "a: >\n  x\n  y\n    deeper\n  z\n",
+      "value": {
+        "map": [["a", "x y\n  deeper z\n"]]
+      }
+    },
+    {
+      "name": "explicit indentation",
+      "src": "a: |2\n    two more\n  base\n",
+      "value": {
+        "map": [["a", "  two more\nbase\n"]]
+      }
+    },
+    {
+      "name": "empty block",
+      "src": "a: |\nb: 1\n",
+      "value": {
+        "map": [["a", ""], ["b", "1"]]
+      }
+    },
+    {
+      "name": "block header comment",
+      "src": "a: | # note\n  x\n",
+      "value": {
+        "map": [["a", "x\n"]]
+      }
+    },
+    {
+      "name": "flow lists",
+      "src": "t: ['a, b', \"c\\td\", (x, y), [n, m], '', ~, null]\nu: []\n",
+      "value": {
+        "map": [["t", ["a, b", "c\td", "(x, y)", "[n, m]", "", null, null]], ["u", []]]
+      }
+    },
+    {
+      "name": "flow mapping kept as text",
+      "src": "m: {a: 1, b: 2}\n",
+      "value": {
+        "map": [["m", "{a: 1, b: 2}"]]
+      }
+    },
+    {
+      "name": "multi-line quoted",
+      "src": "a: \"one\n  two\"\nb: 'x\n  y'\nc: \"\\u00e9\\/\\0\"\n",
+      "value": {
+        "map": [["a", "one two"], ["b", "x y"], ["c", "é/\u0000"]]
+      }
+    },
+    {
+      "name": "quoted and repeated keys",
+      "src": "\"a b\": 1\nx: first\ny:\n- one\n- two\nx: last\n",
+      "value": {
+        "map": [["a b", "1"], ["y", ["one", "two"]], ["x", "last"]]
+      }
+    },
+    {
+      "name": "nested lists and empty items",
+      "src": "l:\n  -\n    - a\n    - b\n  -\n  - c\n",
+      "value": {
+        "map": [["l", [["a", "b"], null, "c"]]]
+      }
+    },
+    {
+      "name": "empty",
+      "src": "",
+      "value": {
+        "map": []
+      }
+    },
+    {
+      "name": "comments only",
+      "src": "# only a comment\n\n",
+      "value": {
+        "map": []
+      }
+    },
+    {
+      "name": "plain value with a dash continuation",
+      "src": "a: 1\n  - b\n",
+      "value": {
+        "map": [["a", "1 - b"]]
+      }
+    },
+    {
+      "name": "url and colons",
+      "src": "homepage: https://example.org/a:b\ntime: 12:30\n",
+      "value": {
+        "map": [["homepage", "https://example.org/a:b"], ["time", "12:30"]]
+      }
+    },
+    {
+      "name": "bad indentation",
+      "src": "name: x\n   bad: indent\n",
+      "errorLine": 2
+    },
+    {
+      "name": "unclosed quote",
+      "src": "description: \"open\n",
+      "errorLine": 1
+    },
+    {
+      "name": "top-level list",
+      "src": "- a\n",
+      "errorLine": 1
+    },
+    {
+      "name": "list where a key was expected",
+      "src": "a: 1\n- b\n",
+      "errorLine": 2
+    },
+    {
+      "name": "not a pair",
+      "src": "a: 1\nnot a pair\n",
+      "errorLine": 2
+    },
+    {
+      "name": "key in a continuation",
+      "src": "a: x\n  b: y\n",
+      "errorLine": 2
+    },
+    {
+      "name": "unclosed flow list",
+      "src": "t: [a, b\n",
+      "errorLine": 1
+    },
+    {
+      "name": "unknown escape",
+      "src": "a: \"\\q\"\n",
+      "errorLine": 1
+    },
+    {
+      "name": "bad unicode escape",
+      "src": "ok: 1\na: \"\\uZZZZ\"\n",
+      "errorLine": 2
+    }
+  ],
+  "skills": [
+    {
+      "name": "ok",
+      "dir": "demo",
+      "text": "---\nname: demo\ndescription: Demo <tasks> &\n  more.\nlicense: MIT\nmetadata:\n  version: 2.0.0\nallowed-tools: Bash(git status:*), Read Write\n---\n\n\n# Demo\nBody.\n",
+      "skill": {
+        "name": "demo",
+        "description": "Demo <tasks> & more.",
+        "disableModelInvocation": false,
+        "allowedTools": ["Bash(git status:*)", "Read", "Write"],
+        "license": "MIT",
+        "version": "2.0.0",
+        "warnings": 0,
+        "body": "# Demo\nBody.\n"
+      }
+    },
+    {
+      "name": "name from the directory",
+      "dir": "from-dir",
+      "text": "---\ndescription: d\n---\nx",
+      "skill": {
+        "name": "from-dir",
+        "description": "d",
+        "disableModelInvocation": false,
+        "allowedTools": [],
+        "license": null,
+        "version": null,
+        "warnings": 1,
+        "body": "x"
+      }
+    },
+    {
+      "name": "name differs from its directory",
+      "dir": "other",
+      "text": "---\nname: demo\ndescription: d\n---\nx",
+      "skill": {
+        "name": "demo",
+        "description": "d",
+        "disableModelInvocation": false,
+        "allowedTools": [],
+        "license": null,
+        "version": null,
+        "warnings": 1,
+        "body": "x"
+      }
+    },
+    {
+      "name": "bad disable flag",
+      "dir": "demo",
+      "text": "---\nname: demo\ndescription: d\ndisable-model-invocation: sometimes\nallowed_tools:\n  - Read\n  - [x]\nversion: 1\n---\n",
+      "skill": {
+        "name": "demo",
+        "description": "d",
+        "disableModelInvocation": true,
+        "allowedTools": ["Read"],
+        "license": null,
+        "version": "1",
+        "warnings": 1,
+        "body": ""
+      }
+    },
+    {
+      "name": "disabled",
+      "dir": "demo",
+      "text": "---\nname: demo\ndescription: d\ndisable-model-invocation: yes\n---\n",
+      "skill": {
+        "name": "demo",
+        "description": "d",
+        "disableModelInvocation": true,
+        "allowedTools": [],
+        "license": null,
+        "version": null,
+        "warnings": 0,
+        "body": ""
+      }
+    },
+    {
+      "name": "null version under metadata",
+      "dir": "demo",
+      "text": "---\nname: demo\ndescription: d\nmetadata:\n  version:\nversion: 9\n---\n",
+      "skill": {
+        "name": "demo",
+        "description": "d",
+        "disableModelInvocation": false,
+        "allowedTools": [],
+        "license": null,
+        "version": null,
+        "warnings": 0,
+        "body": ""
+      }
+    },
+    {
+      "name": "long description",
+      "dir": "demo",
+      "text": "---\nname: demo\ndescription: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word \n---\n",
+      "skill": {
+        "name": "demo",
+        "description": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word",
+        "disableModelInvocation": false,
+        "allowedTools": [],
+        "license": null,
+        "version": null,
+        "warnings": 1,
+        "body": ""
+      }
+    },
+    {
+      "name": "no frontmatter",
+      "dir": "demo",
+      "text": "# demo\n",
+      "error": "no-frontmatter"
+    },
+    {
+      "name": "invalid name",
+      "dir": "demo",
+      "text": "---\nname: Demo_Skill\ndescription: d\n---\n",
+      "error": "invalid"
+    },
+    {
+      "name": "no description",
+      "dir": "demo",
+      "text": "---\nname: demo\ndescription:   \n---\n",
+      "error": "invalid"
+    },
+    {
+      "name": "broken yaml",
+      "dir": "demo",
+      "text": "---\nname: demo\n  description: d\n---\n",
+      "error": "yaml"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "license": "CC-BY-NC-SA 4.0",
+  "page": 1,
+  "pages": 11,
+  "query": "token bucket",
+  "results": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Token_bucket",
+      "title": "Token bucket",
+      "description": "The token bucket algorithm can be conceptually understood as follows: A token is added to the bucket every, displaystyle 1/r, seconds. The bucket can hold at the most, displaystyle b, tokens. If a token arrives when the bucket is full, it is...",
+      "quality": 3.0306293220188603,
+      "format": "html"
+    },
+    {
+      "url": "https://blog.codybunch.com/2016/10/17/Configuring-Hierarchical-Token-Bucket-on-Ubuntu-1604/",
+      "title": "Configuring Hierarchical Token Bucket (QoS) on Ubuntu 16.04 · Cody Bunch",
+      "description": "Hierarchical Token Bucket. The best explanation of Hierarchical Token Bucket, or HTB Ive seen so far is to imagine a fixed size bucket into which traffic flows. This bucket can only drain network traffic at a given rate",
+      "quality": 3.2704734321913493,
+      "format": "html"
+    },
+    {
+      "url": "https://mfbmina.dev/en/posts/golang-rate-token-bucket/",
+      "title": "Exploring the Rate package and the Token Bucket algorithm - mfbmina.dev",
+      "description": "Contents Exploring the Rate package and the Token Bucket algorithm. 14/05/2025 871 words 5 minutes Contents At my post, I mentioned that nowadays it is common that the application has to communicate with other ones, and with that, traffic...",
+      "quality": 3.296851949336548,
+      "format": "html"
+    }
+  ]
+}

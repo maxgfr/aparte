@@ -1,0 +1,315 @@
+# Operations — exit codes, cost, caching, tuning, troubleshooting
+
+Everything about *running* ultrasearch well: what an exit code means, what a run
+costs, which knobs are safe to turn, and how to get unstuck. SKILL.md is the
+decision surface; this is the operations manual.
+
+## Exit codes
+
+| Command | Exit | Meaning |
+|---|---|---|
+| `gather` | 1 | **Empty dossier** — every backend returned nothing usable. The output prints a 3-step bridge protocol. Never write tiers over this. |
+| `check` | 1 | Ungrounded: a dangling `[S#]`, an unmarked unsourced claim, no citations at all, a **cited source whose extract is a wall**, or a `--semantic`/`--min-sources`/`--strict-numerals`/`--fail-on-wall` failure. |
+| `verify --apply` | 1 | The semantic gate failed — a claim its source refutes, or one whose every cited source is unsupported. |
+| `orchestrate` | 2 | The run dir does not exist, or `--phase <p>` was asked for before its worklist existed. The error names the command that produces it. |
+| `drop` | 1 | An `--id` that is not in the dossier (the others were still dropped). |
+| `refcheck` | 1 | No `--refs`, an unreadable file, no reference found in it, or `--out` holding a dossier `refcheck` did not write. Discrepancies are findings, not failures: they never change the exit code. |
+| `merge` · `fetch` · `ingest` · `relink` · `drop` · `verify` · `orchestrate` · `refcheck` | 2 | Run under `--stdout` / `ULTRASEARCH_NO_WRITE=1`. Each exists to leave files behind for a later process, so it refuses rather than return something nobody can act on. |
+| `render` | 2 | `--stdout --no-md` — that combination leaves nothing to emit, because `--stdout` never produces HTML. |
+
+Anything non-zero means *stop and fix*, never *present anyway*.
+
+## What a run costs
+
+| Route | Engine processes | Sources kept | Wall clock |
+|---|---|---|---|
+| lookup (`--depth summary`) | 1 | ≤10 | ~30s |
+| report (`--depth standard`) | 1, or 1 + one gatherer per sub-question | ≤25 | ~2-4 min |
+| deep (`--depth deep`) | 1 plan + N gathers + 1 merge + skeptic batches | ≤60 per sub-run | ~10-20 min |
+
+Per-depth retrieval budget (`src/types.ts`, override with the flags in brackets):
+
+| Depth | max sources `[--max-sources]` | per backend `[--per-source]` | result pages `[--pages]` | engines fused `[--web-breadth]` | recall floor |
+|---|---|---|---|---|---|
+| `summary` | 10 | 4 | 1 | 1 | 3 |
+| `standard` | 25 | 6 | 2 | 2 | 6 |
+| `deep` | 60 | 10 | 3 | 5 | 12 |
+
+The **recall floor** is the "thin dossier" threshold: below it, `gather` flags the
+run, `DOSSIER.md` gets a banner, and `check` warns. `check --min-sources <n>`
+turns that into a hard failure for a high-stakes run.
+
+## The fetch cache
+
+**On by default.** Pass `--no-cache` for an all-live run — every read of the run,
+the page itself, its text endpoint (E-utilities, Europe PMC) and the
+landing-page fallback alike. A cached copy that turns out to be a **wall** is
+never served: the read is redone live (and the good copy replaces it on disk),
+cache or no cache.
+
+- On disk, shared **across processes** — the deep tier's fan-out fetches an
+  overlapping URL once instead of once per sub-question.
+- Keyed by canonical URL, the `Accept-Language` the fetch will send **and the
+  extractor** that cleaned it — so a `--lang de` run is never served a body
+  cached by a `--lang en` run, and bringing Firecrawl up is not masked for a
+  whole TTL by yesterday's natively-extracted entries.
+- **Only successful extractions are stored.** A failed or empty fetch always
+  retries. A corrupt entry is ignored and overwritten, never thrown.
+- 24h TTL. Discovery is **never** cached — only page bodies. Every search query
+  goes out live on every run, so `--since` and "what's the latest" keep working;
+  only the body of an already-discovered page can be up to a day old.
+- `manifest.cache` records `{ enabled, hits }`, and a note names the hit count,
+  so a dossier is self-describing about how fresh its pages are.
+- Under `--stdout` the cache degrades to **read-only**: a run is still served
+  by whatever an earlier normal run left there, but leaves nothing of its own.
+
+## Concurrency and politeness
+
+These services are free, keyless and unauthenticated. Staying welcome matters
+more than saving ten seconds.
+
+- `--concurrency <n>` (default 6) bounds in-flight page fetches.
+- Rate-limited backends (GitHub, Stack Exchange, Semantic Scholar, PubMed) get a
+  single query variant per run; the polite scholarly APIs (arXiv, Crossref,
+  OpenAlex, Europe PMC, ClinicalTrials.gov, dblp) run their per-variant calls
+  sequentially.
+- Every request retries once on 429/503/502/504, honouring `Retry-After`.
+- The scholarly APIs (PubMed, Europe PMC, ClinicalTrials.gov, Crossref,
+  OpenAlex, Semantic Scholar — and every `refcheck` lookup) go further on a
+  429/503: 3 attempts, a `Retry-After` of up to 30 s waited out as sent, else
+  1 s then 2 s. A backend still throttled after that says `rate-limited` in the
+  run's notes.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ULTRASEARCH_SEARXNG` | `http://localhost:8888` | SearXNG base URL (same as `--searxng`). Opt-in: unset ⇒ the backend skips without calling out. |
+| `ULTRASEARCH_FIRECRAWL` | `http://localhost:3002` | Self-hosted Firecrawl base URL (same as `--firecrawl`). `off` disables it. Unreachable ⇒ silently skipped after one 2s probe. |
+| `ULTRASEARCH_FIRECRAWL_KEY` | unset | Optional `Authorization: Bearer` for the Firecrawl API. Not needed self-hosted — only to point the same client at Firecrawl Cloud. |
+| `ULTRASEARCH_BROWSER_FETCH` | see below | The browser rung: `fallback`, `always` or `off` (same as `--browser`, which wins). Unset ⇒ `fallback` when a Chrome, Brave, Chromium or Edge is installed and a window can be shown (macOS, Windows, Linux with `DISPLAY`/`WAYLAND_DISPLAY`), else `off`. Any other value reads as `off`. |
+| `ULTRASEARCH_BROWSER_BIN` | unset | The browser binary to launch. A path that does not exist turns the rung off (`doctor` says why) rather than silently using another browser. |
+| `ULTRASEARCH_BROWSER_KIND` | unset | Only this kind of browser: `chrome`, `brave`, `chromium` or `edge`. |
+| `ULTRASEARCH_BROWSER_TIMEOUT_MS` | 30000 | Ceiling for rendering ONE page in the browser; the tab is closed when it runs out. |
+| `ULTRASEARCH_BROWSER_CONCURRENCY` | 1 | Pages rendered at once (1-4). |
+| `ULTRASEARCH_PDF_ENGINE` | unset | Force ONE rung of the PDF extractor ladder: `pdf-inspector`, `anydoc`, `firecrawl`, `pdftotext`, `native` or `ocr`. Unset ⇒ the full ladder, strongest first. |
+| `ULTRASEARCH_DOC_ENGINE` | unset | Force ONE rung of the office-document ladder (`anydoc`, `firecrawl`), or `none` to disable it — office documents are then refused rather than read. |
+| `ULTRASEARCH_NO_NPX` | unset | Set to skip both rungs that need an implicit `npx` install (`pdf-inspector`, `anydoc`). Useful offline, or where an unattended install is not acceptable. |
+| `ULTRASEARCH_OCR_MAX` | 3 | Documents a single process will OCR (the last PDF rung). `0` disables OCR. Guards against a run full of scans costing seconds per page each. |
+| `ULTRASEARCH_OCR_LANG` | `eng` | tesseract language code(s) for OCR, e.g. `fra+eng`. Needs the matching language pack (`brew install tesseract-lang`). |
+| `ULTRASEARCH_OCR_TIMEOUT_MS` | 300000 | Ceiling for OCR of ONE document. |
+| `ULTRASEARCH_NO_WRITE` | unset | `1` makes every command write nothing, exactly as `--stdout` does — globally, and for the MCP server, which parses no CLI flags. See "Running without writing". |
+| `ULTRASEARCH_CACHE_DIR` | `$TMPDIR/ultrasearch/cache` | Where the fetch cache lives. |
+| `ULTRASEARCH_CACHE_TTL_MS` | 24h | Cache lifetime. `0` = always stale, always refetch. |
+| `ULTRASEARCH_NO_WAYBACK` | unset | Set to disable the Wayback rescue for dead links. |
+| `ULTRASEARCH_UA` | a desktop browser UA | Override the User-Agent scrapers send. |
+| `ULTRASEARCH_MAX_ATTEMPTS` | 2 | Attempts per request (1-5). |
+| `ULTRASEARCH_RETRY_MS` | 600 | Backoff between attempts. |
+| `ULTRASEARCH_PAGE_DELAY_MS` | 350 | Pause between result pages of one engine. |
+| `ULTRASEARCH_POLITE_DELAY_MS` | 400 | Pause between a scholarly API's per-variant calls, and between `refcheck`'s lookups. |
+| `ULTRASEARCH_BACKOFF_MS` | 1000 | First wait of the scholarly APIs' 429/503 back-off (doubles once). |
+| `ULTRASEARCH_BACKOFF_CAP_MS` | 30000 | Longest `Retry-After` the scholarly APIs wait out; a longer one ends the attempt. |
+| `ULTRASEARCH_NCBI_INTERVAL_MS` | 350 | Least gap between two E-utilities calls, across the run (NCBI: 3 requests/s without a key); `0` disables the pacing. |
+
+> **The last six are politeness, not performance.** They exist so tests and CI
+> can run fast offline. Zeroing them against the live web hammers free services
+> and gets the host rate-limited or blocked. **Never lower them on a real run.**
+
+## Running without writing (`--stdout`)
+
+For a planning phase, a read-only sandbox, or any harness that forbids writes.
+`--stdout` on any command — or `ULTRASEARCH_NO_WRITE=1` in the environment —
+makes the engine write **nothing at all**: not the dossier, not the report
+files, not the fetch cache. What it would have written goes to stdout instead.
+
+| Command | Under `--stdout` |
+|---|---|
+| `gather` | `DOSSIER.md`, then every source's full extract, delimited by `===== <path> =====` |
+| `brainstorm` | `BRAINSTORM.md` |
+| `plan` | its JSON payload, unchanged; the `<RUN>/q#` dirs stay in it as hints but are not created |
+| `render` | `index.md` only — `index.html` is never built, since its value is being a file you open |
+| `search` · `modes` · `check` | nothing changes; they already wrote nothing |
+| `merge` · `fetch` · `relink` · `verify` · `orchestrate` · `refcheck` | **exit 2** — see Exit codes |
+
+Add `--json` for the parse-safe form: `{ dir: null, manifest, artifacts: { "<path>": "<content>" } }`,
+carrying every artifact including `sources.json` and `manifest.json`. The plain
+`=====` delimiter is for reading, not parsing — fetched page text is untrusted
+(SKILL.md I2) and can contain any line at all.
+
+**What you lose: the `check` gate.** `check` validates a `REPORT.md` against a
+`sources.json`, and neither can exist here. `DOSSIER.md` says so in its own
+grounding-rules section rather than threatening a gate that cannot run. Cite
+`[S#]` inline from the streamed extracts and claim nothing beyond them.
+
+This is not a sandbox. It stops the writes ultrasearch performs; it cannot stop
+a caller from redirecting stdout into a file.
+
+## Checking a bibliography (`refcheck`)
+
+```
+node <skill-dir>/scripts/ultrasearch.mjs refcheck --refs <thesis.docx|refs.txt|refs.bib> [--citing <text.md|.docx|.pdf>] --out <dir> [--offline] [--json]
+```
+
+| Step | What it does |
+|---|---|
+| Parse | A numbered list (`1.`, `1)`, `[1]`) under the document's last References / Références / Bibliographie heading — or the whole file when there is none; one paragraph per reference when the numbering was not text (Word's automatic lists). Vancouver fields: authors (with `et al.`), title, journal, year, volume, issue, pages, DOI, PMID, PMCID. Or a `.bib`. `.docx`/`.odt` are read by the engine's built-in reader, `.pdf` by the PDF ladder. |
+| Resolve | Its own PMID → `ecitmatch` (journal\|year\|volume\|first page\|first author, batched) → its DOI as `[aid]` → a PubMed title search (kept only when the titles agree) → Crossref by DOI → Crossref `query.bibliographic` (5 candidates; one needs ≥ 85 % title overlap and a year within one, a reprint (`posted-content`) of another year never qualifies; the first author, the journal and a published record type rank the rest — none fits: unresolved). A Crossref title keeps its subtitle. `esummary` and `efetch` are batched (100 ids per call). |
+| DOI | Every cited DOI is asked of doi.org's handle API: `resolves: false` is a broken DOI, `undefined` means doi.org could not be asked. |
+| Diff | Per field `match` / `≈ minor` (a title with ≥ 90 % of its words) / `mismatch` (with the record's value) / `missing` (the record has it, the citation does not). Pages compare expanded (`157-62` = `157-162`); an article-number journal (`Sci Rep. 2020;10:12345`) is not asked for its issue. The journal is compared with the NLM abbreviation (PubMed `source`). Authors: names and initials in order — the initials of esummary or the ones the record's ForeName spells out (`Schranz MKJ` for "Matthias K J"); a shorter list with `et al.` is a style note, not an error (Vancouver lists 6). |
+| Citing text | `[n]`, `[n,m]`, `[n–m]`, `(n)` (only when no bracket call exists and every number is a reference) and superscripts (`¹²`, `<sup>`, `^n^`). Orphans, unknown numbers, and first-citation order. Each call's claim is the text since the previous call in its sentence; its figures are looked up in the cited abstract as whole numbers, written in digits or spelled out in English or French (`found` / `absent` / `no-abstract`). A call citing several references (`[26,27]`) vouches for its figures jointly: one found in any co-cited abstract is `found (in [27], co-cited)`. |
+| Outputs | `refcheck.json` (everything), `REFCHECK.md` (the `verification` template) and, unless `--offline` or nothing resolved, a dossier in the same dir: source `S<n>` is reference `n` (its record and abstract), `refs.bib` regenerated from the records. Write `REPORT.md` from it and run `check` as usual. |
+
+`refcheck` never fails on a finding: discrepancies are its output. It never
+opens a browser (`--browser` is accepted and ignored). An `--out` that already
+holds a `REPORT.md`/`SUMMARY.md` from an earlier run is refused unless
+`--force`: the report would be checked against sources it was not written from
+(with `--force` it is kept, and the run's notes say to re-check it). An absent
+figure is a lead (the number may be in the full text); `fetch --url` the
+article before calling the citation wrong. The same run under MCP is
+`ultrasearch_refcheck`.
+
+## Report templates are guidance
+
+Each mode carries a template, and `--template <t>` (on `gather` and `ingest`)
+swaps it for another — any mode's, or `verification`. Headings are free:
+rename, merge or drop them. `check` expects only one structural thing, an
+"Open questions" section (English or French; "contradictions" counts), and
+warns — never fails — when it is missing. A `## References (see refs.bib)` or
+`## Sources (…)` heading is the appendix: its lines are neither claims nor
+citations.
+
+## Optional local containers
+
+Everything ultrasearch talks to is keyless; two of them can be **self-hosted**.
+The compose file lives inside the engine and is written out on demand, so the
+commands below work from any install — there is nothing to clone and no file to
+find. Each service sits behind its own profile, so neither pays for the other.
+
+| Profile | Brings up | Cost | What it buys |
+|---|---|---|---|
+| `search` | SearXNG on `:8888` | one small container | The `searxng` discovery backend (`--searxng http://localhost:8888`). |
+| `extract` | Firecrawl + playwright/redis/rabbitmq/postgres on `:3002` | ~3 GB images, ~4 GB RAM | Browser-rendered main-content markdown instead of the built-in HTML stripper, plus the `firecrawl` search backend. |
+
+```bash
+ultrasearch searxng up                    # discovery only
+ultrasearch firecrawl up  # + extraction
+```
+
+Firecrawl needs no configuration: the default base is `http://localhost:3002`,
+and a memoised 2s probe decides per process whether it is there. When it is not,
+every extraction uses the built-in reader exactly as before. `docker/firecrawl/README.md`
+has the smoke tests and the tunables.
+
+## The browser rung
+
+The keyless way past what the built-in reader cannot read. When a page is
+refused (HTTP 0/401/403/429/503), comes back a consent or anti-bot wall, or is
+an empty JS shell, the engine renders it in a **real, separate Chrome or Brave**
+with its own profile under `~/.ultrasearch/browser`, and keeps the better read.
+It is **on by default** (`fallback`) wherever a browser is installed and a window
+can be shown; `doctor` prints which binary, which mode, and why it is off when it is.
+
+| `--browser` | Renders |
+|---|---|
+| `fallback` *(default with a browser + a display)* | only a page the built-in read was refused, walled or handed a JS shell for |
+| `always` | every web page, ahead of Firecrawl — slow, for a JS-heavy sweep |
+| `off` *(default otherwise)* | nothing |
+
+What to expect:
+
+- **A window may appear during a run.** It is the dedicated browser, not yours:
+  your own profile, tabs and logins are never touched. Every command that reads
+  pages (`gather`, `search`, `fetch`, `ingest`, `brainstorm`) closes it when it
+  ends — on an error, Ctrl-C and SIGTERM too. The MCP server closes it when the
+  last page-reading call in flight ends (concurrent calls share it), and when it
+  is stopped.
+- **Consent walls are never accepted for the user.** The page is read as it
+  renders; on most news sites the article is in the page under the banner, and
+  that is what is kept. When it is not, the junk check still sees a wall and the
+  page stays `⚠ snippet only` (`gather`) or is refused (`fetch` / `ingest`).
+- **Challenges are handed to the human, never bypassed.** A CAPTCHA or anti-bot
+  check is reported in the run's notes with the command to open it:
+  `ultrasearch browser open <url>` opens it in the same dedicated browser and
+  leaves it open. Once the human has passed it there, the next read of that host
+  gets the page.
+- **Accounting.** `gather` notes `Rendered N page(s) in a real browser` and the
+  `Helpers:` line counts `browser ✓ N page(s)`. `fetch` / `ingest` record
+  `meta.extractor: "browser"` on a source the browser read.
+- **When it renders.** A walled, refused or JS-only page is rendered by the
+  engine *during the read* (`fallback`), once; a page that read could not get
+  is not rendered again. The one read the engine skips is an **empty `402`** —
+  a paywall gate (Le Monde) that still hands a browser the article's opening —
+  so ultrasearch renders that one itself, noted `Recovered <url> in a real
+  browser`: once per page per run, at most 8 per `gather`. After that the
+  ladder goes on: same-document alternate → Firecrawl (when it answers) →
+  Wayback (dead links) → `⚠ snippet only`.
+- **Off under `--stdout` / `ULTRASEARCH_NO_WRITE=1` by default**: that mode
+  writes nothing, and a launched browser writes its profile. An explicit
+  `--browser` (or `ULTRASEARCH_BROWSER_FETCH`) still turns it on.
+- `--browser off` (or `ULTRASEARCH_BROWSER_FETCH=off`) for a run that must not
+  open anything: CI, a remote shell, a deterministic benchmark.
+- Developing it: `pnpm run e2e:browser` reads a real JS shell through a real
+  browser and checks no process is left behind (never in CI).
+
+## Offline and deterministic runs
+
+- `--backends fixture` gives a canned 3-source dossier about rate limiting with
+  **no network at all** — the way to rehearse the whole
+  `plan → orchestrate → merge → verify → check` chain, or to test a harness
+  integration, without touching the web.
+- `search --backend generic --url "https://a,https://b"` fetches exact pages,
+  prints them, and writes nothing.
+- `render` output is byte-identical for the same dossier (no timestamps in the
+  body), so rendered reports diff cleanly.
+
+## Machine-readable output
+
+`--json` works on `check`, `modes`, `plan`, `verify`, `brainstorm`, `search` and
+`gather`. Two worth knowing:
+
+- `orchestrate --run <RUN> --list` → per-phase `{ ready, items, ids, worklist,
+  prerequisite }` without emitting anything. The cheap "can I fan out yet?" probe.
+- `check --run <dir> --json` → the full `CheckResult`, including `dangling`,
+  `unmarkedUnsourced`, `numeralIssues` and the semantic verdict summary.
+
+## Retrieval quality signals
+
+`gather` surfaces four deterministic signals. React to each rather than writing
+around them:
+
+| Signal | Where | What to do |
+|---|---|---|
+| **Thin dossier** | `DOSSIER.md` banner, manifest `recallFloor`, `check` warning | Enrich with `fetch --url` before writing. |
+| **Under-covered terms** | `DOSSIER.md` banner, manifest `coverage.under`, the `weak:` line, `check` warning | These question terms are barely in the sources. Search them yourself and ingest, or state the gap under "Open questions". |
+| **`⚠ snippet only`** | per source in `DOSSIER.md` | The page fetch failed; only the search snippet is on file. Re-`fetch` it or find a primary source — don't lean on it. |
+| **Contradiction** | `check --semantic` warning + an HTML panel | Cited sources disagree. Resolve it in the report; don't silently pick a side. |
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `gather` exits 1, 0 sources | Every keyless backend blocked or offline | Retry once with a different `--web-engine`; then bridge with your own WebSearch + `fetch --url`. Stop after two empty attempts and report the gap. |
+| `searxng` backend skipped although containers are running | A bare `docker compose up` on some other stack starts nothing here — every service is behind a profile | `ultrasearch searxng up` |
+| Firecrawl is up but nothing says so | The probe failed, or `ULTRASEARCH_FIRECRAWL` is `off` | `curl -s http://localhost:3002/` should answer. A run that used it says `Firecrawl cleaned N page(s)…` in the notes. |
+| A browser window opened during a run | The browser rung (`fallback` by default) rendered a walled or JS-only page | Expected; it closes when the command ends. `--browser off` (or `ULTRASEARCH_BROWSER_FETCH=off`) for a run that must not open one. |
+| A note says "challenge — open it with `ultrasearch browser open <url>`" | The page put a CAPTCHA / anti-bot check in front of the browser | Hand it to the human: `ultrasearch browser open <url>`, let them pass it, then re-read the page. Never try to solve it yourself. |
+| `doctor`: `browser ✗ off — no Chrome, Brave, Chromium or Edge found` | No supported browser installed, or `ULTRASEARCH_BROWSER_BIN` points nowhere | Install one, or set `ULTRASEARCH_BROWSER_BIN`. The run is unaffected otherwise — walls fall back to Firecrawl / the snippet. |
+| Extracts look truncated since enabling Firecrawl | Its markdown is richer, so it reaches the 4k/8k `--depth` cap sooner | Use `--depth deep` (uncapped extracts), or read `sources/S#.md` directly. |
+| Thin dossier every time | Query too narrow, or a niche/commercial topic | Add `--queries` variants, raise `--web-breadth`/`--pages`, add `--seed-domains` for hosts you know. |
+| `--seed-domains` / `--rounds` did nothing | `--backends` was also passed — it pins retrieval and voids them | Drop `--backends`. The run now says `IGNORED:` when this happens. |
+| `check`: "No source citations found" | Every `[S#]` sits in the trailing `## Sources` appendix | Cite **in the body**. The appendix is rendered, not counted. |
+| `check`: dangling `[S#]` | Cited a sub-run id after a merge, or invented one | Only MASTER ids resolve after `merge`. Re-cite from the master `DOSSIER.md`. |
+| `check --semantic` always fails | No adjudicated `VERIFY.json` — it fails closed by design | Run `verify`, adjudicate, `verify --apply`. Or drop `--semantic` and use the mechanical gate. |
+| Round-2 verdicts corrupt | `verify` renumbers claim ids; `--apply <dir>` folds **every** `*verdict*.json` | Delete or archive the previous round's verdict files **before** adjudicating a new round. |
+| `index.md` isn't next to `index.html` | `render --run X --out Y` moves only the HTML | Copy it, or render without `--out`. |
+| A cited figure isn't in the source | Numeral asserted but absent from the extract | `fetch` the page that carries it, re-cite, or flag it `[M]`. `check --strict-numerals` makes this fatal. |
+| `numeral not in S#` on a table's first column, or on page/reference labels | The figure is an index or a label, not a claim | A first column headed `#`, `N°`, `No.`, `Ref`, `Réf.` — or holding only short running numbers — is skipped automatically. For anything else, put `<!-- ultrasearch:no-numerals -->` on the line before the block: it is still checked for citations, never for figures. |
+| `check` fails: "cited source(s) are a wall, not content" | A source's extract is a cookie / consent / anti-bot page (flagged `⛔ wall` in `DOSSIER.md`, or recognised from its wording in an older dossier) | Do not cite it. Re-`fetch --url` the page or its text endpoint — a re-read that finds the text **repairs the source in place, same `[S#]`** — cite another source, or `drop --where wall`. |
+| `fetch --url` refuses: "extracted to a … wall" | The host is throttling you (some serve a consent wall or a reCAPTCHA page as HTTP **200**) | Working as intended — a wall is not content. Retry later, pace the run, or pass an endpoint that carries the same document: the text comes from there, a **page** is still what gets cited. |
+| `fetch --url` refuses: "batches N ids" / "is a … query" | One URL listing many ids, or a search, is not one document | Pass the ids one at a time — one `S#` per document is what citation checking rests on. |
+| `fetch --url` refuses: "names no document" | An endpoint whose payload carries no canonical link, DOI, arXiv id or PMID | Nothing citable can be derived from it — reconstruct it. Search for the record's title, then re-run with `--cite-url "<page>"`: the text still comes from the endpoint. |
+| `check` warns: cited source points at an API endpoint | A raw endpoint got pinned as a source (a dossier gathered before this gate) | Run `relink --run <dir>`: it repairs every source whose stored text names its own document, and prints the rest. Then find each remaining page and `relink --id S# --url "<page>"`. |
+| `check` warns: cited source extracted to a wall | The host was throttling when it was fetched | `relink` lists these too but cannot fix them — the text is missing, not just the link. Re-`fetch --url` them (a good read replaces the wall under the same id), or drop the claims resting on them. |
+| `fetch` / `ingest` refuse: "is a search results page" | The URL is a search engine's or a database's results list (`pubmed.ncbi.nlm.nih.gov/?term=…`, `google.com/search?q=…`) — `gather` drops these too, and says so | Open the result you mean and pass its own URL. |
+| `fetch` refuses: "redirected to the site's home page" | A dead deep link the site answers with its home page (HTTP 200). The archive was asked first | Find the document's current address; `gather` keeps such a hit snippet-only. |
+| `fetch` answers "already in dossier as S7 (the same paper: doi:…)" | The paper is already a source under another address — its DOI, its PubMed page, its PMC page | Cite `[S7]`. `gather` merges these itself and lists the other addresses as `alsoAt`. |

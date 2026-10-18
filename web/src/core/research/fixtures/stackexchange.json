@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "tags": ["python", "algorithm", "message-queue"],
+      "is_answered": true,
+      "view_count": 121891,
+      "answer_count": 12,
+      "score": 182,
+      "creation_date": 1237575747,
+      "question_id": 667508,
+      "link": "https://stackoverflow.com/questions/667508/whats-a-good-rate-limiting-algorithm",
+      "title": "What&#39;s a good rate limiting algorithm?",
+      "body": "<p>I could use some pseudo-code, or better, Python.  I am trying to implement a rate-limiting queue for a Python IRC bot, and it partially works, but if someone triggers less messages than the limit (e.g., rate limit is 5 messages per 8 seconds, and the person triggers only 4), and the next trigger is over the 8 seconds (e.g., 16 seconds later), the bot sends the message, but the queue becomes ful"
+    },
+    {
+      "tags": ["javascript", "throttling", "debouncing"],
+      "is_answered": true,
+      "view_count": 277747,
+      "answer_count": 28,
+      "score": 589,
+      "creation_date": 1411463993,
+      "question_id": 25991367,
+      "link": "https://stackoverflow.com/questions/25991367/difference-between-throttling-and-debouncing-a-function",
+      "title": "Difference between throttling and debouncing a function",
+      "body": "<p>Can anyone give me an in-simple-words explanation about the difference between throttling and debouncing a function for rate-limiting purposes?</p>\n<p>To me, both seem to do the same the thing. I have checked these two blogs to find out, but I'm still having trouble understanding.</p>\n<p><a href=\"http://remysharp.com/2010/07/21/throttling-function-calls\" rel=\"noreferrer\">http://remysharp.com/20"
+    }
+  ],
+  "has_more": true,
+  "backoff": 10,
+  "quota_max": 300,
+  "quota_remaining": 298
+}

@@ -33,6 +33,9 @@ const BUILTIN_NAMES: Readonly<Record<string, Key>> = {
   search_conversations: 'tools.name_search_conversations',
   fetch_url: 'tools.name_fetch_url',
   search_knowledge: 'knowledge.toolName',
+  skill: 'skills.toolName',
+  research_search: 'research.name_research_search',
+  research_read: 'research.name_research_read',
 }
 
 const BUILTIN_HINTS: Readonly<Record<string, Key>> = {
@@ -41,6 +44,9 @@ const BUILTIN_HINTS: Readonly<Record<string, Key>> = {
   search_conversations: 'tools.hint_search_conversations',
   fetch_url: 'tools.hint_fetch_url',
   search_knowledge: 'knowledge.toolHint',
+  skill: 'skills.toolHint',
+  research_search: 'research.hint_research_search',
+  research_read: 'research.hint_research_read',
 }
 
 const SANDBOX_NAMES: Readonly<Record<string, Key>> = {

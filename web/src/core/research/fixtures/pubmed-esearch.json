@@ -1,0 +1,19 @@
+{
+  "header": {
+    "type": "esearch",
+    "version": "0.3"
+  },
+  "esearchresult": {
+    "count": "80756",
+    "retmax": "2",
+    "retstart": "0",
+    "idlist": ["42887522", "42886186"],
+    "translationset": [
+      {
+        "from": "aspirin",
+        "to": "\"aspirin\"[Supplementary Concept] OR \"aspirin\"[All Fields] OR \"aspirin\"[MeSH Terms] OR \"aspirins\"[All Fields] OR \"aspirin's\"[All Fields] OR \"aspirine\"[All Fields]"
+      }
+    ],
+    "querytranslation": "\"aspirin\"[Supplementary Concept] OR \"aspirin\"[All Fields] OR \"aspirin\"[MeSH Terms] OR \"aspirins\"[All Fields] OR \"aspirin s\"[All Fields] OR \"aspirine\"[All Fields]"
+  }
+}

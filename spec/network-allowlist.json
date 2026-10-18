@@ -4,10 +4,23 @@
     "app": "The app's own files: the shell, its chunks, the manifest, the service worker and its precache.",
     "provider": "The default API hosts of the model providers the app ships (Anthropic, OpenAI, Google Gemini, Mistral, OpenRouter). User-entered endpoints (local servers, OpenAI-compatible services, custom base URLs) are not listed.",
     "mcp": "MCP servers and their OAuth authorization servers. Every one is added by the user (an endpoint, or an authorization server it names), so none are listed; net.ts requires HTTPS or the loopback.",
-    "tool": "Hosts a tool reaches once the user approved the call (the built-in fetch_url): chosen by the conversation, never fixed, so none are listed.",
+    "tool": "Hosts a tool reaches once the user approved the call (the built-in fetch_url, the pages Deep research reads with research_read): chosen by the conversation, never fixed, so none are listed.",
     "sync": "The fixed API hosts of the sync destinations the app ships (GitHub). Carries the aparte/1 objects only: ciphertext, the format marker and the keyslots. User-entered stores (an S3 endpoint, a self-hosted relay) are not listed.",
     "download": "Pinned, hash-checked downloads of in-browser model files and runtimes. The model workers read Hugging Face model repositories at a fixed commit (huggingface.co, which redirects the large files to its CDN hosts below, by region) and the compiled WebLLM model libraries at a fixed commit of mlc-ai/binary-mlc-llm-libs (raw.githubusercontent.com); ONNX Runtime is self-hosted under the app's origin. The sandbox host fetches Pyodide, its packages and Mermaid from jsDelivr (web/src/core/sandbox/runtime-lock.json) and hands them to the sandbox frames, which have no network. Every file is checked against a SHA-256 shipped with the app.",
+    "skills": "Importing a skill from a public GitHub repository: the GitHub REST API (the repository, the commit a ref points to, its file tree) and raw.githubusercontent.com (the files, at that commit). Unauthenticated; no token is ever sent.",
+    "research": "The keyless search backends of Deep research (web/src/core/research/backends.ts), each checked to answer a cross-origin GET from a browser with an Access-Control-Allow-Origin header, and the CORS-friendly APIs research_read falls back to for a page (Wikipedia articles, RFCs). The backends of the ultrasearch skill that a browser cannot reach are listed under $research-unreachable.",
     "catalog": "Placeholder: the model catalog the app refreshes, if it is fetched rather than bundled."
+  },
+  "$research-unreachable": {
+    "duckduckgo": "html.duckduckgo.com/html and lite.duckduckgo.com/lite: HTTP 403 to a scripted request and no Access-Control-Allow-Origin header (probed 2026-10-18).",
+    "reddit": "www.reddit.com/search.rss: no Access-Control-Allow-Origin header.",
+    "dblp": "dblp.org/search/publ/api: an HTTP 202 bot challenge without Access-Control-Allow-Origin.",
+    "arxiv": "export.arxiv.org/api/query: no Access-Control-Allow-Origin header (and HTTP 429 under load); arxiv.org pages neither.",
+    "semanticscholar": "api.semanticscholar.org: answers its preflight, but its unauthenticated GETs came back HTTP 429 without Access-Control-Allow-Origin, so a browser cannot rely on it.",
+    "mdn": "developer.mozilla.org/api/v1/search: no Access-Control-Allow-Origin header.",
+    "wayback": "web.archive.org snapshots: redirects without Access-Control-Allow-Origin (archive.org's availability API has it, the snapshot it names does not).",
+    "searxng, firecrawl": "self-hosted servers on the user's machine, not fixed hosts; not offered.",
+    "pepper": "deal sites, not a research source; not offered."
   },
   "app": ["self"],
   "provider": [
@@ -30,6 +43,31 @@
     "https://cdn-lfs-eu-1.hf.co",
     "https://raw.githubusercontent.com",
     "https://cdn.jsdelivr.net"
+  ],
+  "skills": ["https://api.github.com", "https://raw.githubusercontent.com"],
+  "research": [
+    "https://en.wikipedia.org",
+    "https://fr.wikipedia.org",
+    "https://de.wikipedia.org",
+    "https://es.wikipedia.org",
+    "https://it.wikipedia.org",
+    "https://pt.wikipedia.org",
+    "https://nl.wikipedia.org",
+    "https://pl.wikipedia.org",
+    "https://ja.wikipedia.org",
+    "https://zh.wikipedia.org",
+    "https://api.marginalia-search.com",
+    "https://www.mojeek.com",
+    "https://hn.algolia.com",
+    "https://api.stackexchange.com",
+    "https://api.github.com",
+    "https://api.openalex.org",
+    "https://api.crossref.org",
+    "https://www.ebi.ac.uk",
+    "https://eutils.ncbi.nlm.nih.gov",
+    "https://clinicaltrials.gov",
+    "https://datatracker.ietf.org",
+    "https://www.rfc-editor.org"
   ],
   "catalog": []
 }

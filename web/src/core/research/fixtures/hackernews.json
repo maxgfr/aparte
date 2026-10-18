@@ -1,0 +1,38 @@
+{
+  "hits": [
+    {
+      "author": "seabass",
+      "created_at": "2024-05-16T23:07:20Z",
+      "num_comments": 49,
+      "objectID": "40384421",
+      "points": 390,
+      "story_id": 40384421,
+      "title": "Visualizing algorithms for rate limiting",
+      "url": "https://smudge.ai/blog/ratelimit-algorithms"
+    },
+    {
+      "author": "dfield",
+      "created_at": "2017-04-12T18:14:48Z",
+      "num_comments": 68,
+      "objectID": "14100254",
+      "points": 226,
+      "story_id": 14100254,
+      "title": "An Alternative Approach to Rate Limiting",
+      "url": "https://medium.com/figma-design/an-alternative-approach-to-rate-limiting-f8a06cf7c94c"
+    },
+    {
+      "author": "momonga",
+      "created_at": "2018-04-27T15:34:56Z",
+      "num_comments": 40,
+      "objectID": "16941554",
+      "points": 213,
+      "story_id": 16941554,
+      "title": "Scaling a High-Traffic Rate Limiting Stack with Redis Cluster",
+      "url": "https://brandur.org/redis-cluster"
+    }
+  ],
+  "nbHits": 638,
+  "page": 0,
+  "hitsPerPage": 3,
+  "query": "rate limiting"
+}

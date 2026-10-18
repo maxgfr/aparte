@@ -1,0 +1,232 @@
+/* Deep research in the chat (Research.tsx): the sheet, the progress card while it runs, the check under a report. */
+
+.sheet {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.switches {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 650;
+}
+
+.footnote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-footnote);
+}
+
+.label {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.mono {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  overflow-wrap: anywhere;
+}
+
+.plainList {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.unreachable {
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.unreachable > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.unreachable[open] {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The progress of a running research turn: a recessed card like the tool cards it sits among. */
+
+.progress,
+.report {
+  display: grid;
+  gap: var(--space-2);
+  max-width: var(--measure-prose);
+  padding: var(--space-3);
+  border: var(--hairline-width) solid var(--tool-border);
+  border-radius: var(--radius-surface);
+  background: var(--tool-bg);
+  color: var(--tool-ink);
+  font-size: var(--text-footnote);
+}
+
+.progress > button {
+  justify-self: start;
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: var(--hairline-width) solid var(--tool-border);
+  color: var(--ink-3);
+}
+
+.step::before {
+  counter-increment: step;
+  content: counter(step) ".";
+  font-variant-numeric: tabular-nums;
+}
+
+.step[data-state="done"] {
+  color: var(--ink-2);
+}
+
+.step[data-state="now"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.stepName {
+  white-space: nowrap;
+}
+
+.counts {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Under a report: its citation check, its sources, its exports. */
+
+.verdict {
+  margin: 0;
+  font-weight: 600;
+}
+
+.verdict[data-tone="ok"] {
+  color: var(--success);
+}
+
+.verdict[data-tone="alert"] {
+  color: var(--danger);
+}
+
+.findings {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  overflow-wrap: anywhere;
+}
+
+.findings > [data-tone="alert"] {
+  color: var(--danger);
+}
+
+.findings > [data-tone="warn"] {
+  color: var(--warning);
+}
+
+.sources {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.source:hover {
+  background: var(--surface-pressed);
+}
+
+.source:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sourceId {
+  grid-row: span 2;
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.sourceTitle {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* A research user message: a quiet chip under the bubble. */
+
+.chip {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-caption);
+}

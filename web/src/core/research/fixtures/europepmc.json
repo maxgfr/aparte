@@ -1,0 +1,28 @@
+{
+  "version": "6.9",
+  "hitCount": 248551,
+  "resultList": {
+    "result": [
+      {
+        "id": "42853985",
+        "source": "MED",
+        "pmid": "42853985",
+        "doi": "10.1093/infdis/jiag508",
+        "title": "Evaluation of gut microbiota composition in elite controllers and antiretroviral-treated people with HIV after aspirin versus atorvastatin administration.",
+        "authorString": "Marotti M, Epling BP, Angelova A, Segrist E, Laidlaw E, Poole A, Manion M, Migueles S, Baker J, Sereti I.",
+        "pubYear": "2026",
+        "abstractText": "Gut dysbiosis is associated with chronic immune activation in people with HIV (PWH), but is not well-characterized in elite controllers (ECs) or PWH receiving aspirin or statins. We analyzed gut microbiota among 22 virally-suppressed PWH and 12 ECs before and 9-months after randomization to aspirin or atorvastatin. There were no differences in microbiota between PWH and EC at baseline. There was a"
+      },
+      {
+        "id": "42359632",
+        "source": "MED",
+        "pmid": "42359632",
+        "doi": "10.1097/fjc.0000000000001841",
+        "title": "Aspirin in Primary Prevention: A Case for Selective Use.",
+        "authorString": "Lewontin M, Abbate A, Villines TC, Guarraia D, Ayers M.",
+        "pubYear": "2026",
+        "abstractText": "<h4>Abstract</h4>Low-dose aspirin has a well-established role in secondary prevention of cardiovascular disease, but use in primary prevention remains uncommon due to limited evidence of benefit and risk of adverse effects such as bleeding. While benefit of aspirin in primary prevention may not outweigh risk in the general population, it may still be appropriate for particular groups in which bene"
+      }
+    ]
+  }
+}

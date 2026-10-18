@@ -1,0 +1,19 @@
+{
+  "batchcomplete": "",
+  "query": {
+    "normalized": [
+      {
+        "from": "Rate_limiting",
+        "to": "Rate limiting"
+      }
+    ],
+    "pages": {
+      "986684": {
+        "pageid": 986684,
+        "ns": 0,
+        "title": "Rate limiting",
+        "extract": "In computer networks, rate limiting is used to control the rate of requests sent or received by a network interface controller. It can be used to prevent DoS attacks and limit web scraping.\nResearch indicates flooding rates for one zombie machine are in excess of 20 HTTP GET requests per second, whereas legitimate rates are much lower.\nRate limiting should be used along with throttling pattern to minimize the number of throttling errors.\n\n\n== Hardware appliances ==\nHardware appliances can limit the rate of requests on layer 4 or 5 of the OSI model. \nRate limiting can be induced by the network protocol stack of the sender due to a received ECN-marked packet and also by the network scheduler of any router along the way. \nWhile a hardware appliance can limit the rate for a given range of IP-addresses on layer 4, it risks blocking a network with many users which are masked by NAT with a single IP address of an ISP. \nDeep packet inspection can be used to filter on the session layer but will effectively disarm encryption protocols like TLS and SSL between the appliance and the protocol server (i.e. web server).\n\n\n== Protocol servers ==\nProtocol servers using a request / response model, such as FTP servers or typically web servers may use a central in-memory key-value database, like Redis or Aerospike, for session management. A rate limiting algorithm is used to check if the user session (or IP address) has to be limited based on the information in the session cache. \nIn case a client made too many requests within a given time frame, HTTP servers can respond with status code 429: Too Many Requests.\nHowever, in some cases (i.e. web servers) the session management and rate limiting algorithm should be built into the application (used for dynamic content) running on the web server, rather than the web server itself.\nWhen a protocol server or a network device notice that the configured request limit is reached, then it will offload new requests and not respond to them. Sometimes they may be added to a queue to be processed once the input rate reaches an acceptable level, but at peak times the request rate can even exceed the capacities of such queues and requests have to be thrown away.\n\n\n== Data centers ==\nData centers widely use rate limiting to control the share of resources given to different tenants and applications according to their service level agreement. A variety of rate limiting techniques are applied in data centers using software and hardware. Virtualized data centers may also apply rate limiting at the hypervisor layer. Two important performance metrics of rate limiters in data centers are resource footprint (memory and CPU usage) which determines scalability, and precision. There usually exists a trade-off, that is, higher precision can be achieved by dedicating more resources to the rate limiters. A considerable body of research  with focus on improving performance of rate limiting in data centers.\n\n\n== See also ==\nBandwidth management\nBandwidth throttling\nProject Shield\nAlgorithms\nToken bucket\nLeaky bucket\nFixed window counter\nSliding window log\nSliding window counter\nLibraries\nASP.NET Web API rate limiter\nASP.NET Core rate limiting middleware\nRate limiting for .NET (PCL Library)\nRate limiting for Node.JS\n\n\n== References =="
+      }
+    }
+  }
+}

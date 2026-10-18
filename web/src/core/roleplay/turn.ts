@@ -23,7 +23,7 @@ export function injectedPart(kind: Injected, text: string): Part {
 /** What injected the part, or null for a part the user wrote. */
 export function injectedOf(part: Part): Injected | null {
   const v = (part as { injected?: unknown }).injected
-  return v === 'lorebook' || v === 'authors-note' || v === 'character' ? v : null
+  return v === 'lorebook' || v === 'authors-note' || v === 'character' || v === 'skills' || v === 'research' ? v : null
 }
 
 /** The text the user wrote in `parts`: injected parts left out. */

@@ -1,0 +1,118 @@
+{
+  "header": {
+    "type": "esummary",
+    "version": "0.3"
+  },
+  "result": {
+    "uids": ["42887522", "42886186"],
+    "42887522": {
+      "uid": "42887522",
+      "pubdate": "2026 Oct 16",
+      "source": "Int J Sports Med",
+      "authors": [
+        {
+          "name": "Franco-Alvarenga PE",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Brietzke C",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Canestri R",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Vinícius I",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Vasconcelos G",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Lima NDO",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Alves DS",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Alves W",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Ferreira GA",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Pires FO",
+          "authtype": "Author",
+          "clusterid": ""
+        }
+      ],
+      "title": "Analgesics and Exercise Performance in Pain-Free Situations: A Systematic Review and Meta-Analysis.",
+      "fulljournalname": "International journal of sports medicine",
+      "elocationid": "doi: 10.1055/a-2957-1021",
+      "articleids": [
+        {
+          "idtype": "pubmed",
+          "idtypen": 1,
+          "value": "42887522"
+        },
+        {
+          "idtype": "doi",
+          "idtypen": 3,
+          "value": "10.1055/a-2957-1021"
+        }
+      ]
+    },
+    "42886186": {
+      "uid": "42886186",
+      "pubdate": "2026 Oct",
+      "source": "Am Fam Physician",
+      "authors": [
+        {
+          "name": "Bigelow S",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Sachs V",
+          "authtype": "Author",
+          "clusterid": ""
+        },
+        {
+          "name": "Hoberecht T",
+          "authtype": "Author",
+          "clusterid": ""
+        }
+      ],
+      "title": "Daily Aspirin Dosing for Preeclampsia Prevention.",
+      "fulljournalname": "American family physician",
+      "elocationid": "",
+      "articleids": [
+        {
+          "idtype": "pubmed",
+          "idtypen": 1,
+          "value": "42886186"
+        },
+        {
+          "idtype": "pii",
+          "idtypen": 4,
+          "value": "94e2b462-f4d4-5f43-829b-ac5fca1e293b"
+        }
+      ]
+    }
+  }
+}

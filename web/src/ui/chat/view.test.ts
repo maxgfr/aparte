@@ -4,7 +4,9 @@ import {
   costOf,
   groupConversations,
   groupOf,
+  injectedKind,
   injectedTextOf,
+  isResearchMessage,
   matches,
   queryWords,
   reasoningOf,
@@ -70,6 +72,19 @@ describe('thread view', () => {
     expect(injectedTextOf(parts)).toBe(
       '<lore>\nThe lamp is lit.\n</lore>\n\n<authors-note>\nBe brief.\n</authors-note>',
     )
+  })
+
+  test('the skills list and the research playbook are neither shown as context nor copied', () => {
+    const parts = [
+      { type: 'text', text: '<available_skills>\n</available_skills>', injected: 'skills' },
+      { type: 'text', text: 'Compare token buckets and sliding windows.' },
+      { type: 'text', text: '<research_mode>\n</research_mode>', injected: 'research' },
+    ] as unknown as Message['parts']
+    expect(textOf(parts)).toBe('Compare token buckets and sliding windows.')
+    expect(injectedTextOf(parts)).toBe('')
+    expect(parts.map(injectedKind)).toEqual(['skills', null, 'research'])
+    expect(isResearchMessage(parts)).toBe(true)
+    expect(isResearchMessage(parts.slice(0, 2))).toBe(false)
   })
 
   test('cost prices fresh input, cache reads and writes and output apart', () => {

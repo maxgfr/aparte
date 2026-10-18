@@ -1,0 +1,22 @@
+{
+  "type": "standard",
+  "title": "Rate limiting",
+  "pageid": 986684,
+  "lang": "en",
+  "description": "Limiting the data rate on network controllers",
+  "content_urls": {
+    "desktop": {
+      "page": "https://en.wikipedia.org/wiki/Rate_limiting",
+      "revisions": "https://en.wikipedia.org/wiki/Rate_limiting?action=history",
+      "edit": "https://en.wikipedia.org/wiki/Rate_limiting?action=edit",
+      "talk": "https://en.wikipedia.org/wiki/Talk:Rate_limiting"
+    },
+    "mobile": {
+      "page": "https://en.wikipedia.org/wiki/Rate_limiting",
+      "revisions": "https://en.wikipedia.org/wiki/Special:History/Rate_limiting",
+      "edit": "https://en.wikipedia.org/wiki/Rate_limiting?action=edit",
+      "talk": "https://en.wikipedia.org/wiki/Talk:Rate_limiting"
+    }
+  },
+  "extract": "In computer networks, rate limiting is used to control the rate of requests sent or received by a network interface controller. It can be used to prevent DoS attacks and limit web scraping."
+}

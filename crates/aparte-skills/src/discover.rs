@@ -459,4 +459,90 @@ mod tests {
             Err(SkillError::Invalid { .. })
         ));
     }
+
+    /// The web app reads skills with its own TypeScript port (web/src/core/skills); both read these shared files.
+    fn web_fixtures() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/core/skills/fixtures")
+    }
+
+    fn json(v: &Value) -> serde_json::Value {
+        match v {
+            Value::Null => serde_json::Value::Null,
+            Value::Str(s) => serde_json::Value::String(s.clone()),
+            Value::List(items) => serde_json::Value::Array(items.iter().map(json).collect()),
+            Value::Map(entries) => serde_json::json!({
+                "map": entries.iter().map(|(k, v)| serde_json::json!([k, json(v)])).collect::<Vec<_>>()
+            }),
+        }
+    }
+
+    fn read_json(path: &Path) -> serde_json::Value {
+        let text = std::fs::read_to_string(path).expect("fixture");
+        serde_json::from_str(&text).expect("json")
+    }
+
+    #[test]
+    fn the_web_reads_the_ultrasearch_skill_the_same_way() {
+        let dir = web_fixtures().join("ultrasearch").canonicalize().expect("fixture");
+        let expected = read_json(&web_fixtures().join("ultrasearch.expected.json"));
+        let (s, warnings) = load(&dir, &web_fixtures(), Scope::User).expect("loads");
+        assert_eq!(expected["name"], s.name.as_str());
+        assert_eq!(expected["description"], s.description.as_str());
+        assert_eq!(expected["disableModelInvocation"], s.disable_model_invocation);
+        assert_eq!(expected["allowedTools"], serde_json::json!(s.allowed_tools));
+        assert_eq!(expected["license"], serde_json::json!(s.license));
+        assert_eq!(expected["version"], serde_json::json!(s.version));
+        let messages: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
+        assert_eq!(expected["warnings"], serde_json::json!(messages));
+    }
+
+    #[test]
+    fn the_web_frontmatter_cases_parse_the_same_way() {
+        let cases = read_json(&web_fixtures().join("cases.json"));
+        let list = cases["frontmatter"].as_array().expect("frontmatter cases");
+        assert!(!list.is_empty());
+        for case in list {
+            let name = case["name"].as_str().unwrap_or("?");
+            let src = case["src"].as_str().expect("src");
+            match crate::frontmatter::parse(src) {
+                Ok(v) => assert_eq!(case["value"], json(&v), "{name}"),
+                Err(e) => assert_eq!(case["errorLine"], serde_json::json!(e.line), "{name}: {e}"),
+            }
+        }
+    }
+
+    #[test]
+    fn the_web_skill_cases_load_the_same_way() {
+        let cases = read_json(&web_fixtures().join("cases.json"));
+        let root = tempfile::tempdir().expect("root");
+        for (i, case) in cases["skills"].as_array().expect("skill cases").iter().enumerate() {
+            let name = case["name"].as_str().unwrap_or("?");
+            let parent = root.path().join(format!("case{i}"));
+            let d = parent.join(case["dir"].as_str().expect("dir"));
+            std::fs::create_dir_all(&d).expect("mkdir");
+            std::fs::write(d.join("SKILL.md"), case["text"].as_str().expect("text")).expect("write");
+            match load(&d, &parent, Scope::User) {
+                Ok((s, warnings)) => {
+                    let skill = &case["skill"];
+                    assert_eq!(skill["name"], s.name.as_str(), "{name}");
+                    assert_eq!(skill["description"], s.description.as_str(), "{name}");
+                    assert_eq!(skill["disableModelInvocation"], s.disable_model_invocation, "{name}");
+                    assert_eq!(skill["allowedTools"], serde_json::json!(s.allowed_tools), "{name}");
+                    assert_eq!(skill["license"], serde_json::json!(s.license), "{name}");
+                    assert_eq!(skill["version"], serde_json::json!(s.version), "{name}");
+                    assert_eq!(skill["warnings"], serde_json::json!(warnings.len()), "{name}");
+                    assert_eq!(skill["body"], body(&s).expect("body").as_str(), "{name}");
+                }
+                Err(e) => {
+                    let code = match e {
+                        SkillError::NoFrontmatter { .. } => "no-frontmatter",
+                        SkillError::Yaml { .. } => "yaml",
+                        SkillError::Invalid { .. } => "invalid",
+                        _ => "other",
+                    };
+                    assert_eq!(case["error"], code, "{name}: {e}");
+                }
+            }
+        }
+    }
 }
