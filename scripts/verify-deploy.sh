@@ -11,7 +11,8 @@
 #    OAuth callback and the lazy chunks the worker does not precache included).
 # 3. With --rebuild: builds COMMIT in a temporary worktree (`bun install --frozen-lockfile`, then the production build
 #    for the site's origin and path, with the version and commit the About screen of the site shows) and compares
-#    every file of that build with the live copy, byte for byte.
+#    every file of that build with the live copy, byte for byte. Run it on Linux x86-64 with CI's Bun version: the PWA
+#    icons generated at build time differ on other platforms, and so does sw.js, which carries their digests.
 #
 # Exit status: 0 when every check passed, 1 when a file differs or an attestation does not verify, 2 on a usage or
 # tooling error. Needs curl, jq and openssl; gh for the attestation; git and bun for --rebuild.

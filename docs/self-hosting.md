@@ -16,7 +16,7 @@ origin it will be served from. The app may live under a path (`/aparte/`) or at 
 
 ## Build
 
-With Bun 1.4 (the version CI uses):
+With Bun 1.4.3 (the version CI uses):
 
 ```sh
 cd web
@@ -52,7 +52,7 @@ On `index.html` (and the base path itself), print the exact values for your orig
 bun -e "import { securityHeaders } from './src/security/policy.ts'; console.log(securityHeaders({ origin: 'https://chat.example.dev', base: '/' }))"
 ```
 
-which gives:
+which prints these headers (as an object):
 
 ```text
 Content-Security-Policy: default-src 'none'; script-src https://chat.example.dev/ 'wasm-unsafe-eval'; style-src https://chat.example.dev/; font-src https://chat.example.dev/; manifest-src https://chat.example.dev/; worker-src https://chat.example.dev/ blob:; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; frame-src https://chat.example.dev/sandbox/; object-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types aparte dompurify; frame-ancestors 'none'
@@ -114,15 +114,21 @@ scripts/verify-deploy.sh --site https://chat.example.dev/ --no-attestation --reb
 
 1. It downloads `index.html` and `sw.js`, then every file the service worker precaches, and checks each against the
    SHA-256 compiled into `sw.js`: what the worker itself checks before serving it.
-2. For the deployed app, it verifies `sw.js` with `gh attestation verify --repo maxgfr/aparte --signer-workflow
-   maxgfr/aparte/.github/workflows/deploy.yml`. The deploy workflow attests every file of the site in one build
+2. Unless `--no-attestation` is given, it verifies `sw.js` with `gh attestation verify --repo <repo>
+   --signer-workflow <repo>/.github/workflows/deploy.yml`, where `<repo>` is `maxgfr/aparte` or the one `--repo`
+   names (a fork that deploys with the same workflow). The deploy workflow attests every file of the site in one build
    provenance attestation; the script reads the digest of each file from it and checks every one as the site serves
    it, including the sandbox pages, the OAuth callback and the chunks the worker does not precache. It prints the
    commit the attestation was made from.
 3. With `--rebuild <commit> --version <x.y.z>` (the version and commit the About screen shows), it builds that commit
    in a temporary worktree for the site's origin and path and compares every file with the live copy byte for byte.
-   Use the Bun version of CI; a different one may produce different bytes.
+   Run it where the deploy workflow builds: Linux on x86-64, with the Bun version of CI (1.4.3). The PWA icons are
+   generated at build time by an image library whose output differs between platforms, so a rebuild on macOS differs
+   in three icons and in `sw.js`, which carries their digests. For a build made with `DEDICATED_ORIGIN=1`, run the
+   script with `DEDICATED_ORIGIN=1` in its environment. Builds made before the precache list was sorted (the
+   `sortedManifest` step of `web/build/integrity.ts`) wrote it in an order that is not stable from one build to the
+   next, so a rebuild of such a commit can differ in `sw.js` alone.
 
-It exits with 0 when every check passed and 1 when a file differs or the attestation does not verify. It needs `curl`,
-`jq` and `openssl`, `gh` (logged in) for the attestation, and `git` and `bun` for a rebuild. Attestations exist for
-deployments made after the deploy workflow started publishing them.
+It exits with 0 when every check passed, 1 when a file differs or the attestation does not verify, and 2 on a usage
+or tooling error. It needs `curl`, `jq` and `openssl`, `gh` (logged in) for the attestation, and `git` and `bun` for a
+rebuild. Attestations exist for deployments made after the deploy workflow started publishing them.

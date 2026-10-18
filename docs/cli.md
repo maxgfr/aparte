@@ -38,7 +38,10 @@ Options for the agent (the bare command, `-p` and `rpc`): `--provider` (`anthrop
 `http` on the loopback), `--effort` (`none` to `max`), `--max-turns` (50), `--max-output-tokens`, `--system`,
 `--append-system`, `--tools read,write,edit,bash,grep,find,ls,git,web_fetch,skill` or `--no-tools`, `--no-skills`,
 `--no-mcp`, `-y/--yes` (approve every tool call), `--allow-net`, `--no-sandbox`, `--resume`/`--export` (JSONL files),
-`--session`, `--branch-from`, `--no-save`.
+`--session`, `--branch-from`, `--no-save`. The base URL is used as given: for `anthropic` it includes the version
+(`https://api.example.com/v1`, the CLI calls `<base>/messages`), where the web app accepts it with or without `/v1`.
+Every command takes `-v/--verbose` (repeat it for more logs) and `-q/--quiet`; `aparte completions <shell>` prints the
+shell completions.
 
 Keys come from the provider's variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` or `GOOGLE_API_KEY`,
 `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`), else the OS keychain:

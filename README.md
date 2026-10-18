@@ -10,8 +10,10 @@ offline).
 
 ## Features
 
-- **Models:** Anthropic, OpenAI, Google Gemini, Mistral, OpenRouter and OpenAI-compatible services with your own keys;
-  Ollama, LM Studio and Jan on your computer; models in the browser with WebLLM; Chrome's built-in Gemini Nano.
+- **Models:** Anthropic (or an Anthropic-compatible base URL, with or without its `/v1`), OpenAI, Google Gemini,
+  Mistral, OpenRouter and over a hundred OpenAI-compatible services of the `llm-models` catalog with your own keys; an
+  option lists the providers a browser cannot call directly, for use through a proxy you run. Ollama, LM Studio and
+  Jan on your computer; models in the browser with WebLLM; Chrome's built-in Gemini Nano.
   Streaming, reasoning display, effort levels, regenerate and edit as branches.
 - **Tools:** built-in web reading, MCP servers (Streamable HTTP, OAuth 2.1 with PKCE) with approvals that show the full
   arguments and detect definition changes, skills (`SKILL.md`), and Deep research with keyless search backends and
@@ -23,7 +25,8 @@ offline).
 - **Sync:** a GitHub repository, an S3-compatible bucket (AWS, R2, MinIO, B2, Garage), a folder, or an `.aparte.zip`
   archive. Only ciphertext and the keyslots leave the device.
 - **Also:** characters, side-by-side comparison of models, imports, exports, usage statistics, image generation, the
-  share target and notifications.
+  share target, notifications, and erasing everything the app keeps on a device.
+- **Languages:** English, French and German.
 - **CLI:** a coding agent for the terminal with sandboxed tools, skills, MCP, a JSON-lines RPC mode, and the same
   vault and sync as the web app.
 
@@ -64,11 +67,19 @@ vectors in `spec/`.
 ```sh
 cd web && bun install && bun run dev      # http://localhost:5173/aparte/
 cd web && bun run check                   # types, lint, unit tests, build, security scan, size budget
-cd web && bun run build && E2E_PORT=4530 bunx playwright test   # end to end: Chromium, WebKit, Firefox, with axe
+cd web && E2E_PORT=4530 bunx playwright test   # builds for the preview origin; Chromium, WebKit, Firefox, with axe
+cd web && bun run test:live               # real providers, on your machine only (see below)
 scripts/check.sh                          # Rust: fmt, clippy, tests, cargo deny, actionlint, shellcheck
 scripts/check-vectors.sh                  # aparte/1 vectors and fixtures, TypeScript against Rust
 scripts/check-interop.sh                  # the web app's sync code and the CLI sync one vault through Git
 ```
+
+The live suite (`web/e2e-live/`, `web/playwright.live.config.ts`) runs the production build against real model
+servers, under the same gates as the end-to-end suite, and never in CI. Each test runs only when what it needs is
+there: `ANTHROPIC_API_KEY` for Anthropic (`APARTE_LIVE_ANTHROPIC_MODEL` picks the model), and Ollama answering on
+`http://localhost:11434` with `APARTE_LIVE_OLLAMA_MODEL` (default `qwen2.5:7b`) pulled. It records no trace, video or
+screenshot, writes its results outside the repository, and checks that the key is sent only in Anthropic's
+`x-api-key` header and never stored in plaintext. The CLI's live test is `cargo test -p aparte-llm -- --ignored`.
 
 Every user-facing string goes through `web/src/i18n`, `web/src/core` stays free of React and the DOM, and the test
 and security gates are never weakened. The visual system is in [DESIGN.md](DESIGN.md), the product in
@@ -80,7 +91,7 @@ and security gates are never weakened. The visual system is in [DESIGN.md](DESIG
   shared-origin limits.
 - [docs/self-hosting.md](docs/self-hosting.md): building for an origin of your own, headers, verifying a deployment.
 - [docs/sync.md](docs/sync.md): each destination, its CORS rule and GitHub token permissions.
-- [docs/local-models.md](docs/local-models.md): Ollama, LM Studio, WebLLM and Chrome's built-in model.
+- [docs/local-models.md](docs/local-models.md): Ollama, LM Studio, Jan, WebLLM and Chrome's built-in model.
 - [docs/cli.md](docs/cli.md): install, commands, the RPC protocol, the MCP bridge.
 - [spec/](spec/README.md): the `aparte/1` format, the data model and the MCP bridge protocol.
 - [SECURITY.md](SECURITY.md): reporting a vulnerability.

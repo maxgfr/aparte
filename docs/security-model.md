@@ -49,9 +49,9 @@ phone, WebKit desktop and iPhone, Firefox) run on every pull request.
 - CacheStorage holds public code and model files only: the precache of the app (checked against the digests in the
   service worker), the sandbox runtimes (`aparte-runtime-v1`) and in-browser model files (`aparte-webllm/*`,
   `aparte-transformers`), each pinned by SHA-256 and checked again when read back.
-- localStorage holds the interface preferences listed in `web/src/app/prefs.ts` (theme, dictation and read-aloud
-  engines, push to talk, notifications, a pending Emergency Kit marker, a dismissed hint); sessionStorage holds one
-  reload flag.
+- localStorage holds the interface preferences listed in `web/src/app/prefs.ts` (theme, interface language,
+  dictation and read-aloud engines, push to talk, notifications, the Deep research sources turned on, a pending
+  Emergency Kit marker, a dismissed hint); sessionStorage holds one reload flag.
 - Answers from providers, MCP servers and fetched pages are requested with `cache: 'no-store'`, so they stay out of
   the browser's HTTP cache (`web/src/security/net.ts`).
 
@@ -118,8 +118,8 @@ the default API hosts of the providers it ships, the GitHub API (sync), the pinn
 `raw.githubusercontent.com` for importing a skill from a public repository (unauthenticated), and the keyless search
 backends and readable APIs of Deep research (Wikipedia, Marginalia, Mojeek, Hacker News, Stack Exchange, GitHub,
 OpenAlex, Crossref, Europe PMC, PubMed, ClinicalTrials.gov, the IETF datatracker and the RFC Editor). Hosts the user
-enters (a provider endpoint, a preset of the catalog they pick, an MCP server, an S3 endpoint, a page `fetch_url` reads)
-are not listed.
+enters (a provider endpoint, a preset of the catalog they pick, a provider of the full llm-models list at the base URL
+they give, an MCP server, an S3 endpoint, a page `fetch_url` reads) are not listed.
 
 Enforced by: the `fetch`, `fetch-reference`, `network-api`, `import-scripts` and `new-worker` rules of
 `bun run scan`; the network gate of every e2e test, which aborts and reports any request to a host the allowlist does
@@ -164,10 +164,10 @@ destructive tool; the research and skills unit tests.
 The master key is wrapped by keyslots: a passphrase (Argon2id, `m = 64 MiB`, `t = 3`, `p = 1`) combined with the
 16-byte Secret Key of the Emergency Kit, and a recovery key. Keyslots commit to their key before decrypting, so a
 wrong secret is told apart from a damaged slot. Keys are non-extractable `CryptoKey` objects; raw key bytes are zeroed
-after use; locking drops them (a vault a passphrase protects locks after 5 minutes without activity, after a
-30-second grace period). The
-pending Emergency Kit marker in localStorage only asks for a renewal: the vault renews the recovery key only for a
-proof it made itself, under a key derived from the master key, for a recovery slot it still holds.
+after use; locking drops them (a vault a passphrase protects locks after 5 minutes without activity; if an answer or
+other work is still running then, it locks 30 seconds after that work ends). The pending Emergency Kit marker in
+localStorage only asks for a renewal: the vault renews the recovery key only for a proof it made itself, under a key
+derived from the master key, for a recovery slot it still holds.
 
 Enforced by: the crypto, keyslot and vault unit tests (RFC and Wycheproof vectors, bit flips, hostile parameters), the
 cross-implementation vectors (`scripts/check-vectors.sh`) and the vault e2e tests.
@@ -200,6 +200,11 @@ site cannot make a protected vault open without its passphrase. "Remove passphra
 and swaps every keyslot for a new device slot in one transaction; it is refused while the device syncs. A device that
 joins a vault from its store replaces its device vault, deleting what that held, in one transaction; a vault a
 passphrase protects is never replaced.
+
+When the device slot no longer opens (its key is missing or damaged, for example after the browser's site data was
+partly cleared), nothing else opens the vault on this device unless it holds a recovery slot, which the recovery key
+then opens. The app says so and offers to start over with a new, empty vault, which deletes what the old one held only
+after the user ticks that they understand (`web/src/screens/Unlock/DeviceFailed.tsx`).
 
 Enforced by: the device slot unit tests (`web/src/core/vault/device.test.ts`: opening, a missing, malformed, replaced
 or foreign slot or key, protecting, unprotecting, a planted slot, replacing), the `meta` rules of `core/store`,
@@ -303,28 +308,42 @@ list is to run the app on an origin of its own: [docs/self-hosting.md](self-host
 - **WebRTC in a Run artifact:** an artifact the user ran is kept from WebRTC by the prelude only, since no CSP governs
   it; a browser bug that left a realm with WebRTC would let it resolve a host name of its choice.
 
-## Not offered yet: a tighter connect-src
+## Evaluated and not adopted: a connect-src narrowed after unlock
 
 The policy allows `connect-src 'self' https: http://localhost:* http://127.0.0.1:*`, because the endpoints are chosen
-by the user. A tighter policy after unlock (a second `<meta>` naming only the configured hosts, which can only narrow,
-with a reload whenever they change) was evaluated and deferred:
+by the user. A narrower policy was evaluated: once the vault is open, the page would add a second `<meta>` policy
+naming only the hosts configured in it (a provider endpoint, an MCP server, a sync store) and the fixed hosts of
+[spec/network-allowlist.json](../spec/network-allowlist.json). Policies only add up, so a second policy can narrow the
+first but never widen it, and a host added later would need a reload. It is not adopted, for these reasons:
 
-- the hosts are not all known ahead of a request: an MCP server names its OAuth authorization server during
-  discovery, Hugging Face redirects model downloads to CDN hosts that differ by region, and `fetch_url` reads a page
-  the conversation chose after the user approved it, which a narrowed policy would block until a reload that ends the
-  turn;
-- a `<meta>` policy in the page does not govern workers, which load the models and documents and are governed by the
-  policy of their own response;
-- what it would stop, script running in the page and calling `fetch`, is already prevented by the script policy and
-  Trusted Types, and every request the app makes goes through `net.ts`, which enforces the same scheme rule and
-  records every origin.
+- **Hosts the app must reach from the page are not known at unlock.** The built-in `fetch_url`
+  (`web/src/core/tools/fetch.ts`) and Deep research's `research_read` (`web/src/core/research/tools.ts`) read an
+  address the conversation chose, once the user approved it; MCP sign-in learns its authorization server, and from its
+  metadata the token endpoint, from the server's protected resource metadata during discovery
+  (`web/src/core/mcp/oauth.ts`). A narrowed policy blocks each of these until a reload, and a reload ends the answer
+  being streamed, which the app never does ([PRODUCT.md](../PRODUCT.md), principle 5). Keeping them working means
+  keeping `https:` in the policy whenever these built-ins exist, which is always: the narrowed policy would narrow
+  nothing.
+- **It would not cover the workers.** A `<meta>` policy governs its document. A dedicated worker loaded from a URL is
+  governed by the policy of its own response (`workerHeaders()` in `web/src/security/policy.ts`, sent by the service
+  worker), and the model workers are where the large downloads happen (`web/src/workers/webllmSetup.ts`,
+  `web/src/workers/transformersSetup.ts`, whose Hugging Face files redirect to CDN hosts that differ by region).
+- **What it would stop is already stopped, and what it would not stop is navigation.** It would only constrain script
+  running in the page. The script policy and Trusted Types already keep any script but the build's from running there,
+  and every request the build makes goes through `net.ts`, which enforces the same scheme rule and records every
+  origin. Against the build's own code turned hostile (a compromised dependency), `connect-src` is not a boundary: CSP
+  does not govern top-level navigation (the `navigate-to` directive was dropped from CSP Level 3), so such code can
+  send data by navigating or opening a window, and it runs before unlock, before the narrowed policy exists.
+
+The defence against a hostile build is checking the build: [Verifying the deployed app](#verifying-the-deployed-app).
 
 ## Verifying the deployed app
 
 The deploy workflow attests every file of the site: one build provenance attestation names each file with its SHA-256
 (`.github/workflows/deploy.yml`). `scripts/verify-deploy.sh` downloads the live `index.html`, `sw.js` and every file
 the attestation names, checks each against it with `gh attestation verify`, checks every precached file against the
-digest `sw.js` carries, and can rebuild a given commit locally and compare it with the live site byte for byte. See
+digest `sw.js` carries, and can rebuild a given commit (on Linux x86-64, as the deploy workflow does) and compare it
+with the live site byte for byte. See
 [docs/self-hosting.md](self-hosting.md#verifying-a-deployment).
 
 ## Reporting

@@ -21,7 +21,7 @@ on GitHub Pages under `/aparte/`; no server of any kind. A Rust CLI (`crates/`) 
 
 Privacy-minded power users and developers who already use AI chat daily and do not want their conversations, keys or
 documents to live on someone else's server. They bring their own API keys or run models on their own hardware
-(WebLLM in the browser, Ollama or LM Studio on the local network). Same person across moments:
+(WebLLM in the browser, Ollama, LM Studio or Jan on their own computer). Same person across moments:
 
 - iPhone or Android, installed as a PWA, for quick questions, voice and photos on the move; this is the first target;
 - desktop browser for long sessions: code, documents, tool calls, reading long answers;
@@ -70,10 +70,12 @@ transparency panel together.
 - Security baseline is part of the product, not an implementation detail: strict CSP, Trusted Types, no third-party
   script, style, font or CDN, all requests through one audited module, untrusted code only in sandbox frames, nothing
   stored in plaintext.
-- Interface language: English only for now, every string through i18n so more languages can follow.
+- Interface languages: English, French and German, following the device's languages or chosen on the About screen;
+  every string goes through i18n, with English as the typed source.
 - Shipped: chat with streaming, branches and effort; in-browser and local models; tools, MCP with OAuth and
   approvals; skills and Deep research; JavaScript and Python sandboxes and artifacts; local knowledge bases; voice;
-  end-to-end sync to a GitHub repository, an S3-compatible bucket, a folder or an archive; the CLI.
+  end-to-end sync to a GitHub repository, an S3-compatible bucket, a folder or an archive; erasing everything on
+  the device; the CLI.
 - Undecided: a custom domain, pricing (none is planned _(assumed)_).
 
 ## Brand Commitments
