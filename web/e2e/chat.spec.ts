@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { about } from '../src/i18n/en/about.ts'
 import { chat } from '../src/i18n/en/chat.ts'
+import { shell } from '../src/i18n/en/shell.ts'
 import {
   addProvider,
   answers,
@@ -319,4 +321,27 @@ test('a photo with GPS EXIF reaches neither the provider nor the disk with its m
   expect(plaintextHits(stored, [gps])).toEqual([])
   const userData = stored.filter((s) => s.where.startsWith('indexedDB') || s.where.startsWith('OPFS'))
   expect(plaintextHits(userData, [EXIF_MARKER.toString('latin1')])).toEqual([])
+})
+
+test('About lists every origin this page contacted and why, without paths', async ({ page, providers }) => {
+  test.setTimeout(120_000)
+  await startChat(page, providers, { ...CLAUDE, key: `sk-ant-api03-${canary('panel')}` })
+  providers.serve('anthropic', anthropicText(['Paris.']))
+  await send(page, 'What is the capital of France?')
+  await settled(page)
+  // In place, not a reload: the log lives in this page's memory only (and a reload locks the vault).
+  await page.evaluate(() => {
+    location.hash = '#/about'
+  })
+  await expect(page.getByRole('heading', { level: 1, name: shell.navAbout })).toBeVisible()
+  const panel = page.getByRole('region', { name: about.networkTitle })
+  await expect(panel).toBeVisible()
+  const row = panel.getByRole('listitem').filter({ hasText: 'https://api.anthropic.com' })
+  await expect(row).toHaveCount(1)
+  await expect(row).toContainText(about.networkPurposeProvider)
+  await expect(row).toContainText(/Requests: \d+/)
+  // The origin only: no path, no query, no key.
+  await expect(panel).not.toContainText('/v1/')
+  await expect(panel).not.toContainText('sk-ant')
+  await accessible(page, 'about with network')
 })

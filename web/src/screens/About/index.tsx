@@ -3,6 +3,7 @@ import { BUILD, REPOSITORY } from '../../app/buildInfo.ts'
 import { useTheme } from '../../app/theme.ts'
 import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
+import { type NetPurpose, networkLog } from '../../security/net.ts'
 import { ListGroup, ListRow } from '../../ui/components/List.tsx'
 import { Segmented } from '../../ui/components/Segmented.tsx'
 import { Screen } from '../../ui/shell/Screen.tsx'
@@ -28,6 +29,20 @@ const STORAGE: Record<StorageState, Key> = {
   unsupported: 'about.storageUnsupported',
 }
 
+const PURPOSES: Record<NetPurpose, Key> = {
+  app: 'about.networkPurposeApp',
+  provider: 'about.networkPurposeProvider',
+  mcp: 'about.networkPurposeMcp',
+  tool: 'about.networkPurposeTool',
+  sync: 'about.networkPurposeSync',
+  download: 'about.networkPurposeDownload',
+  catalog: 'about.networkPurposeCatalog',
+  skills: 'about.networkPurposeSkills',
+  research: 'about.networkPurposeResearch',
+}
+
+const NO_REQUESTS: readonly never[] = []
+
 const THEMES = ['system', 'light', 'dark'] as const
 
 function useStorageState(): StorageState | null {
@@ -50,6 +65,8 @@ export default function About() {
   const tt = useMemo(trustedTypesState, [])
   const worker = useSyncExternalStore(subscribeWorker, workerState, () => 'unsupported' as const)
   const storage = useStorageState()
+  // The transparency panel: what web/src/security/net.ts recorded in this page, origin and purpose only.
+  const contacted = useSyncExternalStore(networkLog.subscribe, networkLog.snapshot, () => NO_REQUESTS)
   const origin = location.origin
 
   return (
@@ -98,6 +115,22 @@ export default function About() {
             </span>
           }
         />
+      </ListGroup>
+
+      <ListGroup title={t('about.networkTitle')} footer={t('about.networkHint')}>
+        {contacted.length === 0 ? (
+          <ListRow title={t('about.networkEmpty')} />
+        ) : (
+          contacted.map((entry) => (
+            <ListRow
+              key={`${entry.purpose} ${entry.origin}`}
+              wrap
+              title={<code className={styles.origin}>{entry.origin}</code>}
+              subtitle={t(PURPOSES[entry.purpose])}
+              trailing={<span className={styles.value}>{t('about.networkRequests', { count: entry.count })}</span>}
+            />
+          ))
+        )}
       </ListGroup>
 
       <section className={styles.section} aria-labelledby="about-origin">

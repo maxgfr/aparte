@@ -13,6 +13,13 @@
   font-weight: 600;
 }
 
+/* An origin of the network panel, in mono: it is read character by character, never wrapped mid-host if it fits. */
+.origin {
+  font-family: var(--font-mono);
+  font-size: var(--text-footnote);
+  overflow-wrap: anywhere;
+}
+
 /* Laid out like a list group, for content that is prose rather than rows. */
 .section {
   display: grid;
