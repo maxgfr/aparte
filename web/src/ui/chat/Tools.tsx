@@ -1,6 +1,7 @@
 import { Globe, Wrench } from 'lucide-react'
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
-import { useToolApprovals } from '../../app/chat.tsx'
+import { useRegisteredTools, useToolApprovals } from '../../app/chat.tsx'
+import { useMcpServerName } from '../../app/mcp.tsx'
 import type { ModelDescriptor } from '../../core/contracts/ai.ts'
 import type { ToolCallState } from '../../core/contracts/chat.ts'
 import type { ApprovalScope, ToolAnnotations } from '../../core/contracts/tools.ts'
@@ -39,12 +40,17 @@ const BUILTIN_HINTS: Readonly<Record<string, Key>> = {
   fetch_url: 'tools.hint_fetch_url',
 }
 
-/** What the interface calls a tool: a built-in by its translated name, any other by its own title or name. */
+/**
+ * What the interface calls a tool: a built-in by its translated name, any other by its own title (given, or the
+ * registered tool's), else its name.
+ */
 export function useToolTitle(): (name: string, title?: string, source?: string | null) => string {
   const t = useT()
+  const registered = useRegisteredTools()
   return (name, title, source) => {
     const key = source === 'builtin' || source === undefined ? BUILTIN_NAMES[name] : undefined
-    return key === undefined ? (title ?? name) : t(key)
+    if (key !== undefined) return t(key)
+    return title ?? registered.find((r) => r.tool.name === name)?.tool.title ?? name
   }
 }
 
@@ -81,6 +87,7 @@ export interface ToolsButtonProps {
 export function ToolsButton(props: ToolsButtonProps) {
   const t = useT()
   const title = useToolTitle()
+  const serverName = useMcpServerName()
   const [open, setOpen] = useState(false)
   const approvalsId = useId()
   const approvals = useToolApprovals().filter((a) => a.conversation === null)
@@ -118,7 +125,7 @@ export function ToolsButton(props: ToolsButtonProps) {
                 <SwitchRow
                   key={o.name}
                   label={title(o.name, o.title, o.source)}
-                  hint={hintKey === undefined ? o.origin : t(hintKey)}
+                  hint={hintKey === undefined ? (serverName(o.origin) ?? o.origin) : t(hintKey)}
                   checked={props.selected.has(o.name)}
                   disabled={props.frozen}
                   onChange={(on) => props.onToggle(o.name, on)}
@@ -224,7 +231,7 @@ function statusOf(result: ResultPart | undefined): ToolCallState['status'] | 'pe
   return result.isError ? 'failed' : 'done'
 }
 
-function AnnotationChips({ annotations }: { annotations: ToolAnnotations }) {
+export function AnnotationChips({ annotations }: { annotations: ToolAnnotations }) {
   const t = useT()
   const chips: Key[] = [
     annotations.readOnly ? 'tools.readsOnly' : 'tools.changesThings',
@@ -258,6 +265,7 @@ export interface ToolCallCardProps {
 export function ToolCallCard({ call, result, live, onApprove }: ToolCallCardProps) {
   const t = useT()
   const title = useToolTitle()
+  const serverName = useMcpServerName()
   const [scope, setScope] = useState<ApprovalScope>('once')
   const status = live?.status ?? statusOf(result)
   const name = title(call.name, live?.title, live?.source)
@@ -277,7 +285,7 @@ export function ToolCallCard({ call, result, live, onApprove }: ToolCallCardProp
         <Wrench size={16} strokeWidth={1.75} aria-hidden="true" />
         <span className={styles.cardName}>{name}</span>
         {live?.origin !== undefined && (
-          <span className={styles.mono}>{t('tools.origin', { origin: live.origin })}</span>
+          <span className={styles.mono}>{t('tools.origin', { origin: serverName(live.origin) ?? live.origin })}</span>
         )}
         <span className={styles.status} data-tone={status} role={live ? 'status' : undefined}>
           {t(STATUS_KEYS[status])}

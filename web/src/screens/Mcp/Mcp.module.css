@@ -1,0 +1,45 @@
+/* The MCP server screens (screens/Mcp): the tool list of a server. */
+
+.tools {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tool {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+  padding-bottom: var(--space-3);
+  border-bottom: var(--hairline-width) solid var(--hairline);
+}
+
+.tool > button {
+  justify-self: start;
+}
+
+.toolMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mono {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-footnote);
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--text-footnote);
+}

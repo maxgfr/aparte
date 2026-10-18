@@ -44,7 +44,7 @@ Top-level `Y.Map`s, each `id -> Y.Map` of one entity whose fields are `Any` valu
 | `personas` | `{id, name, systemPrompt: string, model?: ModelRef, params?: object, avatar?: blob ref}` |
 | `prompts` | `{id, title, body: string, tags: string[]}` |
 | `providers` | [3.3](#33-provider) |
-| `mcp` | `{id, name, transport: 'http' \| 'sse', url, auth: 'none' \| 'oauth' \| 'bearer', enabled: boolean, approvals: object}` |
+| `mcp` | [3.5](#35-mcp-server) |
 | `skills` | `{id, name, description, source: object, files?: blob ref, enabled: boolean}` |
 | `knowledge` | `{id, name, documents: {blob: blob ref, name, mediaType}[]}` |
 | `settings` | not entities: `settingName -> Any`, synced preferences: `defaultModel: ModelRef \| null`, `defaultEffort: Effort \| null`, `defaultSystem: string`... |
@@ -112,6 +112,26 @@ two devices granting different tools never overwrite each other:
 
 An approval holds only while the tool's current fingerprint equals `fingerprint`. Granting again replaces the value
 (last writer wins); revoking deletes the key. These are not entities and have no trash.
+
+### 3.5 MCP server
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | string | server id; the `origin` of its tools ([8.1](#81-definition)) |
+| `name` | string | what the interface calls it |
+| `prefix` | string | `^[a-z][a-z0-9]{0,15}$`, unique among the servers that are not trashed, fixed at creation: the server's tools are registered as `<prefix>__<tool>` (characters outside `[A-Za-z0-9_-]` become `_`; a name longer than 64 characters or taken by another tool of the server ends with a short hash of the MCP name instead) |
+| `transport` | `'http' \| 'sse'` | Streamable HTTP, or the legacy HTTP+SSE transport |
+| `url` | string | the endpoint: https (http on the loopback only), without credentials, query or fragment |
+| `auth` | `'none' \| 'oauth' \| 'bearer' \| 'headers'` | how the app authenticates; the secret itself is a device-only record ([6](#6-secrets)) |
+| `enabled` | boolean | off: never contacted, no tool offered |
+| `tools` | `{name, enabled: boolean, fingerprint}[]` sorted by `name` | the user's choice per tool of the server, by its MCP name, with the fingerprint ([8.2](#82-identity-and-fingerprint)) of the definition the user accepted |
+| `createdAt`, `updatedAt`, `deletedAt?` | number | |
+
+A tool is offered only when its entry is `enabled` and its live definition has the entry's `fingerprint`; a tool
+whose definition changed is held back until the user accepts it again (which writes the new fingerprint), and a tool
+without an entry is new and off. The first listing of a server just added writes an entry for every tool, enabled.
+`tools` is replaced as a whole (last writer wins). No field holds a secret: a value shaped like a key or token is
+refused.
 
 ## 4. Conversation shard documents
 
@@ -264,7 +284,7 @@ Secrets never enter a Yjs document. They are of two kinds.
 | Purpose | Content |
 |---|---|
 | `sync-credential` | credentials of a sync destination (a GitHub token, S3 keys) |
-| `oauth-token` | OAuth tokens: MCP servers, Dropbox, OneDrive, GitLab |
+| `oauth-token` | OAuth tokens: MCP servers, Dropbox, OneDrive, GitLab. For an MCP server, the id is `mcp:<serverId>` and the value the UTF-8 JSON `{"kind": "mcp-auth", "server": "<serverId>", "auth": ...}`, where `auth` is `{"kind": "bearer", "token"}`, `{"kind": "headers", "headers": {name: value}}` or `{"kind": "oauth", "client": {clientId, clientSecret?, tokenAuth, issuer, authorizationEndpoint, tokenEndpoint, issParameter, resource?, scope?, redirectUri}, "tokens"?: {accessToken, tokenType, refreshToken?, expiresAt?, scope?}}` |
 | `provider-key` | an API key, under the provider id: the UTF-8 JSON `{"kind": "api-key", "provider": "<providerId>", "key": "<the key>"}` |
 | `device` | the `deviceId` |
 

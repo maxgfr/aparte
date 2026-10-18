@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'sha256-19f8jMDfiDnhWVmUdv5fLrSc5TGvrIjnw/66t0zLXBA='; style-src 'sha256-wGh4PFHbbncqo8mSdsN1XkR6gIMP9KndkJTm8meuyag='; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <title>Aparté sign-in</title>
+    <style>:root{color-scheme:light dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f6f4ef;color:#1d1b17}
+@media (prefers-color-scheme:dark){:root{background:#161513;color:#ecebe7}}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box}
+main{max-width:28rem;text-align:center}
+h1{font-size:1.25rem;margin:0 0 .5rem}
+p{margin:0;line-height:1.5}</style>
+  </head>
+  <!--
+    The end of an OAuth sign-in (web/src/core/mcp/callback.ts). The authorization server sends the popup here with
+    `code` and `state`; this page relays {type, state, code, iss, error} on the BroadcastChannel named after the
+    state, drops the query from the address and the history, and closes. It reads nothing else, stores nothing and
+    loads nothing but the app's icon: its policy allows its own inline script and style by hash, and images from this
+    origin (web/build/oauth-callback.test.ts).
+  -->
+  <body>
+    <main>
+      <h1>Aparté</h1>
+      <p id="status" role="status">Finishing the sign-in…</p>
+    </main>
+    <script>'use strict'
+;(() => {
+  const status = document.getElementById('status')
+  const say = (text) => {
+    if (status) status.textContent = text
+  }
+  if (window.top !== window.self) {
+    say('This page cannot run inside another page.')
+    return
+  }
+  const params = new URLSearchParams(window.location.search)
+  // The code leaves the address bar and the history before anything else happens.
+  window.history.replaceState(null, '', window.location.pathname)
+  const state = params.get('state') || ''
+  if (!/^[A-Za-z0-9_-]{43}$/.test(state)) {
+    say('This sign-in answer is not valid. Close this window and try again from Aparté.')
+    return
+  }
+  const pick = (name) => {
+    const value = params.get(name)
+    return value === null ? null : value.slice(0, 4096)
+  }
+  const message = { type: 'aparte-oauth-callback', state, code: pick('code'), iss: pick('iss'), error: pick('error') }
+  const channel = new BroadcastChannel(`aparte-oauth-${state}`)
+  channel.postMessage(message)
+  channel.close()
+  say(
+    message.error === null
+      ? 'Signed in. You can close this window and go back to Aparté.'
+      : 'The sign-in did not complete. You can close this window and try again from Aparté.',
+  )
+  window.setTimeout(() => window.close(), 400)
+})()</script>
+  </body>
+</html>

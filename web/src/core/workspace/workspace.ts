@@ -25,6 +25,7 @@ import {
   LockedError,
   type ShardId,
 } from '../contracts/crypto.ts'
+import type { McpServerConfig, McpServerPatch, McpServers, McpToolChoice, NewMcpServer } from '../contracts/mcp.ts'
 import type { ToolApproval, ToolApprovals } from '../contracts/tools.ts'
 import type {
   Conversation,
@@ -124,6 +125,14 @@ const SECRET_SHAPED =
 const SECRET_NAME = /key|token|secret|password|passwd|auth|credential|bearer/i
 
 const ID = /^[a-z2-7]{26}$/
+
+const MCP_FIELDS: ReadonlySet<string> = new Set(['name', 'prefix', 'transport', 'url', 'auth', 'enabled', 'tools'])
+const MCP_PATCHABLE: ReadonlySet<string> = new Set(['name', 'transport', 'url', 'auth', 'enabled', 'tools'])
+const MCP_TRANSPORTS: ReadonlySet<string> = new Set(['http', 'sse'])
+const MCP_AUTHS: ReadonlySet<string> = new Set(['none', 'oauth', 'bearer', 'headers'])
+const MCP_PREFIX = /^[a-z][a-z0-9]{0,15}$/
+/** The most tool choices a server keeps; a server listing more is refused by the manager first. */
+const MCP_MAX_TOOLS = 512
 
 export const isId = (value: unknown): value is Id => typeof value === 'string' && ID.test(value)
 
@@ -301,6 +310,123 @@ function checkBaseUrl(value: unknown): string {
     throw new InvalidInputError('baseUrl must not carry credentials, a query or a fragment')
   }
   return text.replace(/\/+$/, '')
+}
+
+/** An MCP endpoint: https (http on the loopback), no credentials, query or fragment (tokens go in device secrets). */
+function checkMcpUrl(value: unknown): string {
+  const text = checkText(value, 'url')
+  let url: URL
+  try {
+    url = new URL(text)
+  } catch (cause) {
+    throw new InvalidInputError('url is not a URL', { cause })
+  }
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+    throw new InvalidInputError('url must be https (http only on the loopback)')
+  }
+  if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
+    throw new InvalidInputError('url must not carry credentials, a query or a fragment')
+  }
+  return url.href
+}
+
+function checkMcpTools(value: unknown): McpToolChoice[] {
+  if (!Array.isArray(value)) throw new InvalidInputError('tools must be an array')
+  if (value.length > MCP_MAX_TOOLS) throw new InvalidInputError('Too many tools')
+  const seen = new Set<string>()
+  const out = value.map((entry, i): McpToolChoice => {
+    if (entry === null || typeof entry !== 'object') throw new InvalidInputError(`tools[${i}] must be an object`)
+    const e = entry as Record<string, unknown>
+    const name = checkText(e.name, `tools[${i}].name`)
+    if (name === '' || seen.has(name)) throw new InvalidInputError(`tools[${i}].name is empty or repeated`)
+    seen.add(name)
+    return {
+      name,
+      enabled: checkBool(e.enabled, `tools[${i}].enabled`),
+      fingerprint: checkText(e.fingerprint, `tools[${i}].fingerprint`),
+    }
+  })
+  return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+}
+
+/** Validates MCP server fields; every field is required on create, none on update (and `prefix` never changes). */
+function checkMcp(input: Record<string, unknown>, partial: boolean): Map<string, unknown> {
+  const out = new Map<string, unknown>()
+  for (const [field, value] of Object.entries(input)) {
+    if (value === undefined) continue
+    if (!(partial ? MCP_PATCHABLE : MCP_FIELDS).has(field)) {
+      if (SECRET_NAME.test(field))
+        throw new InvalidInputError(`An MCP server never holds a ${field}: secrets are device-only`)
+      throw new InvalidInputError(`Unknown or fixed MCP server field ${field}`)
+    }
+    switch (field) {
+      case 'name': {
+        const name = checkText(value, 'name').trim()
+        if (name === '') throw new InvalidInputError('name is empty')
+        out.set(field, name)
+        break
+      }
+      case 'prefix':
+        if (typeof value !== 'string' || !MCP_PREFIX.test(value)) throw new InvalidInputError('Invalid prefix')
+        out.set(field, value)
+        break
+      case 'transport':
+        if (typeof value !== 'string' || !MCP_TRANSPORTS.has(value)) throw new InvalidInputError('Unknown transport')
+        out.set(field, value)
+        break
+      case 'auth':
+        if (typeof value !== 'string' || !MCP_AUTHS.has(value)) throw new InvalidInputError('Unknown auth')
+        out.set(field, value)
+        break
+      case 'url':
+        out.set(field, checkMcpUrl(value))
+        break
+      case 'enabled':
+        out.set(field, checkBool(value, field))
+        break
+      case 'tools':
+        out.set(field, toAny(checkMcpTools(value), 'tools'))
+        break
+    }
+    checkSecretFree(out.get(field), field)
+  }
+  if (!partial) {
+    for (const field of ['name', 'prefix', 'transport', 'url', 'auth'])
+      if (!out.has(field)) throw new InvalidInputError(`${field} missing`)
+    if (!out.has('enabled')) out.set('enabled', true)
+    out.set('tools', [])
+  }
+  return out
+}
+
+function readMcp(id: Id, m: Y.Map<unknown>): McpServerConfig {
+  // Unknown fields (a newer build's) are kept: a reader never drops what it does not understand.
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of m.entries()) if (value !== undefined) out[key] = value
+  out.id = id
+  out.name = str(out.name)
+  out.prefix = str(out.prefix)
+  out.transport = MCP_TRANSPORTS.has(str(out.transport)) ? out.transport : 'http'
+  out.url = str(out.url)
+  out.auth = MCP_AUTHS.has(str(out.auth)) ? out.auth : 'none'
+  out.enabled = bool(out.enabled)
+  out.tools = Array.isArray(out.tools)
+    ? (out.tools as unknown[]).filter(
+        (t): t is McpToolChoice =>
+          t !== null &&
+          typeof t === 'object' &&
+          typeof (t as McpToolChoice).name === 'string' &&
+          typeof (t as McpToolChoice).enabled === 'boolean' &&
+          typeof (t as McpToolChoice).fingerprint === 'string',
+      )
+    : []
+  out.createdAt = num(out.createdAt) ?? 0
+  out.updatedAt = num(out.updatedAt) ?? out.createdAt
+  const deletedAt = num(out.deletedAt)
+  if (deletedAt === undefined) delete out.deletedAt
+  else out.deletedAt = deletedAt
+  return frozenCopy<McpServerConfig>(out)
 }
 
 /** Validates provider fields; returns the Any values to write, `undefined` meaning "remove this optional field". */
@@ -687,7 +813,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   const listeners = new Map<string, Set<Listener>>()
   const scopeKey = (scope: Scope): string => {
     if (typeof scope === 'string') {
-      if (!['conversations', 'folders', 'settings', 'providers', 'toolApprovals'].includes(scope)) {
+      if (!['conversations', 'folders', 'settings', 'providers', 'toolApprovals', 'mcp'].includes(scope)) {
         throw new InvalidInputError('Unknown scope')
       }
       return scope
@@ -728,6 +854,9 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
   const folderLists = new Map<string, readonly Folder[]>()
   const providerCache = new Map<Id, ProviderConfig>()
   let providerList: readonly ProviderConfig[] | null = null
+  let mcpMap: Y.Map<Y.Map<unknown>>
+  const mcpCache = new Map<Id, McpServerConfig>()
+  let mcpList: readonly McpServerConfig[] | null = null
   const settingsCache = new Map<string, unknown>()
   const threadCaches = new Map<Id, ConvCache>()
 
@@ -737,6 +866,12 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     settingsMap = doc.getMap('settings')
     providersMap = doc.getMap('providers')
     approvalsMap = doc.getMap('toolApprovals')
+    mcpMap = doc.getMap('mcp')
+    mcpMap.observeDeep((events) => {
+      for (const id of changedKeys(events, mcpMap)) mcpCache.delete(id)
+      mcpList = null
+      emit(['mcp'])
+    })
     approvalsMap.observe(() => {
       approvalList = null
       emit(['toolApprovals'])
@@ -1259,6 +1394,74 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     },
   }
 
+  // MCP servers
+
+  const getMcp = (id: Id): McpServerConfig | undefined => {
+    const cached = mcpCache.get(id)
+    if (cached) return cached
+    const m = mcpMap.get(id)
+    if (!(m instanceof Y.Map)) return undefined
+    const value = readMcp(id, m)
+    mcpCache.set(id, value)
+    return value
+  }
+  const mcpEntity = (id: Id): Y.Map<unknown> => {
+    const m = typeof id === 'string' ? mcpMap.get(id) : undefined
+    if (!(m instanceof Y.Map)) throw new InvalidInputError('Unknown MCP server')
+    return m
+  }
+
+  const mcp: McpServers = {
+    list() {
+      live()
+      if (mcpList) return mcpList
+      const out: McpServerConfig[] = []
+      for (const id of mcpMap.keys()) {
+        const server = getMcp(id)
+        if (server && server.deletedAt === undefined) out.push(server)
+      }
+      out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      mcpList = Object.freeze(out)
+      return mcpList
+    },
+    get(id) {
+      live()
+      return getMcp(id)
+    },
+    create(input: NewMcpServer) {
+      live()
+      if (input === null || typeof input !== 'object') throw new InvalidInputError('A server must be an object')
+      const fields = checkMcp(input as unknown as Record<string, unknown>, false)
+      if (mcp.list().some((s) => s.prefix === fields.get('prefix'))) {
+        throw new InvalidInputError('This prefix is taken by another server')
+      }
+      const t = now()
+      const id = newId()
+      const entity = new Y.Map<unknown>([['id', id], ...fields.entries(), ['createdAt', t], ['updatedAt', t]])
+      local(indexDoc(), () => mcpMap.set(id, entity))
+      return id
+    },
+    update(id, patch: McpServerPatch) {
+      live()
+      const m = mcpEntity(id)
+      if (patch === null || typeof patch !== 'object') throw new InvalidInputError('A patch must be an object')
+      const fields = checkMcp(patch as Record<string, unknown>, true)
+      if (fields.size === 0) return
+      const t = now()
+      local(indexDoc(), () => {
+        for (const [key, value] of fields) m.set(key, value)
+        m.set('updatedAt', t)
+      })
+    },
+    trash(id) {
+      live()
+      const m = mcpEntity(id)
+      if (m.has('deletedAt')) return
+      const t = now()
+      local(indexDoc(), () => m.set('deletedAt', t))
+    },
+  }
+
   // Threads
 
   const threads = new Map<Id, Thread>()
@@ -1418,6 +1621,7 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     settings,
     providers,
     toolApprovals,
+    mcp,
     async thread(conversationId) {
       live()
       const m = convEntity(conversationId)
@@ -1537,6 +1741,8 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       folderLists.clear()
       providerCache.clear()
       providerList = null
+      mcpCache.clear()
+      mcpList = null
       approvalList = null
       settingsCache.clear()
       shardIds.clear()

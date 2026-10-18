@@ -37,6 +37,7 @@ import type {
 import type { LocalBlobs } from '../core/media/blobs.ts'
 import type { SearchIndex } from '../core/search/search.ts'
 import { holdReload } from '../pwa/register.ts'
+import { createMcpHost, type McpHost } from './mcpHost.ts'
 import { resolveModelWith } from './providers.tsx'
 import { useVault } from './vault.tsx'
 
@@ -58,6 +59,8 @@ import { useVault } from './vault.tsx'
  *   auto-lock nor an update cuts an answer.
  * - The tool registry holds the built-in tools (web/src/core/tools/builtins.ts) for the session only; approvals that
  *   outlive a call are stored encrypted in the workspace (`toolApprovals`).
+ * - The MCP client (app/mcpHost.ts) adds the tools of the MCP servers to the same registry while the session is open;
+ *   it is disposed with the session, before the workspace closes.
  */
 
 /** The core modules a session uses, loaded together after unlock. */
@@ -82,6 +85,8 @@ export interface ChatSession {
   readonly search: SearchIndex
   /** The tools chats may declare (contracts/tools.ts), registered when the session opens. */
   readonly tools: ToolRegistry
+  /** The MCP client, loaded once the vault has a server (or a screen asks for it). */
+  readonly mcp: McpHost
   readonly modules: ChatModules
   /** The bundled model catalog, null until its chunk has loaded (the session opens without waiting for it). */
   readonly catalog: Catalog | null
@@ -208,6 +213,7 @@ async function openSession(vault: Vault): Promise<{
   for (const tool of builtinsModule.builtinTools({ clock, search, download: toolFetchModule.toolFetch })) {
     await tools.register(tool)
   }
+  const mcp = createMcpHost({ workspace, registry: tools, store, rng })
   const chat = controller.createChatController({
     workspace,
     holdLock: (reason: string) => vault.holdLock(reason),
@@ -270,6 +276,7 @@ async function openSession(vault: Vault): Promise<{
     closed = true
     try {
       await chat.dispose()
+      await mcp.dispose().catch(() => undefined)
     } finally {
       // The model workers hold the conversation in memory (its prompt, its cache on the GPU): they go with the lock.
       local.releaseLocal()
@@ -293,6 +300,7 @@ async function openSession(vault: Vault): Promise<{
     blobs,
     search,
     tools,
+    mcp,
     modules,
     catalog,
     resolveModel,

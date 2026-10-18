@@ -19,6 +19,11 @@ export const paths = {
   sync: '/sync',
   /** A device without a vault takes one from its sync store. */
   syncJoin: '/sync/join',
+  /** The MCP servers. */
+  mcp: '/mcp',
+  mcpNew: '/mcp/new',
+  /** One MCP server: `/mcp/<server id>`. */
+  mcpServer: '/mcp/:id',
 } as const
 
 export type RouteName = keyof typeof paths
@@ -31,6 +36,11 @@ export function chatPath(id: string): string {
 /** The path of one provider's settings. */
 export function providerPath(id: string): string {
   return `/providers/${encodeURIComponent(id)}`
+}
+
+/** The path of one MCP server's settings. */
+export function mcpServerPath(id: string): string {
+  return `/mcp/${encodeURIComponent(id)}`
 }
 
 /**

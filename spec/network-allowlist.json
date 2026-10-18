@@ -3,7 +3,7 @@
   "$purposes": {
     "app": "The app's own files: the shell, its chunks, the manifest, the service worker and its precache.",
     "provider": "The default API hosts of the model providers the app ships (Anthropic, OpenAI, Google Gemini, Mistral, OpenRouter). User-entered endpoints (local servers, OpenAI-compatible services, custom base URLs) are not listed.",
-    "mcp": "Placeholder: fixed MCP servers. User-added servers are not listed.",
+    "mcp": "MCP servers and their OAuth authorization servers. Every one is added by the user (an endpoint, or an authorization server it names), so none are listed; net.ts requires HTTPS or the loopback.",
     "tool": "Hosts a tool reaches once the user approved the call (the built-in fetch_url): chosen by the conversation, never fixed, so none are listed.",
     "sync": "The fixed API hosts of the sync destinations the app ships (GitHub). Carries the aparte/1 objects only: ciphertext, the format marker and the keyslots. User-entered stores (an S3 endpoint, a self-hosted relay) are not listed.",
     "download": "Pinned, hash-checked downloads of in-browser model files and runtimes, made by the model workers only: Hugging Face model repositories read at a fixed commit (huggingface.co, which redirects the large files to its CDN hosts below, by region), and the compiled WebLLM model libraries at a fixed commit of mlc-ai/binary-mlc-llm-libs (raw.githubusercontent.com). Every file is checked against a SHA-256 shipped with the app; ONNX Runtime is self-hosted under the app's origin.",

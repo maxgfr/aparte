@@ -23,6 +23,7 @@
 
 import type { Effort, ProviderConfig, StopReason, Usage } from './ai.ts'
 import type { Bytes, DocId, Rng, ShardId, Subkeys } from './crypto.ts'
+import type { McpServers } from './mcp.ts'
 import type { LocalStore } from './store.ts'
 import type { ToolApprovals, ToolSource } from './tools.ts'
 import type { Clock } from './vault.ts'
@@ -313,6 +314,8 @@ export type Scope =
   | 'providers'
   /** The stored tool approvals. */
   | 'toolApprovals'
+  /** The MCP servers' configuration. */
+  | 'mcp'
   /** The messages and leaf of one conversation. */
   | { readonly conversation: Id }
 
@@ -330,6 +333,8 @@ export interface Workspace {
   readonly providers: Providers
   /** Tool approvals that outlive a call (contracts/tools.ts): "always" and "for this conversation". */
   readonly toolApprovals: ToolApprovals
+  /** MCP servers (contracts/mcp.ts): configuration only; their secrets are device-only local records. */
+  readonly mcp: McpServers
   /** Loads the conversation's shard (once) and returns its tree; InvalidInputError for an unknown or purged id. */
   thread(conversationId: Id): Promise<Thread>
   /** Runs `fn` as one transaction per touched document (one update each). */

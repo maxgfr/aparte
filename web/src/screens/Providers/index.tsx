@@ -102,6 +102,10 @@ export default function Providers() {
         )}
       </section>
 
+      <ListGroup title={t('mcp.entry')}>
+        <ListRow href={paths.mcp} title={t('mcp.entry')} subtitle={t('mcp.entryHint')} />
+      </ListGroup>
+
       <ListGroup title={t('chat.providerLocal')}>
         {LOCAL_PRESETS.map((preset) => (
           <ListRow

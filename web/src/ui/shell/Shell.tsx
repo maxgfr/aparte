@@ -37,7 +37,7 @@ const TABS: readonly Tab[] = [
   { href: paths.welcome, label: 'shell.navHome', icon: MessageSquareLock, width: 'wide-or-locked' },
   { href: paths.chat, label: 'chat.navNewChat', icon: SquarePen, unlocked: true, width: 'narrow' },
   { href: paths.conversations, label: 'chat.navChats', icon: MessagesSquare, also: [paths.chat], unlocked: true },
-  { href: paths.providers, label: 'chat.navProviders', icon: Sparkles, unlocked: true },
+  { href: paths.providers, label: 'chat.navProviders', icon: Sparkles, also: [paths.mcp], unlocked: true },
   { href: paths.sync, label: 'sync.navSync', icon: RefreshCw, unlocked: true },
   { href: paths.about, label: 'shell.navAbout', icon: Info },
 ]

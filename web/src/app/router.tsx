@@ -18,6 +18,8 @@ const Providers = lazyChunk(() => import('../screens/Providers/index.tsx').then(
 const Provider = lazyChunk(() => import('../screens/Providers/Provider.tsx').then((m) => m.default))
 const Sync = lazyChunk(() => import('../screens/Sync/index.tsx').then((m) => m.default))
 const SyncJoin = lazyChunk(() => import('../screens/Sync/Join.tsx').then((m) => m.default))
+const McpServers = lazyChunk(() => import('../screens/Mcp/index.tsx').then((m) => m.default))
+const McpServer = lazyChunk(() => import('../screens/Mcp/Server.tsx').then((m) => m.default))
 
 /** Hash routing (path and query in the hash): GitHub Pages serves one file and has no SPA rewrite. */
 export function HashRouter({ children }: { children: ReactNode }) {
@@ -45,6 +47,9 @@ export function Routes() {
           <Route path={paths.provider} component={Provider} />
           <Route path={paths.sync} component={Sync} />
           <Route path={paths.syncJoin} component={SyncJoin} />
+          <Route path={paths.mcp} component={McpServers} />
+          <Route path={paths.mcpNew} component={McpServer} />
+          <Route path={paths.mcpServer} component={McpServer} />
           {/* Recovery is a screen of the lock gate; once the vault is open, its address leads home. */}
           <Route path={paths.recover}>
             <Redirect to={paths.welcome} replace />
