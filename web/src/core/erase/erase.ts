@@ -7,7 +7,7 @@
  * - Only Aparté's own data goes. The origin is shared with other sites (`maxgfr.github.io`), so a database is deleted
  *   only when it is one the app opens or its name starts with `aparte-`, and a cache only when its name starts with
  *   `aparte-`; anything else on the origin is left as it is.
- * - The app precache (Workbox's `workbox-precache-*`, public code checked against the service worker's digests) stays,
+ * - The app precache (`aparte-precache-*`, public code checked against the service worker's digests) stays,
  *   so the app still opens offline. Downloaded model files and sandbox runtimes (public, pinned files) stay unless the
  *   caller asks for them to go.
  * - Aparté keeps nothing in the origin private file system, so there is nothing to erase there.
@@ -20,6 +20,12 @@ export const APP_DATABASES: readonly string[] = ['aparte-v1', 'aparte-inbox-v1']
 
 /** The prefix of every database and cache name the app creates. */
 export const APP_PREFIX = 'aparte-'
+
+/**
+ * The app precache: the service worker names it `aparte-precache-v2-<scope>` (src/sw.ts sets Workbox's prefix), and
+ * serves the app from nothing else, so deleting it leaves a page it can no longer verify.
+ */
+const PRECACHE = /^aparte-precache-/
 
 /** Caches of downloaded on-device models (WebLLM, transformers.js) and sandbox runtimes (Pyodide, Mermaid). */
 const MODEL_CACHE = /^aparte-(?:webllm\/|transformers$|runtime-)/
@@ -58,9 +64,12 @@ export function isAppDatabase(name: string): boolean {
   return APP_DATABASES.includes(name) || name.startsWith(APP_PREFIX)
 }
 
-/** Whether erasing deletes the cache `name`: Aparté's own, and a model or runtime cache only when asked. */
+/**
+ * Whether erasing deletes the cache `name`: Aparté's own but never its precache, and a model or runtime cache only
+ * when asked.
+ */
 export function erasesCache(name: string, options: EraseOptions = {}): boolean {
-  if (!name.startsWith(APP_PREFIX)) return false
+  if (!name.startsWith(APP_PREFIX) || PRECACHE.test(name)) return false
   return options.models === true || !MODEL_CACHE.test(name)
 }
 

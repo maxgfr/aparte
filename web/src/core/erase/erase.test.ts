@@ -38,6 +38,8 @@ function memoryCaches(names: readonly string[]): CachesLike & { readonly names: 
 }
 
 const PRECACHE = 'workbox-precache-v2-https://maxgfr.github.io/aparte/'
+/** The name src/sw.ts gives the app precache (Workbox prefix `aparte`). */
+const APP_PRECACHE = 'aparte-precache-v2-https://maxgfr.github.io/aparte/'
 const SIBLING_PRECACHE = 'workbox-precache-v2-https://maxgfr.github.io/other/'
 
 describe('erasing this device', () => {
@@ -76,6 +78,7 @@ describe('erasing this device', () => {
 
   test('keeps the app precache, and the models and runtimes unless asked, and every cache of another site', async () => {
     const all = [
+      APP_PRECACHE,
       PRECACHE,
       SIBLING_PRECACHE,
       'aparte-webllm/model',
@@ -97,7 +100,7 @@ describe('erasing this device', () => {
       'aparte-webllm/model',
       'aparte-webllm/wasm',
     ])
-    expect([...dropped.names].sort()).toEqual([PRECACHE, SIBLING_PRECACHE, 'other-site-cache'].sort())
+    expect([...dropped.names].sort()).toEqual([APP_PRECACHE, PRECACHE, SIBLING_PRECACHE, 'other-site-cache'].sort())
   })
 
   test('names: only Aparté’s own databases and caches', () => {
@@ -108,6 +111,7 @@ describe('erasing this device', () => {
     expect(erasesCache('aparte-webllm/config')).toBe(false)
     expect(erasesCache('aparte-webllm/config', { models: true })).toBe(true)
     expect(erasesCache(PRECACHE, { models: true })).toBe(false)
+    expect(erasesCache(APP_PRECACHE, { models: true })).toBe(false)
     expect(erasesCache('webllm/model', { models: true })).toBe(false)
   })
 })

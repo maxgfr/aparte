@@ -78,6 +78,17 @@ function names(page: Page): Promise<{ databases: string[]; caches: string[]; loc
   })
 }
 
+/** Each precache of the page's origin, with the number of files it holds. */
+function precached(page: Page): Promise<{ name: string; files: number }[]> {
+  return page.evaluate(async () => {
+    const out: { name: string; files: number }[] = []
+    for (const name of (await caches.keys()).sort()) {
+      if (name.includes('precache')) out.push({ name, files: (await (await caches.open(name)).keys()).length })
+    }
+    return out
+  })
+}
+
 /** Plays another site of the origin and the app's own downloads: a key, a database and a cache of each. */
 async function plant(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -172,7 +183,10 @@ test('erasing from the settings, models included, starts every open tab over', a
   const before = await vaultId(page)
   expect(await vaultId(second)).toBe(before)
   await plant(page)
-  const precache = (await names(page)).caches.filter((n) => n.includes('precache'))
+  // The worker has installed the app precache (it is named after Workbox's `aparte` prefix, src/sw.ts).
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined))
+  await expect.poll(async () => (await precached(page)).length, { timeout: 30_000 }).toBeGreaterThan(0)
+  const precache = await precached(page)
 
   await openEraseFromSettings(page)
   await expect(sheet(page).getByText(vault.eraseLostLead)).toHaveCount(0)
@@ -194,8 +208,9 @@ test('erasing from the settings, models included, starts every open tab over', a
   expect(after.caches).not.toContain('aparte-webllm/model')
   expect(after.caches).not.toContain('aparte-runtime-v1')
   expect(after.caches).toContain('other-site-cache')
-  // The app precache stays: the app still opens offline.
-  for (const name of precache) expect(after.caches).toContain(name)
+  // The app precache stays, whole: the app still opens offline. (A deleted one would come back with only the few
+  // files the next page load fetched again, and none at all once the deployed build is newer than the worker.)
+  expect(await precached(page)).toEqual(precache)
   expect(after.local).toEqual(['other-site:session'])
   expect(after.databases).toContain('other-site-db')
 })
