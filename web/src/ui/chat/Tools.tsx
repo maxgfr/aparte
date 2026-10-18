@@ -14,6 +14,7 @@ import { Segmented } from '../components/Segmented.tsx'
 import { Sheet } from '../components/Sheet.tsx'
 import { SwitchRow } from '../components/Switch.tsx'
 import { LinkSheet } from '../render/Sanitized.tsx'
+import { ToolOutputs } from './Outputs.tsx'
 import styles from './Tools.module.css'
 
 /*
@@ -42,18 +43,41 @@ const BUILTIN_HINTS: Readonly<Record<string, Key>> = {
   search_knowledge: 'knowledge.toolHint',
 }
 
+const SANDBOX_NAMES: Readonly<Record<string, Key>> = {
+  run_js: 'sandbox.name_run_js',
+  run_python: 'sandbox.name_run_python',
+}
+
+const SANDBOX_HINTS: Readonly<Record<string, Key>> = {
+  run_js: 'sandbox.hint_run_js',
+  run_python: 'sandbox.hint_run_python',
+}
+
 /**
- * What the interface calls a tool: a built-in by its translated name, any other by its own title (given, or the
- * registered tool's), else its name.
+ * What the interface calls a tool: a built-in or sandbox tool by its translated name, any other by its own title
+ * (given, or the registered tool's), else its name.
  */
 export function useToolTitle(): (name: string, title?: string, source?: string | null) => string {
   const t = useT()
   const registered = useRegisteredTools()
   return (name, title, source) => {
-    const key = source === 'builtin' || source === undefined ? BUILTIN_NAMES[name] : undefined
+    const key =
+      source === 'builtin' || source === undefined
+        ? (BUILTIN_NAMES[name] ?? (source === undefined ? SANDBOX_NAMES[name] : undefined))
+        : source === 'sandbox'
+          ? SANDBOX_NAMES[name]
+          : undefined
     if (key !== undefined) return t(key)
     return title ?? registered.find((r) => r.tool.name === name)?.tool.title ?? name
   }
+}
+
+/** iPhone and iPad (iPadOS reports a Mac with touch), where a tab's memory is tight for Pyodide and its packages. */
+function onIOS(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return (
+    /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  )
 }
 
 /** One tool a chat may use, as the tool sheet lists it. */
@@ -122,7 +146,12 @@ export function ToolsButton(props: ToolsButtonProps) {
               onChange={props.onWebSearch}
             />
             {props.options.map((o) => {
-              const hintKey = o.source === 'builtin' ? BUILTIN_HINTS[o.name] : undefined
+              const hintKey =
+                o.source === 'builtin'
+                  ? BUILTIN_HINTS[o.name]
+                  : o.source === 'sandbox'
+                    ? SANDBOX_HINTS[o.name]
+                    : undefined
               return (
                 <SwitchRow
                   key={o.name}
@@ -298,6 +327,9 @@ export function ToolCallCard({ call, result, live, onApprove }: ToolCallCardProp
           <p className={styles.approvalTitle}>{t('tools.approveTitle', { name })}</p>
           <p className={styles.footnote}>{t('tools.approveBody')}</p>
           {live?.annotations && <AnnotationChips annotations={live.annotations} />}
+          {live?.source === 'sandbox' && call.name === 'run_python' && onIOS() && (
+            <p className={styles.warning}>{t('sandbox.iosMemory')}</p>
+          )}
           <p className={styles.label}>{t('tools.arguments')}</p>
           <CodeBox>{empty ? t('tools.argumentsEmpty') : args}</CodeBox>
           <Segmented
@@ -337,6 +369,7 @@ export function ToolCallCard({ call, result, live, onApprove }: ToolCallCardProp
           )}
         </details>
       )}
+      {result?.parts !== undefined && <ToolOutputs parts={result.parts} />}
     </section>
   )
 }

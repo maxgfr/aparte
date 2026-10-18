@@ -148,7 +148,7 @@ describe('spec/network-allowlist.json', () => {
     expect(purposes.sort()).toEqual([...NET_PURPOSES].sort())
   })
 
-  test('lets the app contact its own origin, the default provider hosts, the pinned model hosts and the GitHub API, and nothing else', () => {
+  test('lets the app contact its own origin, the default provider hosts, the pinned download hosts and the GitHub API, and nothing else', () => {
     expect(allowlist.app).toEqual(['self'])
     expect(allowlist.provider).toEqual([
       'https://api.anthropic.com',
@@ -157,6 +157,7 @@ describe('spec/network-allowlist.json', () => {
       'https://api.mistral.ai',
       'https://openrouter.ai',
     ])
+    // The pinned model hosts (M4) and the sandbox runtime CDN (M6), each file checked against its SHA-256.
     expect(allowlist.download).toEqual([
       'https://huggingface.co',
       'https://us.aws.cdn.hf.co',
@@ -166,6 +167,7 @@ describe('spec/network-allowlist.json', () => {
       'https://cdn-lfs-us-1.hf.co',
       'https://cdn-lfs-eu-1.hf.co',
       'https://raw.githubusercontent.com',
+      'https://cdn.jsdelivr.net',
     ])
     expect(allowlist.sync).toEqual(['https://api.github.com'])
     for (const purpose of NET_PURPOSES.filter(

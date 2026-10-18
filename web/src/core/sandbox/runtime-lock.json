@@ -1,0 +1,19 @@
+{
+  "$comment": "The runtimes the sandbox frames use, pinned by version and SHA-256 (lowercase hex). The page fetches each file through web/src/security/net.ts (purpose download), refuses it unless its hash matches, and transfers it into the frame. Pyodide packages are pinned by the sha256 of each entry of pyodide-lock.json, itself pinned here. The versions equal the exact devDependencies of web/package.json, whose files the unit tests hash against this lock and the e2e tests serve offline. Changing a version or a hash is a reviewed change.",
+  "pyodide": {
+    "version": "0.29.5",
+    "base": "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/",
+    "files": {
+      "pyodide.js": "7f832a350240263d9946a9c3c877f7bcdab6c37d6dc65f72cd3be5905dca62dd",
+      "pyodide.asm.js": "356c42f69e1695397e9d8670bd3c2e678248cde76e18bdae1731e848537b47d7",
+      "pyodide.asm.wasm": "54309a5a2cfd757b1f0fdbc9093c92503f7b341500110329d932487183912718",
+      "python_stdlib.zip": "831fd1e535084b972f87c6a35275de3d236efd5166f5e77ce89497710635e73c",
+      "pyodide-lock.json": "14d2c2dba101277999e17135e653d8f15389ad1437f53eae213bf0c3cdff723d"
+    }
+  },
+  "mermaid": {
+    "version": "12.0.0",
+    "url": "https://cdn.jsdelivr.net/npm/mermaid@12.0.0/dist/mermaid.min.js",
+    "sha256": "28fca7ae6ebc7ed7bb63bde63136a74bfef14f296a57e403657eeb8b32836073"
+  }
+}

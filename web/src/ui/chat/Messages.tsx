@@ -6,15 +6,18 @@ import type { StreamState, ToolCallState } from '../../core/contracts/chat.ts'
 import type { ApprovalDecision } from '../../core/contracts/tools.ts'
 import type { Id, Message, Part, Thread } from '../../core/contracts/workspace.ts'
 import { citeText } from '../../core/knowledge/citations.ts'
+import { artifactOfFence } from '../../core/sandbox/artifacts.ts'
 import { formatNumber, formatUsd } from '../../i18n/format.ts'
 import type { Key } from '../../i18n/index.ts'
 import { useLocale, useT } from '../../i18n/react.tsx'
 import { Button } from '../components/Button.tsx'
 import { IconButton } from '../components/IconButton.tsx'
 import { ContextChip, KnowledgeSources, useKnownPassages } from '../knowledge/Sources.tsx'
+import { splitBlocks } from '../render/markdown.ts'
 import { CopyButton, Markdown } from '../render/Sanitized.tsx'
 import { useDisplayText } from '../roleplay/hooks.ts'
 import roleplayStyles from '../roleplay/Roleplay.module.css'
+import { ArtifactCard } from './Artifact.tsx'
 import styles from './Chat.module.css'
 import { useEffortLabel } from './ModelPicker.tsx'
 import { isWebSearchCall, SourcesList, ToolCallCard, WebSearchNote } from './Tools.tsx'
@@ -347,6 +350,32 @@ function UsageLine({ message, model }: { message: Message; model: ModelDescripto
   )
 }
 
+/**
+ * The artifacts of a committed answer (its HTML, SVG and Mermaid fences), as cards beside the rendered text: the text
+ * itself stays inert, and each preview lives in its own sandbox frame, made only when the user opens it.
+ */
+function AnswerArtifacts({ text }: { text: string }) {
+  const artifacts = useMemo(() => {
+    const seen = new Map<string, number>()
+    return splitBlocks(text).flatMap((block) => {
+      const artifact = block.kind === 'code' && !block.open ? artifactOfFence(block.lang, block.text) : null
+      if (artifact === null) return []
+      // The same fence twice is two cards: its source and its rank make the key.
+      const n = (seen.get(block.raw) ?? 0) + 1
+      seen.set(block.raw, n)
+      return [{ key: `${n}:${block.raw}`, artifact }]
+    })
+  }, [text])
+  if (artifacts.length === 0) return null
+  return (
+    <div className={styles.artifacts}>
+      {artifacts.map((a) => (
+        <ArtifactCard key={a.key} artifact={a.artifact} />
+      ))}
+    </div>
+  )
+}
+
 function Reasoning({ text, live, hidden }: { text: string; live: boolean; hidden: boolean }) {
   const t = useT()
   if (text === '' && !hidden) return null
@@ -400,6 +429,7 @@ function AssistantMessage({
     >
       <Reasoning text={reasoning} live={false} hidden={hadReasoning && reasoning === ''} />
       {shown !== '' && <Markdown source={shown} className={styles.answerContent} data={CONTENT} />}
+      {shown !== '' && <AnswerArtifacts text={shown} />}
       <ToolWork parts={parts} results={results} live={live} streaming={false} onApprove={actions.onApprove} />
       <KnowledgeSources sources={cited.sources} />
       <AnswerNote message={message} />

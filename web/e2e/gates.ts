@@ -76,6 +76,14 @@ export function loadAllowlist(path = ALLOWLIST_PATH): AllowedHost[] {
   return [...byOrigin].map(([origin, purposes]) => ({ origin, purposes }))
 }
 
+/** Schemes that reach the network; `blob:` and `data:` URLs are the page's own bytes and never leave it. */
+const NETWORK_SCHEMES = ['http:', 'https:', 'ws:', 'wss:']
+
+/** Whether a URL reaches the network at all. */
+export function reachesNetwork(url: URL): boolean {
+  return NETWORK_SCHEMES.includes(url.protocol)
+}
+
 /** Whether `url` is the origin `entry` names; websockets match the http origin of the same host and port. */
 export function originMatches(entry: AllowedHost, url: URL): boolean {
   const scheme = url.protocol === 'wss:' ? 'https:' : url.protocol === 'ws:' ? 'http:' : url.protocol
@@ -199,7 +207,7 @@ export class Gates {
       this.blocked.push(raw)
       return false
     }
-    if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) return true
+    if (!reachesNetwork(url)) return true
     const ok = this.allows(url)
     const key = url.protocol.startsWith('ws') ? `${url.protocol}//${url.host}` : url.origin
     const kind =
@@ -232,9 +240,14 @@ export class Gates {
     context.on('request', (r) => {
       this.check(r.url())
     })
+    // WebKit routes the `blob:` URLs a sandboxed frame loads its workers from: they are not requests (as `check`
+    // says), so they go on untouched.
     await context.route(
       () => true,
-      (route) => (this.allows(new URL(route.request().url())) ? route.fallback() : route.abort('blockedbyclient')),
+      (route) => {
+        const url = new URL(route.request().url())
+        return !reachesNetwork(url) || this.allows(url) ? route.fallback() : route.abort('blockedbyclient')
+      },
     )
     await context.routeWebSocket(
       () => true,

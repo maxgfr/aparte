@@ -6,6 +6,7 @@ import type { knowledge } from './en/knowledge.ts'
 import type { local } from './en/local.ts'
 import type { mcp } from './en/mcp.ts'
 import type { roleplay } from './en/roleplay.ts'
+import type { sandbox } from './en/sandbox.ts'
 import type { shell } from './en/shell.ts'
 import type { stats } from './en/stats.ts'
 import type { sync } from './en/sync.ts'
@@ -41,6 +42,7 @@ type Source = {
   readonly compare: typeof compare
   readonly stats: typeof stats
   readonly knowledge: typeof knowledge
+  readonly sandbox: typeof sandbox
 }
 export type Namespace = keyof Source
 const NAMESPACES: readonly Namespace[] = [
@@ -58,6 +60,7 @@ const NAMESPACES: readonly Namespace[] = [
   'compare',
   'stats',
   'knowledge',
+  'sandbox',
 ]
 export type Catalog = { readonly [N in Namespace]: Shape<Source[N]> }
 
@@ -77,23 +80,39 @@ const loaded = new Map<Locale, Catalog>()
 
 const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
   en: async () => {
-    const [common, shell, about, vault, chat, tools, local, sync, mcp, transfer, roleplay, compare, stats, knowledge] =
-      await Promise.all([
-        import('./en/common.ts'),
-        import('./en/shell.ts'),
-        import('./en/about.ts'),
-        import('./en/vault.ts'),
-        import('./en/chat.ts'),
-        import('./en/tools.ts'),
-        import('./en/local.ts'),
-        import('./en/sync.ts'),
-        import('./en/mcp.ts'),
-        import('./en/transfer.ts'),
-        import('./en/roleplay.ts'),
-        import('./en/compare.ts'),
-        import('./en/stats.ts'),
-        import('./en/knowledge.ts'),
-      ])
+    const [
+      common,
+      shell,
+      about,
+      vault,
+      chat,
+      tools,
+      local,
+      sync,
+      mcp,
+      transfer,
+      roleplay,
+      compare,
+      stats,
+      knowledge,
+      sandbox,
+    ] = await Promise.all([
+      import('./en/common.ts'),
+      import('./en/shell.ts'),
+      import('./en/about.ts'),
+      import('./en/vault.ts'),
+      import('./en/chat.ts'),
+      import('./en/tools.ts'),
+      import('./en/local.ts'),
+      import('./en/sync.ts'),
+      import('./en/mcp.ts'),
+      import('./en/transfer.ts'),
+      import('./en/roleplay.ts'),
+      import('./en/compare.ts'),
+      import('./en/stats.ts'),
+      import('./en/knowledge.ts'),
+      import('./en/sandbox.ts'),
+    ])
     return {
       common: common.common,
       shell: shell.shell,
@@ -109,6 +128,7 @@ const loaders: { readonly [L in Locale]: () => Promise<Catalog> } = {
       compare: compare.compare,
       stats: stats.stats,
       knowledge: knowledge.knowledge,
+      sandbox: sandbox.sandbox,
     }
   },
   pseudo: async () => {

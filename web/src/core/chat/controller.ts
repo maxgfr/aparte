@@ -620,18 +620,22 @@ export function createChatController(deps: ChatDeps): ChatController {
     changed(run)
   }
 
-  /** What a tool's result becomes as a stored part: images go to blobs first. */
+  /** What a tool's result becomes as a stored part: images and files go to blobs first. */
   async function storedResult(
     call: { readonly callId: string; readonly name: string },
     result: ToolResult,
   ): Promise<Extract<Part, { readonly type: 'tool-result' }>> {
-    const images: Extract<Part, { readonly type: 'image' }>[] = []
+    const parts: Extract<Part, { readonly type: 'image' | 'file' }>[] = []
     for (const c of result.content) {
-      if (c.type !== 'image') continue
-      const blob = await deps.blobs.put(c.data, c.mediaType)
-      images.push({ type: 'image', blob, mediaType: c.mediaType, width: 0, height: 0 })
+      if (c.type === 'image') {
+        const blob = await deps.blobs.put(c.data, c.mediaType)
+        parts.push({ type: 'image', blob, mediaType: c.mediaType, width: 0, height: 0 })
+      } else if (c.type === 'file') {
+        const blob = await deps.blobs.put(c.data, c.mediaType)
+        parts.push({ type: 'file', blob, mediaType: c.mediaType, size: c.data.length, name: c.name })
+      }
     }
-    return resultPart(call, result, images)
+    return resultPart(call, result, parts)
   }
 
   /** Waits for the user's answer to a call, or null when the turn stops first. */

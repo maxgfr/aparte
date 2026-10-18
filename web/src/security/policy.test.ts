@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { contentSecurityPolicy, parsePolicy, securityHeaders, workerHeaders } from './policy.ts'
+import {
+  contentSecurityPolicy,
+  parsePolicy,
+  SANDBOX_PAGES,
+  sandboxPolicy,
+  sandboxScriptURL,
+  securityHeaders,
+  workerHeaders,
+} from './policy.ts'
 
 const site = { origin: 'https://maxgfr.github.io', base: '/aparte/' }
 const app = 'https://maxgfr.github.io/aparte/'
@@ -154,5 +162,60 @@ describe('workerHeaders', () => {
       ['connect-src', connect],
     ])
     expect(workerHeaders(site)['X-Content-Type-Options']).toBe('nosniff')
+  })
+})
+
+describe('sandboxPolicy', () => {
+  for (const page of ['runner', 'artifact'] as const) {
+    const csp = parsePolicy(sandboxPolicy(page, site))
+    test(`${page}: nothing may be fetched, framed, submitted or based elsewhere`, () => {
+      expect(csp.get('default-src')).toEqual(["'none'"])
+      for (const d of [
+        'connect-src',
+        'frame-src',
+        'child-src',
+        'object-src',
+        'manifest-src',
+        'base-uri',
+        'form-action',
+      ])
+        expect([d, csp.get(d)]).toEqual([d, ["'none'"]])
+    })
+
+    test(`${page}: its only script URL is its own built script, exactly`, () => {
+      const script = csp.get('script-src') ?? []
+      expect(script[0]).toBe(sandboxScriptURL(page, site))
+      expect(script[0]).toBe(`${app}sandbox/${page}.js`)
+      const hosts = script.filter((s) => !s.startsWith("'"))
+      expect(hosts).toEqual([`${app}sandbox/${page}.js`, 'blob:'])
+      // No source anywhere names a host but that script: images, styles, fonts and media load from nowhere outside.
+      for (const [name, values] of csp)
+        if (name !== 'script-src')
+          for (const v of values)
+            expect([name, v]).toEqual([name, expect.stringMatching(/^(?:'[a-z-]+'|blob:|data:)$/)])
+    })
+  }
+
+  test('runner: workers from blob: only, no image, style, font or media', () => {
+    const csp = parsePolicy(sandboxPolicy('runner', site))
+    expect(csp.get('worker-src')).toEqual(['blob:'])
+    for (const d of ['img-src', 'style-src', 'font-src', 'media-src']) expect(csp.get(d)).toEqual(["'none'"])
+  })
+
+  test('artifact: no worker; images, fonts and media from blob: or data: only', () => {
+    const csp = parsePolicy(sandboxPolicy('artifact', site))
+    expect(csp.get('worker-src')).toEqual(["'none'"])
+    expect(csp.get('img-src')).toEqual(['blob:', 'data:'])
+    expect(csp.get('font-src')).toEqual(['data:'])
+  })
+
+  test('the app policy itself is unchanged: it frames the sandbox path only', () => {
+    expect(parsePolicy(contentSecurityPolicy(site)).get('frame-src')).toEqual([`${app}sandbox/`])
+    expect(SANDBOX_PAGES).toEqual(['runner', 'artifact'])
+  })
+
+  test('refuses a bad origin or base', () => {
+    expect(() => sandboxPolicy('runner', { origin: 'https://maxgfr.github.io/', base: '/aparte/' })).toThrow()
+    expect(() => sandboxPolicy('runner', { origin: 'https://maxgfr.github.io', base: 'aparte' })).toThrow()
   })
 })

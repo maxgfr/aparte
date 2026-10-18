@@ -129,3 +129,61 @@ export function parsePolicy(policy: string): Map<string, string[]> {
   }
   return out
 }
+
+/** The sandbox pages, served under `<base>sandbox/` and framed by the app with `sandbox="allow-scripts"`. */
+export type SandboxPage = 'runner' | 'artifact'
+
+export const SANDBOX_PAGES: readonly SandboxPage[] = ['runner', 'artifact']
+
+/** Where a sandbox page loads its one script from: `<origin><base>sandbox/<page>.js`. */
+export function sandboxScriptURL(page: SandboxPage, o: { origin: string; base: string }): string {
+  checkOptions(o)
+  return `${o.origin}${o.base}sandbox/${page}.js`
+}
+
+/**
+ * The meta policy of a sandbox page (web/src/sandbox/frame/). Sandbox frames have an opaque origin, which the
+ * service worker never intercepts, so the page carries its whole policy itself; its workers (started from `blob:`)
+ * and nested `srcdoc` frames inherit it. Nothing may be fetched or connected to: `connect-src 'none'`, no host for
+ * images, styles, fonts, media, frames or forms. The only script URL is the page's own built script, exactly; the rest
+ * comes from `blob:` URLs the page makes from bytes it was given (the pinned runtimes, the code to run).
+ *
+ * - runner: runs code in workers. `'unsafe-eval'` because Pyodide's dynamic libraries evaluate their JavaScript glue;
+ *   evaluation inside the sandbox reaches nothing the code itself could not.
+ * - artifact: renders an artifact, and runs its inline scripts and styles only once the user clicked Run (until
+ *   then the nested frame is `sandbox=""`); images and fonts may come from `blob:` and `data:` only.
+ */
+export function sandboxPolicy(page: SandboxPage, o: { origin: string; base: string }): string {
+  const script = sandboxScriptURL(page, o)
+  const closed: Array<[string, ...string[]]> = [
+    ['connect-src', "'none'"],
+    ['frame-src', "'none'"],
+    ['child-src', "'none'"],
+    ['object-src', "'none'"],
+    ['manifest-src', "'none'"],
+    ['base-uri', "'none'"],
+    ['form-action', "'none'"],
+  ]
+  if (page === 'runner') {
+    return serialize([
+      ['default-src', "'none'"],
+      ['script-src', script, 'blob:', "'unsafe-eval'", "'wasm-unsafe-eval'"],
+      ['worker-src', 'blob:'],
+      ['img-src', "'none'"],
+      ['style-src', "'none'"],
+      ['font-src', "'none'"],
+      ['media-src', "'none'"],
+      ...closed,
+    ])
+  }
+  return serialize([
+    ['default-src', "'none'"],
+    ['script-src', script, 'blob:', "'unsafe-inline'"],
+    ['worker-src', "'none'"],
+    ['img-src', 'blob:', 'data:'],
+    ['style-src', "'unsafe-inline'"],
+    ['font-src', 'data:'],
+    ['media-src', 'blob:', 'data:'],
+    ...closed,
+  ])
+}

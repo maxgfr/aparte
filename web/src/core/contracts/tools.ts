@@ -78,6 +78,8 @@ export type ToolContent =
   | { readonly type: 'json'; readonly value: JsonValue }
   /** Stored as an image blob; sent to models that read images in tool results (from M6 on). */
   | { readonly type: 'image'; readonly data: Bytes; readonly mediaType: string }
+  /** A file the tool made (a sandbox run's output): stored as a file blob, shown to the user, named to the model. */
+  | { readonly type: 'file'; readonly data: Bytes; readonly mediaType: string; readonly name: string }
 
 export interface ToolResult {
   /** What the model reads, in order. */
@@ -230,11 +232,11 @@ export interface LoopModule {
    * `low` 4, `medium` 8, `high` 16, `xhigh` 24, `max` 32; a model that takes no effort gets 8.
    */
   stepBudget(effort: Effort | null): number
-  /** The stored `tool-result` part of a result (images become image parts with their blob ids). */
+  /** The stored `tool-result` part of a result (images and files become parts with their blob ids). */
   resultPart(
     call: { readonly callId: string; readonly name: string },
     result: ToolResult,
-    images?: readonly Extract<Part, { readonly type: 'image' }>[],
+    parts?: readonly Extract<Part, { readonly type: 'image' | 'file' }>[],
   ): Extract<Part, { readonly type: 'tool-result' }>
   /** The error result a call gets when it did not run (`reason` says why, for the model and the interface). */
   unansweredResult(

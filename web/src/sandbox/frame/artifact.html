@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="%APARTE_SANDBOX_CSP%" />
+    <meta http-equiv="x-dns-prefetch-control" content="off" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Aparté artifact</title>
+    <style>
+      html { color-scheme: light; background: #fff; color: #1d1b17; }
+      html[data-theme='dark'] { color-scheme: dark; background: #1b1a17; color: #ece8df; }
+      body { margin: 0; font: 15px/1.5 system-ui, sans-serif; }
+      #root { display: block; }
+      #root > img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+      #root > iframe { display: block; width: 100%; border: 0; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <main id="root"></main>
+    <script src="%APARTE_SANDBOX_SCRIPT%"></script>
+  </body>
+</html>

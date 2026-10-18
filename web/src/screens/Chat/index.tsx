@@ -163,7 +163,7 @@ function ChatView({ id }: { id: Id | null }) {
     model: ModelRef | null
     effort: Effort | null
     system: string | null
-    /** Tool names chosen for the new chat; null: every registered tool. */
+    /** Tool names chosen for the new chat; null: every registered tool but the sandbox ones, which are opt-in. */
     tools: readonly string[] | null
     webSearch: boolean
     /** Knowledge bases attached to the new chat. */
@@ -191,7 +191,7 @@ function ChatView({ id }: { id: Id | null }) {
   const toolNames = useMemo(() => {
     if (conversation !== undefined)
       return new Set(conversation.tools.filter((e) => e.source !== 'provider').map((e) => e.name))
-    return new Set(draft.tools ?? registered.map((r) => r.tool.name))
+    return new Set(draft.tools ?? registered.filter((r) => r.tool.source !== 'sandbox').map((r) => r.tool.name))
   }, [conversation, draft.tools, registered])
   const webSearch =
     conversation !== undefined

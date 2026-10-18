@@ -13,7 +13,7 @@ import type { NotRunReason, ToolResult } from '../contracts/tools.ts'
 import type { Part } from '../contracts/workspace.ts'
 
 type ResultPart = Extract<Part, { readonly type: 'tool-result' }>
-type ImagePart = Extract<Part, { readonly type: 'image' }>
+type BlobPart = Extract<Part, { readonly type: 'image' | 'file' }>
 
 const BUDGET: Readonly<Record<Effort, number>> = {
   none: 2,
@@ -34,7 +34,7 @@ export function stepBudget(effort: Effort | null): number {
 
 /** What the model reads of a result: one text as a string, one JSON value as itself, anything else as a list. */
 function outputOf(result: ToolResult): unknown {
-  const content = result.content.filter((c) => c.type !== 'image')
+  const content = result.content.filter((c) => c.type === 'text' || c.type === 'json')
   if (content.length === 0) return ''
   if (content.every((c) => c.type === 'text')) return content.map((c) => c.text).join('\n\n')
   if (content.length === 1 && content[0]?.type === 'json') return content[0].value
@@ -44,7 +44,7 @@ function outputOf(result: ToolResult): unknown {
 export function resultPart(
   call: { readonly callId: string; readonly name: string },
   result: ToolResult,
-  images: readonly ImagePart[] = [],
+  parts: readonly BlobPart[] = [],
 ): ResultPart {
   return {
     type: 'tool-result',
@@ -52,7 +52,7 @@ export function resultPart(
     name: call.name,
     output: outputOf(result),
     ...(result.isError ? { isError: true as const } : {}),
-    ...(images.length > 0 ? { parts: images } : {}),
+    ...(parts.length > 0 ? { parts } : {}),
     ...(result.details === undefined ? {} : { details: result.details }),
   }
 }

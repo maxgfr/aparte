@@ -24,6 +24,7 @@ import type {
 import type { ChatController, RequestModule, StreamState } from '../core/contracts/chat.ts'
 import type { CollectionName, CollectionTypes } from '../core/contracts/extras.ts'
 import type { KnowledgeService } from '../core/contracts/knowledge.ts'
+import type { RuntimeFetcher } from '../core/contracts/sandbox.ts'
 import type { RegisteredTool, ToolApproval, ToolRegistry } from '../core/contracts/tools.ts'
 import type { Vault } from '../core/contracts/vault.ts'
 import type {
@@ -40,6 +41,7 @@ import type {
   Workspace,
 } from '../core/contracts/workspace.ts'
 import type { LocalBlobs } from '../core/media/blobs.ts'
+import type { ConversationFile } from '../core/sandbox/tools.ts'
 import type { SearchIndex } from '../core/search/search.ts'
 import { holdReload } from '../pwa/register.ts'
 import { createMcpHost, type McpHost } from './mcpHost.ts'
@@ -64,9 +66,10 @@ import { useVault } from './vault.tsx'
  *   auto-lock nor an update cuts an answer.
  * - The MCP client (app/mcpHost.ts) adds the tools of the MCP servers to the same registry while the session is open;
  *   it is disposed with the session, before the workspace closes.
- * - The tool registry holds the built-in tools (web/src/core/tools/builtins.ts) and `search_knowledge`
- *   (web/src/core/knowledge/tool.ts) for the session only; approvals that outlive a call are stored encrypted in the
- *   workspace (`toolApprovals`).
+ * - The tool registry holds the built-in tools (web/src/core/tools/builtins.ts), `search_knowledge`
+ *   (web/src/core/knowledge/tool.ts) and the sandbox tools (web/src/core/sandbox/tools.ts) for the session only;
+ *   approvals that outlive a call are stored encrypted in the workspace (`toolApprovals`). The sandbox's runner frame
+ *   is removed on lock, with every run in flight.
  * - The knowledge service (app/knowledge.ts) holds decrypted document indexes for the session only; on lock it drops
  *   them and its document workers terminate.
  */
@@ -99,6 +102,8 @@ export interface ChatSession {
   readonly mcp: McpHost
   /** The knowledge bases' ingestion and search (contracts/knowledge.ts). */
   readonly knowledge: KnowledgeService
+  /** The pinned runtimes of the sandboxes (Mermaid for artifacts), fetched and checked on demand. */
+  readonly runtimes: RuntimeFetcher
   readonly modules: ChatModules
   /** The bundled model catalog, null until its chunk has loaded (the session opens without waiting for it). */
   readonly catalog: Catalog | null
@@ -141,6 +146,55 @@ function observableKeys(keys: ProviderKeys): ObservableKeys {
   }
 }
 
+/** A file name the sandbox takes: one plain segment, other characters replaced. */
+function plainName(name: string): string {
+  const cleaned = name
+    .replace(/[^\p{L}\p{N} _.,()+=@-]/gu, '_')
+    .replace(/^[^\p{L}\p{N}_]+/u, '')
+    .replace(/\.\.+/g, '.')
+    .slice(0, 128)
+  return cleaned === '' ? 'file' : cleaned
+}
+
+const IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+}
+
+/**
+ * The files of a conversation's active branch a sandbox run may read: the photos and files of its messages and the
+ * files earlier runs returned, by name (a later file of the same name wins). Read from the encrypted blob store on
+ * demand.
+ */
+async function conversationFiles(workspace: Workspace, blobs: LocalBlobs, id: Id): Promise<ConversationFile[]> {
+  const thread = await workspace.thread(id)
+  const byName = new Map<string, ConversationFile>()
+  let photos = 0
+  const add = (part: Part) => {
+    if (part.type !== 'image' && part.type !== 'file') return
+    const name =
+      part.type === 'file'
+        ? plainName(part.name)
+        : plainName(part.name ?? `image-${++photos}.${IMAGE_EXTENSIONS[part.mediaType] ?? 'bin'}`)
+    byName.delete(name)
+    byName.set(name, {
+      name,
+      mediaType: part.mediaType,
+      size: part.type === 'file' ? part.size : 0,
+      read: () => blobs.get(part.blob),
+    })
+  }
+  for (const message of thread.path()) {
+    for (const part of message.parts) {
+      add(part)
+      if (part.type === 'tool-result') for (const inner of part.parts ?? []) add(inner)
+    }
+  }
+  return [...byName.values()]
+}
+
 /** Opens the session of an unlocked vault; the returned `close` runs the lock cleanup. */
 async function openSession(vault: Vault): Promise<{
   session: ChatSession
@@ -169,6 +223,9 @@ async function openSession(vault: Vault): Promise<{
     beamModule,
     knowledgeModule,
     knowledgeToolModule,
+    sandboxToolsModule,
+    sandboxHost,
+    sandboxRuntime,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -190,6 +247,9 @@ async function openSession(vault: Vault): Promise<{
     import('../core/compare/beam.ts'),
     import('./knowledge.ts'),
     import('../core/knowledge/tool.ts'),
+    import('../core/sandbox/tools.ts'),
+    import('../sandbox/host.ts'),
+    import('../sandbox/runtime.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
@@ -239,6 +299,10 @@ async function openSession(vault: Vault): Promise<{
       basesOf: (id) => workspace.conversations.get(id)?.knowledge ?? [],
     }),
   )
+  const runtimes = sandboxRuntime.createRuntimeFetcher()
+  const runner = sandboxHost.createSandboxRunner({ fetcher: runtimes })
+  const files = (conversationId: Id) => conversationFiles(workspace, blobs, conversationId)
+  for (const tool of sandboxToolsModule.sandboxTools({ runner, files })) await tools.register(tool)
   const chat = controller.createChatController({
     workspace,
     holdLock: (reason: string) => vault.holdLock(reason),
@@ -319,6 +383,7 @@ async function openSession(vault: Vault): Promise<{
       local.releaseLocal()
       knowledge.dispose()
       knowledgeModule.releaseKnowledge()
+      runner.reset()
       search.dispose()
       unbind()
       workspace.close()
@@ -342,6 +407,7 @@ async function openSession(vault: Vault): Promise<{
     tools,
     mcp,
     knowledge,
+    runtimes,
     modules,
     catalog,
     resolveModel,

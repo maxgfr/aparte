@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { createWorker } from './workers.ts'
+import { createBlobWorker, createWorker } from './workers.ts'
 
 const g = globalThis as Record<string, unknown>
 const saved = { Worker: g.Worker, location: g.location }
@@ -34,6 +34,26 @@ describe('createWorker', () => {
   ])('refuses %s before starting anything', (url) => {
     const before = started.length
     expect(() => createWorker(url)).toThrow(TypeError)
+    expect(started).toHaveLength(before)
+  })
+})
+
+describe('createBlobWorker', () => {
+  test('starts a classic worker from a blob: URL only', () => {
+    const before = started.length
+    createBlobWorker('blob:null/5e1b0c2a-2d3c-4b8e-9a0f-1c2d3e4f5a6b')
+    expect(started).toHaveLength(before + 1)
+    expect(started.at(-1)).toEqual({ url: 'blob:null/5e1b0c2a-2d3c-4b8e-9a0f-1c2d3e4f5a6b', options: undefined })
+  })
+
+  test.each([
+    'https://evil.example/w.js',
+    'data:text/javascript,postMessage(1)',
+    '/aparte/sandbox/runner.js',
+    ' blob:null/x',
+  ])('refuses %s', (url) => {
+    const before = started.length
+    expect(() => createBlobWorker(url)).toThrow(TypeError)
     expect(started).toHaveLength(before)
   })
 })
