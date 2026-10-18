@@ -1,9 +1,9 @@
 # Format `aparte/1`
 
-**Status: draft.** This document is normative but not frozen. It freezes at the end of milestone M3; from then on a
-change to any byte layout, name, label or rule below needs a new format version (`aparte/2`), new vectors and new
-fixtures, never edited ones. Until then a change is made here first, then in both implementations and the vectors in
-the same change.
+**Status: frozen.** This document is normative and frozen since milestone M3: a change to any byte layout, name, label
+or rule below needs a new format version (`aparte/2`), new vectors and new fixtures, never edited ones. The vectors
+([`vectors/`](vectors/README.md)) pin every primitive and encoding, and the fixture ([`fixtures/`](fixtures/README.md))
+pins a whole store written by the reference, which both implementations read back (section 15.4).
 
 `aparte/1` is how Aparté stores a vault: on the device (IndexedDB) and on the storage the user syncs to (a Git
 repository, a bucket, a folder). The web app (TypeScript, `web/src/core/crypto`, the reference) and the CLI (Rust,
@@ -608,8 +608,13 @@ is withholding or rolled back data" when, in a complete listing:
 - a gap below a listed segment persists across two complete listings at least 10 minutes apart (withholding);
 - a segment's `seen` or a checkpoint's `covers` names a `(dtag, seq)` that the store does not return under the same
   persistence rule (a device saw data this one is not given);
-- two different names exist for one `(stag, dtag, seq)` (fork: a cloned device or an attack). A device that finds a
-  foreign object under its own `dtag` takes a new `deviceId`.
+- two different segment names exist for one `(stag, dtag, seq)` (fork: a cloned device or an attack). A device that
+  finds a segment or checkpoint under its own `dtag` that it did not write takes a new `deviceId`.
+
+A device writes at most one checkpoint per own `seq`, so two checkpoint names for one `(stag, dtag, seq)` are a fork
+as well. The marks a device keeps per destination (the highest `seq` listed per `(stag, dtag)`, its own segments
+counted once uploaded) are compared with that destination's next listings; a destination that only carries a one-off
+copy (an exported archive) keeps no marks.
 
 The alarm stops nothing that is already local: data is never deleted because the store stopped returning it.
 
@@ -617,6 +622,28 @@ The alarm stops nothing that is already local: data is never deleted because the
 
 A device that joins a vault has no high-water mark yet: it trusts the first state it lists. A store that withholds
 data from a new device's first listing is not detected by that device, only by devices that saw the data before.
+
+A device joins from the store's plaintext only: `fmt/1` and the keyslots. It holds the vault locked until the
+passphrase and the Secret Key of the Emergency Kit open a slot; then it downloads everything else. For a document it
+holds nothing of, it may start from the checkpoints and then fetch only the segments above their `covers` (applying
+every checkpoint it holds covers, per device, the highest `covers` among them).
+
+### 10.5 Store layouts
+
+Every store holds the objects of section 8 under their names, relative to the store's root; anything else there (a
+README, a file a sync client renamed) is not a name and is ignored.
+
+| Store | Root | An object is |
+|---|---|---|
+| Git repository written through the GitHub API | the folder `aparte` of the branch (configurable) | a file whose content is the standard base64 (RFC 4648 section 4, padded, no line break) of the object's bytes: Git trees take inline content as UTF-8 text only |
+| S3-compatible bucket | `<bucket>/<prefix>` | the object's bytes |
+| folder | the chosen folder | the object's bytes, in sub-folders following the `/` of the name |
+| archive (`.aparte.zip`) | the archive | a stored (uncompressed) zip entry named after the object, UTF-8 name, timestamp 1980-01-01; a reader also accepts deflated entries and checks each CRC-32 |
+
+Git commits written by a device carry a constant message (`aparte: objects`) and a constant author, so the history
+dates writes but neither names nor describes them. The first commit of an empty repository adds `aparte/README.md`.
+A store's credentials (a token, S3 keys) are local records of purpose `sync-credential`: never in the store, never
+in a synced document.
 
 ## 11. Local storage
 
@@ -722,6 +749,10 @@ which device is which beyond its `dtag`, file names or types, or exact sizes.
   vault.
 - **Shared origin.** On `maxgfr.github.io` any page of that origin can read the IndexedDB database. It finds only
   ciphertext, keyslots and the wrapped Secret Key, but can use the device key and can delete everything.
+- **A damaged object is reported, not repaired.** An object a store holds damaged is refused by every reader
+  (`tampered` after a few attempts); the devices that hold an intact copy do not upload it again, since the store
+  still lists the name.
+- **Archives have no ZIP64:** at most 65 535 objects and 4 GiB per `.aparte.zip`.
 
 ## 15. Vectors and worked examples
 
@@ -774,3 +805,11 @@ the precomputed `deflated` stream with flag `01`; opening them returns `payload`
 `tamper` names a mutation; the error each must produce is the one of [7.5](#75-opening) for the step it breaks (for
 example `epoch` → `unsupported-format`, `flags-compress` → `tampered` because the flag is valid for kind 1 but is
 authenticated, `padding-non-zero` → `corrupt`, `truncated-short` → `corrupt`, `truncated-tag` → `tampered`).
+
+### 15.4 Fixture
+
+[`fixtures/sync-v1`](fixtures/README.md) is a store written once by the reference (`web/scripts/fixtures.ts`): two
+devices of one vault, a folder, a conversation with a reasoning part and a photo of two chunks, checkpoints and segments
+whose `seen` name each other. `fixture.json` gives the passphrase, the Secret Key and the recovery key that open it,
+and what every object decodes to. Both implementations read it back in their tests (`web/src/core/sync/fixtures.test.ts`,
+`crates/aparte-format/tests/fixtures.rs`); it is never regenerated or edited.

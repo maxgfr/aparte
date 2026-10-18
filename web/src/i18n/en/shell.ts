@@ -1,11 +1,9 @@
-/** The frame around every screen: navigation, the preview notice and update prompts. */
+/** The frame around every screen: navigation and update prompts. */
 export const shell = {
   skipToContent: 'Skip to content',
   navMain: 'Main',
   navHome: 'Home',
   navAbout: 'About',
-  previewLabel: 'Preview notice',
-  preview: 'Preview: the storage format is not frozen yet.',
   updateReady: 'A new version of Aparté is ready.',
   updateApply: 'Update',
   updateWaiting: 'Updating once the current reply finishes…',
@@ -14,7 +12,7 @@ export const shell = {
   welcomeLead:
     'Aparté is a chat with the AI models you choose, running entirely in this browser: conversations are encrypted on this device and synced end to end, with no server of ours in between.',
   welcomePreview:
-    'This is an early preview: the chat works on this device, and syncing between your devices comes next.',
+    'Your devices sync end to end through storage you own: a GitHub repository, a bucket, a folder or an archive.',
   welcomeCreateVault: 'Create your encrypted vault',
   welcomeComingNext: 'Coming next',
   welcomeLearnMore: 'About this build',

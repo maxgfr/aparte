@@ -3,12 +3,14 @@
 useDefault = true
 
 # The keys, IVs and ciphertexts under spec/kat and spec/vectors are fixed, public test inputs (RFC and Wycheproof known
-# answers, and the aparte/1 cross-implementation vectors); they protect nothing and must stay byte-exact.
+# answers, and the aparte/1 cross-implementation vectors), and spec/fixtures holds frozen stores with the passphrases,
+# Secret Keys and recovery keys that open them; they protect nothing and must stay byte-exact.
 [[allowlists]]
 description = "Public cryptographic test vectors"
 paths = [
   '''(^|/)spec/kat/[^/]+\.json$''',
   '''(^|/)spec/vectors/[^/]+\.json$''',
+  '''(^|/)spec/fixtures/.+$''',
 ]
 
 # SHA-256 digests of the pinned, public files the app downloads at runtime (model weights, WebGPU libraries, embedding

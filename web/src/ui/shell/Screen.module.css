@@ -5,8 +5,8 @@
   width: 100%;
   max-width: var(--content-max);
   margin-inline: auto;
-  /* No safe-area inset on top: the preview banner above every screen clears the status bar. */
-  padding: var(--space-4) var(--gutter) var(--space-10);
+  /* The status bar's safe area on top, as nothing above the screen clears it. */
+  padding: calc(env(safe-area-inset-top) + var(--space-4)) var(--gutter) var(--space-10);
 }
 
 .header {

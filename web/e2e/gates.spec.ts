@@ -3,10 +3,11 @@ import { expect, Gates, loadAllowlist, originMatches, test } from './gates.ts'
 // The gates are what every other spec relies on to catch a CSP violation, a stray request or an error, so they are
 // tested themselves: each case runs in a context of its own, watched by its own gates, and reads what they caught.
 
-test('the allowlist file is valid and allows only the default provider hosts and the pinned model hosts', () => {
+test('the allowlist file is valid and allows only the default provider hosts, the GitHub API and the pinned model hosts', () => {
   // The app contacts its own origin; for purpose `provider`, the default API host of each provider it ships; for
-  // purpose `download`, the hosts the model workers read pinned, hash-checked model files from. Endpoints the user
-  // types stay unlisted. A host added to the file is a reviewed change that updates this test.
+  // purpose `sync`, the GitHub API; for purpose `download`, the hosts the model workers read pinned, hash-checked model
+  // files from. Endpoints the user types stay unlisted. A host added to the file is a reviewed change that updates
+  // this test.
   expect(loadAllowlist()).toEqual([
     ...[
       'https://api.anthropic.com',
@@ -15,6 +16,7 @@ test('the allowlist file is valid and allows only the default provider hosts and
       'https://api.mistral.ai',
       'https://openrouter.ai',
     ].map((origin) => ({ origin, purposes: ['provider'] })),
+    { origin: 'https://api.github.com', purposes: ['sync'] },
     ...[
       'https://huggingface.co',
       'https://us.aws.cdn.hf.co',

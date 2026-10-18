@@ -15,6 +15,10 @@ export const paths = {
   providerNew: '/providers/new',
   /** One provider: `/providers/<provider id>`. */
   provider: '/providers/:id',
+  /** Sync status and destinations. */
+  sync: '/sync',
+  /** A device without a vault takes one from its sync store. */
+  syncJoin: '/sync/join',
 } as const
 
 export type RouteName = keyof typeof paths

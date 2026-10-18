@@ -1,0 +1,398 @@
+{
+  "format": "aparte/1",
+  "description": "Two devices of one vault synced through this store by the TypeScript reference. Open a passphrase keyslot with passphrase and secretKey (Argon2 parameters as in the slot), then every object.",
+  "passphrase": "fixture passphrase: Aparté, café, 日本",
+  "secretKey": "A1-XRSGP-B5LU4-C7TH3-F3XA5-IJG5X-ZDDMG",
+  "recoveryKey": "KBPX-4S6F-CQLO-VOD3-FGCV-OSE6-CAUB-FYYQ-CKAP-MJZE-H3WU-66OX-K77A",
+  "vault": "3zd4skzr5sg5hhn5wh4nywkynm",
+  "devices": {
+    "a": "etamyqevz3aaxoyl",
+    "b": "ya3nufskgrgtna7w"
+  },
+  "docs": {
+    "c06": "mzqoerqteikrjtwh",
+    "index": "uarlryt2pjdrb767"
+  },
+  "photo": {
+    "blob": "npf4fyxvoxefeuebffjhtly3xl",
+    "size": 2101248,
+    "sha256": "d12f4f5530d545615d198edc6172df445bf06264a838d7a18eb28238b0840054"
+  },
+  "objects": [
+    {
+      "name": "b/cq/cq7lyngg6p6n2znpt3qgq6najg",
+      "type": "chunk",
+      "sha256": "52c2c123378bc64f04873f82e151e3ff1d106f2ab11ed157516413e76605aa1a",
+      "size": 2097152,
+      "plaintext": "667594d45f8b1c0ed51343f2645e692a9aed17524c809f027a40ae507eca52e0"
+    },
+    {
+      "name": "b/ip/ip4o2x5q32zqlh5o5xlu6mvnjg",
+      "type": "chunk",
+      "sha256": "e0d1c33c6f86e03541e8363862853364d136fcdf13591c5bd83b650050a14474",
+      "size": 4096,
+      "plaintext": "3c98944b03c6da05286e02d5b3883cf0247b3001270ac099b346a1183df3de3b"
+    },
+    {
+      "name": "d/mzqoerqteikrjtwh/c/etamyqevz3aaxoyl/0000000003-d3ln5x7g",
+      "type": "checkpoint",
+      "sha256": "74f1f21126dfdaf0eec6ecddff3a4bf14478330818867c22ea501991a0f4b094",
+      "header": {
+        "doc": "c06",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 3,
+        "time": 1760000026000,
+        "seen": {},
+        "blobs": [
+          "npf4fyxvoxefeuebffjhtly3xl"
+        ],
+        "covers": {
+          "etamyqevz3aaxoyl": 3
+        }
+      },
+      "update": "75fc646f9a0022b30abd09637e3c7c6e5956a29832d79ace9ba3c2dbf3448e3b"
+    },
+    {
+      "name": "d/mzqoerqteikrjtwh/s/etamyqevz3aaxoyl/0000000/0000000001-fdytqkzf",
+      "type": "segment",
+      "sha256": "d5f5de5040c139c32c474198a8bff027d8bf2f10f82603e6a17b69a9642db10b",
+      "header": {
+        "doc": "c06",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 1,
+        "time": 1760000008000,
+        "seen": {},
+        "blobs": []
+      },
+      "update": "98ef31d6dd86579a135c40d97cbc13b2a911f8366f39f4ae95d122a4684a1c94"
+    },
+    {
+      "name": "d/mzqoerqteikrjtwh/s/etamyqevz3aaxoyl/0000000/0000000002-jid3gnyf",
+      "type": "segment",
+      "sha256": "bdec4139c81bd7b75b326b73ebb3859c0baac97b166a135616bcc2714e9fc80d",
+      "header": {
+        "doc": "c06",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 2,
+        "time": 1760000015000,
+        "seen": {},
+        "blobs": []
+      },
+      "update": "b02f56cb5913ecfdedd76e760fd4191d02a2b1d9e74496ead803d8dcec0f9143"
+    },
+    {
+      "name": "d/mzqoerqteikrjtwh/s/etamyqevz3aaxoyl/0000000/0000000003-ezce4tbv",
+      "type": "segment",
+      "sha256": "6bd073ddff04c0774f6bb28fbc50b81bc5b84367eea4fcc59e2c114e00d86bc3",
+      "header": {
+        "doc": "c06",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 3,
+        "time": 1760000022000,
+        "seen": {},
+        "blobs": [
+          "npf4fyxvoxefeuebffjhtly3xl"
+        ]
+      },
+      "update": "9905c96a7c55685b3f3193346714f3d717373439f9fc86fb9bdbb9b9945d4240"
+    },
+    {
+      "name": "d/mzqoerqteikrjtwh/s/ya3nufskgrgtna7w/0000000/0000000001-6nt43quq",
+      "type": "segment",
+      "sha256": "e3268c44a339d237348dfb38937a51af7f01d42bad8c60bdb72c9ff55545a14b",
+      "header": {
+        "doc": "c06",
+        "device": "ya3nufskgrgtna7w",
+        "seq": 1,
+        "time": 1760000044000,
+        "seen": {
+          "etamyqevz3aaxoyl": 3
+        },
+        "blobs": []
+      },
+      "update": "7af187905f3557c3ca4a84fd993e04a8300772969939c8890794adf9bd792157"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/c/etamyqevz3aaxoyl/0000000003-qjmz3yu3",
+      "type": "checkpoint",
+      "sha256": "d4cb8d5c214061799076cb640757b377516d169b4e8ec7e39833e4e46eb0b449",
+      "header": {
+        "doc": "index",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 3,
+        "time": 1760000025000,
+        "seen": {},
+        "blobs": [],
+        "covers": {
+          "etamyqevz3aaxoyl": 3
+        }
+      },
+      "update": "deacdddf29b4401ca65976036bdd329f91457071dddc12959aeaf3848d2fad18"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/c/etamyqevz3aaxoyl/0000000005-27bgkx5a",
+      "type": "checkpoint",
+      "sha256": "abbd57734eb7eec81438a820f3a4bddb69cecd17fc69d83ba7fa2219ba45619c",
+      "header": {
+        "doc": "index",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 5,
+        "time": 1760000057000,
+        "seen": {
+          "ya3nufskgrgtna7w": 1
+        },
+        "blobs": [],
+        "covers": {
+          "etamyqevz3aaxoyl": 5,
+          "ya3nufskgrgtna7w": 1
+        }
+      },
+      "update": "f52e3738aaa3e2b4bd200299e531857e7ec38caebfe1ac8ab523079a0ee3979b"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/s/etamyqevz3aaxoyl/0000000/0000000001-g6faeoam",
+      "type": "segment",
+      "sha256": "4d171bef86667af748e04df4fa4058bd14a6ee51dc0a2af0d09cac523a21a2de",
+      "header": {
+        "doc": "index",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 1,
+        "time": 1760000007000,
+        "seen": {},
+        "blobs": []
+      },
+      "update": "018309b1f2b416f25517319037bb6275df735ab59b7fef22798db858dd61df33"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/s/etamyqevz3aaxoyl/0000000/0000000002-n3hgnxty",
+      "type": "segment",
+      "sha256": "ce2323d7c047c377ab0693e6aedbd6bbb95673e5fb5202547abcac5659b7f8ed",
+      "header": {
+        "doc": "index",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 2,
+        "time": 1760000014000,
+        "seen": {},
+        "blobs": []
+      },
+      "update": "e5b6f97d13a1317f31c5758d3937240a68b039f82c2fb843cc92dc65fd866da8"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/s/etamyqevz3aaxoyl/0000000/0000000003-4em4czkq",
+      "type": "segment",
+      "sha256": "ea33a52c418bbdc1070a05110dfba6d1c778114acafec01fb296f721accad4f7",
+      "header": {
+        "doc": "index",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 3,
+        "time": 1760000021000,
+        "seen": {},
+        "blobs": []
+      },
+      "update": "612807d0822d01ebfdc678a0bbbcda7d93ea31ee8300d3abb8167bea9df356ec"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/s/etamyqevz3aaxoyl/0000000/0000000004-iv4lbrdq",
+      "type": "segment",
+      "sha256": "50f0fa15354d992cb3135e5c866116505c06428775226ca6622cbcb09650cb92",
+      "header": {
+        "doc": "index",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 4,
+        "time": 1760000030000,
+        "seen": {},
+        "blobs": []
+      },
+      "update": "1f4b12ad82374f8bb8a4e4f458a30410d74a47c9530c4c13057cc7aad0afe7d3"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/s/etamyqevz3aaxoyl/0000000/0000000005-hlqdo3sc",
+      "type": "segment",
+      "sha256": "f34fc80cd11a9ee6cc9304823a0b6f4448da4370ba545839d00505d24cdcddd5",
+      "header": {
+        "doc": "index",
+        "device": "etamyqevz3aaxoyl",
+        "seq": 5,
+        "time": 1760000054000,
+        "seen": {
+          "ya3nufskgrgtna7w": 1
+        },
+        "blobs": []
+      },
+      "update": "b1c81b5e0a88852ed975d5c816bc03fc56073a24a6b90882d90c2f2069fe00b8"
+    },
+    {
+      "name": "d/uarlryt2pjdrb767/s/ya3nufskgrgtna7w/0000000/0000000001-t67bj622",
+      "type": "segment",
+      "sha256": "8eef847f6950c64457febaa78734181b591f84c4c13c36670821653abf24a981",
+      "header": {
+        "doc": "index",
+        "device": "ya3nufskgrgtna7w",
+        "seq": 1,
+        "time": 1760000043000,
+        "seen": {
+          "etamyqevz3aaxoyl": 4
+        },
+        "blobs": []
+      },
+      "update": "d21aa491ebdfe00ba189f7b0a911a46be4a5a2d93ebb90f4bb931a6e4050afb2"
+    },
+    {
+      "name": "fmt/1",
+      "type": "fmt",
+      "sha256": "c8c29673e03764ecc0c04833c22cd6acc0e6a2c3fb547f040ab9946ff24cad0d"
+    },
+    {
+      "name": "keys/qmyg7ikb7u7qfl55yb6mxpsq3u.json",
+      "type": "keyslot",
+      "sha256": "e9ada9e0b7ff2708fbf74ef54321b37cc8d778066d170170c5fde829581ef901"
+    },
+    {
+      "name": "keys/y6daw6ujr4po4s436ma7yazoqi.json",
+      "type": "keyslot",
+      "sha256": "18c01bc7b3b78c2150873a835bb0da3ace1585680c4286c4dda8bd256b97dfe8"
+    },
+    {
+      "name": "m/np/npf4fyxvoxefeuebffjhtly3xl",
+      "type": "manifest",
+      "sha256": "590eaf43d1f203f9eb259ed6db3321b04156671d5b31199c75f065074ba379af",
+      "manifest": {
+        "v": 1,
+        "type": "image/jpeg",
+        "size": 2101248,
+        "sha256": "0S9PVTDVRWFdGY7cYXLfRFvwYmSoONehjrKCOLCEAFQ",
+        "chunks": [
+          "cq7lyngg6p6n2znpt3qgq6najg",
+          "ip4o2x5q32zqlh5o5xlu6mvnjg"
+        ]
+      }
+    }
+  ],
+  "documents": {
+    "index": {
+      "conversations": {
+        "la5wno5doo373ohhgoaskjj5iq": {
+          "id": "la5wno5doo373ohhgoaskjj5iq",
+          "title": "Renamed on the second device",
+          "folder": "v2zebwzvaewpepyysckfckjasm",
+          "persona": null,
+          "model": null,
+          "effort": null,
+          "leaf": "gkn5q4fn5rtjm5njdnxckryrrq",
+          "system": "Answer briefly.",
+          "tools": [],
+          "pinned": true,
+          "archived": false,
+          "createdAt": 1760000005000,
+          "updatedAt": 1760000053000,
+          "startedAt": 1760000006000
+        }
+      },
+      "folders": {
+        "v2zebwzvaewpepyysckfckjasm": {
+          "id": "v2zebwzvaewpepyysckfckjasm",
+          "name": "Fixtures",
+          "parent": null,
+          "order": "V",
+          "createdAt": 1760000004000,
+          "updatedAt": 1760000004000
+        }
+      },
+      "settings": {
+        "defaultSystem": "Answer briefly."
+      },
+      "providers": {
+        "mj2uwgrjne2u544pnhwtd5ltha": {
+          "id": "mj2uwgrjne2u544pnhwtd5ltha",
+          "kind": "anthropic",
+          "label": "Anthropic",
+          "syncKey": false,
+          "createdAt": 1760000003000,
+          "updatedAt": 1760000003000
+        }
+      }
+    },
+    "c06": {
+      "messages": {
+        "jrinnrdes5dkbr4g5jn2chfh2y": {
+          "conv": "la5wno5doo373ohhgoaskjj5iq",
+          "parent": null,
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Bonjour, café 日本 🙂: what is aparte/1?"
+            }
+          ],
+          "model": null,
+          "status": "done",
+          "createdAt": 1760000006000
+        },
+        "zxjkj3cxxloeivcjfg3mlld64u": {
+          "conv": "la5wno5doo373ohhgoaskjj5iq",
+          "parent": "jrinnrdes5dkbr4g5jn2chfh2y",
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "reasoning",
+              "text": "The user asks about the format.",
+              "providerMeta": {
+                "anthropic": {
+                  "signature": "c2ln"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "text": "A frozen, encrypted sync format."
+            }
+          ],
+          "model": {
+            "provider": "p",
+            "id": "claude-opus-5-5"
+          },
+          "status": "done",
+          "usage": {
+            "input": 12,
+            "output": 7
+          },
+          "stop": "end",
+          "effort": "medium",
+          "createdAt": 1760000013000
+        },
+        "uf6fmicgt5xyxkob5htnngzg2y": {
+          "conv": "la5wno5doo373ohhgoaskjj5iq",
+          "parent": "zxjkj3cxxloeivcjfg3mlld64u",
+          "role": "user",
+          "parts": [
+            {
+              "type": "image",
+              "blob": "npf4fyxvoxefeuebffjhtly3xl",
+              "mediaType": "image/jpeg",
+              "width": 64,
+              "height": 48,
+              "name": "photo.jpg"
+            }
+          ],
+          "model": null,
+          "status": "done",
+          "createdAt": 1760000020000
+        },
+        "gkn5q4fn5rtjm5njdnxckryrrq": {
+          "conv": "la5wno5doo373ohhgoaskjj5iq",
+          "parent": "uf6fmicgt5xyxkob5htnngzg2y",
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Written on the second device."
+            }
+          ],
+          "model": null,
+          "status": "done",
+          "createdAt": 1760000042000
+        }
+      }
+    }
+  }
+}

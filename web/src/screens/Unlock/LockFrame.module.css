@@ -77,3 +77,17 @@
     animation-duration: 1ms;
   }
 }
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--text-footnote);
+}
+
+.remember input {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  accent-color: var(--accent);
+}

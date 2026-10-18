@@ -8,7 +8,7 @@ import { Screen } from '../../ui/shell/Screen.tsx'
 import styles from './Welcome.module.css'
 
 /**
- * The start screen of the preview: what Aparté is and, on a device without a vault, the first step (creating it).
+ * The start screen: what Aparté is and, on a device without a vault, the first step (creating it).
  * With the vault open it says so and leads to a new chat and to the model providers.
  */
 export default function Welcome() {
@@ -39,10 +39,15 @@ export default function Welcome() {
           </>
         )}
         {absent && (
-          <Link href={paths.createVault} className={buttonClass({ variant: 'primary', size: 'large' })}>
-            <LockKeyhole size={18} strokeWidth={2} aria-hidden="true" />
-            {t('shell.welcomeCreateVault')}
-          </Link>
+          <>
+            <Link href={paths.createVault} className={buttonClass({ variant: 'primary', size: 'large' })}>
+              <LockKeyhole size={18} strokeWidth={2} aria-hidden="true" />
+              {t('shell.welcomeCreateVault')}
+            </Link>
+            <Link href={paths.syncJoin} className={buttonClass({ variant: 'secondary' })}>
+              {t('sync.welcomeJoin')}
+            </Link>
+          </>
         )}
         <Link href={paths.about} className={buttonClass({ variant: 'plain' })}>
           {t('shell.welcomeLearnMore')}

@@ -148,7 +148,7 @@ describe('spec/network-allowlist.json', () => {
     expect(purposes.sort()).toEqual([...NET_PURPOSES].sort())
   })
 
-  test('lets the app contact its own origin, the default provider hosts and the pinned model hosts, and nothing else', () => {
+  test('lets the app contact its own origin, the default provider hosts, the pinned model hosts and the GitHub API, and nothing else', () => {
     expect(allowlist.app).toEqual(['self'])
     expect(allowlist.provider).toEqual([
       'https://api.anthropic.com',
@@ -167,7 +167,10 @@ describe('spec/network-allowlist.json', () => {
       'https://cdn-lfs-eu-1.hf.co',
       'https://raw.githubusercontent.com',
     ])
-    for (const purpose of NET_PURPOSES.filter((p) => p !== 'app' && p !== 'provider' && p !== 'download'))
+    expect(allowlist.sync).toEqual(['https://api.github.com'])
+    for (const purpose of NET_PURPOSES.filter(
+      (p) => p !== 'app' && p !== 'provider' && p !== 'download' && p !== 'sync',
+    ))
       expect(allowlist[purpose]).toEqual([])
   })
 })

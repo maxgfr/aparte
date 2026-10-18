@@ -1,4 +1,13 @@
-import { Info, Lock, type LucideIcon, MessageSquareLock, MessagesSquare, Sparkles, SquarePen } from 'lucide-react'
+import {
+  Info,
+  Lock,
+  type LucideIcon,
+  MessageSquareLock,
+  MessagesSquare,
+  RefreshCw,
+  Sparkles,
+  SquarePen,
+} from 'lucide-react'
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'wouter'
 import { useSession } from '../../app/chat.tsx'
@@ -7,12 +16,11 @@ import { paths } from '../../app/routes.ts'
 import { useVault } from '../../app/vault.tsx'
 import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
-import { PreviewBanner } from '../PreviewBanner.tsx'
 import styles from './Shell.module.css'
 
 interface Tab {
   readonly href: string
-  readonly label: Extract<Key, `shell.nav${string}` | `chat.nav${string}`>
+  readonly label: Extract<Key, `shell.nav${string}` | `chat.nav${string}` | `sync.nav${string}`>
   readonly icon: LucideIcon
   /** Other sections this tab stands for (the Chats tab is current on a chat too). */
   readonly also?: readonly string[]
@@ -30,6 +38,7 @@ const TABS: readonly Tab[] = [
   { href: paths.chat, label: 'chat.navNewChat', icon: SquarePen, unlocked: true, width: 'narrow' },
   { href: paths.conversations, label: 'chat.navChats', icon: MessagesSquare, also: [paths.chat], unlocked: true },
   { href: paths.providers, label: 'chat.navProviders', icon: Sparkles, unlocked: true },
+  { href: paths.sync, label: 'sync.navSync', icon: RefreshCw, unlocked: true },
   { href: paths.about, label: 'shell.navAbout', icon: Info },
 ]
 
@@ -169,7 +178,6 @@ export function Shell({ children }: { readonly children: ReactNode }) {
         )}
       </nav>
       <main id="main" ref={main} className={styles.main} tabIndex={-1}>
-        <PreviewBanner />
         {children}
       </main>
     </div>

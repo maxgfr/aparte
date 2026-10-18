@@ -295,6 +295,69 @@ class VaultImpl implements Vault {
     }
   }
 
+  async join(input: { readonly vault: string; readonly keyslots: readonly KeyslotFile[] }): Promise<void> {
+    if (this.state !== 'absent' || this.creating) throw new InvalidStateError('A vault already exists on this device')
+    this.creating = true
+    try {
+      let vaultId: Bytes
+      try {
+        vaultId = B.base32Decode(input.vault)
+      } catch (cause) {
+        throw new InvalidInputError('Not a vault id', { cause })
+      }
+      if (vaultId.length !== ID_BYTES) throw new InvalidInputError('Not a vault id')
+      const slots: Slot[] = []
+      for (const file of input.keyslots) {
+        const keyslot = KS.parseKeyslot(file.bytes, { name: file.name })
+        if (keyslot.vault !== input.vault) throw new InvalidInputError('A keyslot belongs to another vault')
+        if (slots.some((s) => s.id === keyslot.slot)) continue
+        slots.push({ id: keyslot.slot, keyslot, bytes: KS.serializeKeyslot(keyslot) })
+      }
+      if (!slots.some((s) => s.keyslot.kind !== 'recovery')) {
+        throw new InvalidInputError('The vault has no slot that a passphrase opens')
+      }
+      const made = await this.meta.initVault({
+        entries: { fmt: FMT, vault: input.vault },
+        keyslots: slots.map(({ id, bytes }) => ({ slot: id, bytes })),
+      })
+      if (!made) {
+        await this.refresh()
+        throw new InvalidStateError('A vault already exists on this device')
+      }
+      this.vaultId = vaultId
+      this.vaultText = input.vault
+      this.slots.clear()
+      for (const slot of slots) this.slots.set(slot.id, slot)
+      this.secretKeyStored = false
+      this.secretKeyDamaged = false
+      this.setState('locked')
+    } finally {
+      this.creating = false
+    }
+  }
+
+  importKeyslots(files: readonly KeyslotFile[]): Promise<readonly string[]> {
+    return this.exclusive(async () => {
+      const vault = this.requireVaultText()
+      await this.reloadSlots()
+      const added: string[] = []
+      for (const file of files) {
+        let keyslot: Keyslot
+        try {
+          keyslot = KS.parseKeyslot(file.bytes, { name: file.name })
+        } catch (error) {
+          // A slot this build cannot read opens nothing here; the others still come in.
+          if (error instanceof AparteError) continue
+          throw error
+        }
+        if (keyslot.vault !== vault || this.slots.has(keyslot.slot)) continue
+        await this.addSlot(keyslot)
+        added.push(keyslot.slot)
+      }
+      return added
+    })
+  }
+
   unlock(credential: UnlockCredential): Promise<void> {
     return this.unlockWith(credential, async () => undefined)
   }
@@ -608,8 +671,9 @@ class VaultImpl implements Vault {
       const opened = await this.openWith(credential)
       try {
         const result = await then(opened)
-        if (this.secretKeyDamaged && opened.secretKey && credential.kind === 'passphrase' && credential.secretKey) {
-          await this.rememberSecretKey(opened.secretKey, this.requireVaultText(), true)
+        const typed = opened.secretKey && credential.kind === 'passphrase' && credential.secretKey
+        if (typed && (this.secretKeyDamaged || credential.rememberSecretKey === true)) {
+          await this.rememberSecretKey(opened.secretKey as Bytes, this.requireVaultText(), this.secretKeyDamaged)
         }
         await this.finishUnlock(await K.deriveSubkeys(opened.mk, this.requireVaultId()))
         return result

@@ -345,6 +345,8 @@ export interface Workspace {
   state(docId: DocId): Promise<Bytes>
   /** Applies an update from another device (origin `remote`, not captured); loads a shard first. */
   applyRemote(docId: DocId, update: Uint8Array): Promise<void>
+  /** Whether a document is in memory or loading (the index always is once open; a shard once used). */
+  isLoaded(docId: DocId): boolean
   /**
    * Replaces a document's pending queue by one merged update (appended first, then the older positions dropped, so a
    * crash in between only leaves duplicates, which Yjs ignores).
@@ -362,6 +364,12 @@ export interface WorkspaceDeps {
   readonly clock: Clock
   /** Backoff before retry `attempt` of a failed append; defaults to min(60 s, 1 s * 2^(attempt-1)). */
   readonly retryDelayMs?: (attempt: number) => number
+  /**
+   * What this device holds of a document beyond its pending queue: the segments and checkpoints the sync layer keeps
+   * in the object mirror (spec/FORMAT.md section 11.1), already authenticated. Applied with origin `remote` when the
+   * document loads, before the queue. Absent: nothing but the queue.
+   */
+  readonly base?: (docId: DocId) => Promise<readonly Uint8Array[]>
 }
 
 export interface WorkspaceModule {

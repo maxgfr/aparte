@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { navigate } from '../../app/hashLocation.ts'
 import { paths } from '../../app/routes.ts'
+import { joinedThisPage } from '../../app/sync.tsx'
 import { useVault } from '../../app/vault.tsx'
 import type { Key } from '../../i18n/index.ts'
 import { useT } from '../../i18n/react.tsx'
@@ -23,6 +24,9 @@ export default function Unlock() {
   const needsSecretKey = !status.secretKeyOnDevice
   const [passphrase, setPassphrase] = useState('')
   const [secretKey, setSecretKey] = useState('')
+  // A device that just joined the vault keeps its Secret Key by default, as one that created it does.
+  const [remember, setRemember] = useState(joinedThisPage)
+  const rememberId = useId()
   const [problem, setProblem] = useState<Problem | null>(null)
   const [busy, setBusy] = useState(false)
   const passphraseId = useId()
@@ -54,7 +58,11 @@ export default function Unlock() {
     setProblem(null)
     await nextPaint()
     try {
-      await unlock(needsSecretKey ? { kind: 'passphrase', passphrase, secretKey } : { kind: 'passphrase', passphrase })
+      await unlock(
+        needsSecretKey
+          ? { kind: 'passphrase', passphrase, secretKey, rememberSecretKey: remember }
+          : { kind: 'passphrase', passphrase },
+      )
     } catch (e) {
       const code = errorCode(e)
       if (code === 'invalid-input' && !needsSecretKey && !vault.status().secretKeyOnDevice) {
@@ -117,6 +125,18 @@ export default function Unlock() {
             enterKeyHint="go"
             readOnly={busy}
           />
+        )}
+        {needsSecretKey && (
+          <label className={styles.remember} htmlFor={rememberId}>
+            <input
+              id={rememberId}
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              disabled={busy}
+            />
+            {t('sync.rememberSecretKey')}
+          </label>
         )}
         <Button type="submit" variant="primary" size="large" full loading={busy}>
           {busy ? t('vault.unlocking') : t('vault.unlock')}

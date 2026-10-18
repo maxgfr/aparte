@@ -148,6 +148,7 @@ async function openSession(vault: Vault): Promise<{
     builtinsModule,
     toolFetchModule,
     local,
+    streams,
   ] = await Promise.all([
     import('../core/workspace/workspace.ts'),
     import('../core/workspace/lifecycle.ts'),
@@ -165,12 +166,20 @@ async function openSession(vault: Vault): Promise<{
     import('../core/tools/builtins.ts'),
     import('../core/tools/fetch.ts'),
     import('./local.ts'),
+    import('../core/sync/streams.ts'),
   ])
   const store = vault.localStore()
   const subkeys = vault.subkeys()
   const rng = rngModule.cryptoRng()
   const clock = { now: () => Date.now() }
-  const workspace = await ws.openWorkspace({ store, subkeys, rng, clock })
+  // What sync brought to this device (the object mirror) is replayed with each document, under its pending queue.
+  const workspace = await ws.openWorkspace({
+    store,
+    subkeys,
+    rng,
+    clock,
+    base: (docId) => streams.mirroredUpdates(store.objects, subkeys, docId),
+  })
   const search = searchModule.createSearch({ workspace, onLock: (cleanup) => vault.onLock(cleanup) })
   // The session's own lock cleanup (below) runs first, as it was registered first; this one then finds the search
   // disposed and the workspace closed, which are both idempotent.

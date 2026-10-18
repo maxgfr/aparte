@@ -620,9 +620,22 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
     const existing = loading.get(docId)
     if (existing) return existing
     const promise = (async (): Promise<Loaded> => {
-      const queue = await store.pending.list(docId)
+      const [extra, queue] = await Promise.all([deps.base ? deps.base(docId) : [], store.pending.list(docId)])
       if (closed) throw new LockedError('The workspace is closed')
       const doc = new Y.Doc()
+      Y.transact(
+        doc,
+        () => {
+          for (const update of extra) {
+            try {
+              Y.applyUpdateV2(doc, update)
+            } catch {
+              // One mirrored update that does not apply must not keep the rest of the document from opening.
+            }
+          }
+        },
+        'remote',
+      )
       try {
         Y.transact(
           doc,
@@ -1480,6 +1493,11 @@ export async function openWorkspace(deps: WorkspaceDeps & WorkspaceOptions): Pro
       } catch (cause) {
         throw new CorruptError('The update does not apply', { cause })
       }
+    },
+    isLoaded(docId) {
+      live()
+      // A document still loading counts: an update applied to it now waits for the load, so none is missed.
+      return loading.has(checkDocId(docId))
     },
     async compact(docId) {
       live()

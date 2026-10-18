@@ -3,6 +3,7 @@ import type { JSX } from 'react'
 import { ChatProvider } from './app/chat.tsx'
 import { readPref } from './app/prefs.ts'
 import { HashRouter, Routes } from './app/router.tsx'
+import { SyncProvider } from './app/sync.tsx'
 import { applyTheme } from './app/theme.ts'
 import { ToastProvider } from './app/toast.tsx'
 import { VaultGate, VaultProvider } from './app/vault.tsx'
@@ -24,13 +25,15 @@ export function App(): JSX.Element {
       <ToastProvider>
         <VaultProvider>
           <ChatProvider>
-            <HashRouter>
-              <VaultGate>
-                <Shell>
-                  <Routes />
-                </Shell>
-              </VaultGate>
-            </HashRouter>
+            <SyncProvider>
+              <HashRouter>
+                <VaultGate>
+                  <Shell>
+                    <Routes />
+                  </Shell>
+                </VaultGate>
+              </HashRouter>
+            </SyncProvider>
           </ChatProvider>
         </VaultProvider>
         <UpdateToast />

@@ -1,8 +1,8 @@
 # Data model `aparte/1`
 
-**Status: draft**, frozen with [FORMAT.md](FORMAT.md) at the end of milestone M3. This document describes what the
-encrypted documents of a vault contain; FORMAT.md describes how they are encrypted, named and stored. A change that
-an older build would misread needs a new format version.
+**Status: frozen** with [FORMAT.md](FORMAT.md) since milestone M3. This document describes what the encrypted
+documents of a vault contain; FORMAT.md describes how they are encrypted, named and stored. A change that an older
+build would misread needs a new format version.
 
 ## 1. Documents
 

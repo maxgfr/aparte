@@ -4,6 +4,8 @@
 #    files, or when a generated file is not committed.
 # 2. Runs the Rust generator into a temporary directory and compares every generated file with the TypeScript one,
 #    after `jq -S` (member order and whitespace are not compared, every name and value is).
+# 3. Checks that the frozen fixtures of spec/fixtures are committed and unchanged, and that both implementations read
+#    them back (spec/fixtures/README.md).
 # Exits non-zero with a unified diff on any mismatch. CI runs this script as is.
 # Usage: scripts/check-vectors.sh
 set -euo pipefail
@@ -91,4 +93,19 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 printf 'Rust output matches the TypeScript vectors (%d files)\n' "${#FILES[@]}"
-printf '\ncheck-vectors: all vectors agree\n'
+
+printf '\n==> Frozen fixtures\n'
+FIXTURES=spec/fixtures
+untracked="$(git ls-files --others --exclude-standard -- "$FIXTURES")"
+if [ -n "$untracked" ]; then
+  printf '\ncheck-vectors: fixtures are not committed:\n%s\n' "$untracked" >&2
+  exit 1
+fi
+if ! git diff --exit-code --stat -- "$FIXTURES"; then
+  printf '\ncheck-vectors: a committed fixture was changed (diff above). Fixtures are frozen: write a new one.\n' >&2
+  exit 1
+fi
+(cd web && bun test src/core/sync/fixtures.test.ts)
+cargo test -q --locked -p aparte-format --test fixtures
+printf 'Both implementations read the fixtures\n'
+printf '\ncheck-vectors: all vectors agree, and the fixtures read back\n'

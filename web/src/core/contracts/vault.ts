@@ -74,6 +74,11 @@ export type UnlockCredential =
       readonly passphrase: string
       /** Emergency Kit text; omitted to use the one this device remembers. */
       readonly secretKey?: string
+      /**
+       * Keep the Secret Key typed in on this device, wrapped by the device key, so later unlocks need only the
+       * passphrase (default false; a device that joined a vault from its sync store asks for it).
+       */
+      readonly rememberSecretKey?: boolean
     }
   | { readonly kind: 'recovery'; readonly recoveryKey: string }
 
@@ -135,6 +140,19 @@ export interface Vault {
    * vault is then `locked`.
    */
   create(input: CreateVaultInput): Promise<CreatedVault>
+  /**
+   * absent -> locked: this device takes a vault that exists elsewhere, from the keyslot files its sync store holds
+   * (spec/FORMAT.md section 10.4). Every file must parse, carry its own name and belong to `vault`, and one at least
+   * must not be a recovery slot (InvalidInputError, or the parse error, with nothing written). Only `fmt`, `vault`
+   * and the keyslots are written, in one transaction; unlocking then needs the passphrase and the Secret Key of the
+   * Emergency Kit. InvalidStateError when the device already holds a vault.
+   */
+  join(input: { readonly vault: string; readonly keyslots: readonly KeyslotFile[] }): Promise<void>
+  /**
+   * Adds the keyslot files of this vault that another device created (read from the sync store) and this device does
+   * not have; files of another vault or that do not parse are skipped. Returns the slots added.
+   */
+  importKeyslots(files: readonly KeyslotFile[]): Promise<readonly string[]>
   /**
    * locked -> unlocked. WrongSecretError (state back to locked) when no slot opens; InvalidInputError for a malformed
    * text or a missing Secret Key; InvalidStateError in any state but locked.

@@ -5,7 +5,9 @@ and photos are encrypted on the device and synced end-to-end to storage you own.
 
 - App: <https://maxgfr.github.io/aparte/>
 - Interface language: English.
-- Status: preview. The storage and sync format is not frozen yet; do not rely on it for data you cannot lose.
+- Format: `aparte/1` is frozen ([spec/FORMAT.md](spec/FORMAT.md)): any change to it needs a new format version.
+- Sync: a GitHub repository, an S3-compatible bucket, a local folder, or an archive (`.aparte.zip`). Only encrypted
+  objects and the keyslots leave the device; a sync credential stays on the device that uses it.
 
 ## Development
 
@@ -15,6 +17,7 @@ The web app lives in `web/` (Bun, Vite, React) and the CLI in `crates/` (Rust).
 cd web && bun install && bun run dev      # http://localhost:5173/aparte/
 cd web && bun run check                   # types, lint, tests, build, security scan, size budget
 scripts/check.sh                          # Rust: fmt, clippy, tests, cargo deny
+scripts/check-vectors.sh                  # aparte/1 vectors and fixtures, TypeScript against Rust
 ```
 
 ## CLI

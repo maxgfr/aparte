@@ -40,9 +40,12 @@ async function waitForController(page: Page) {
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true)
 }
 
-test('the welcome screen renders with the preview notice, clean and accessible', async ({ page }) => {
+test('the welcome screen renders clean and accessible, with no preview notice now that aparte/1 is frozen', async ({
+  page,
+}) => {
   await openWelcome(page)
-  await expect(page.getByText(shell.preview)).toBeVisible()
+  await expect(page.getByText(shell.welcomePreview)).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Preview notice' })).toHaveCount(0)
   await accessible(page, 'welcome')
 })
 
