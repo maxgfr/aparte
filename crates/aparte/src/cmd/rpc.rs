@@ -145,7 +145,16 @@ async fn serve(
 ) -> anyhow::Result<ExitCode> {
     let cwd = setup::cwd()?;
     let pending: Pending = Arc::default();
-    let sink: EventSink = Arc::new(|ev: &AgentEvent| send(&event_json(ev)));
+    // `agent-end` is held back until the run's task has handed the agent back, so a command sent on seeing it finds
+    // the agent free instead of "a run is in progress".
+    let ended: Arc<Mutex<Option<Value>>> = Arc::default();
+    let held = ended.clone();
+    let sink: EventSink = Arc::new(move |ev: &AgentEvent| match ev {
+        AgentEvent::AgentEnd { .. } => {
+            *held.lock().unwrap_or_else(PoisonError::into_inner) = Some(event_json(ev));
+        }
+        _ => send(&event_json(ev)),
+    });
     let wiring = setup::Wiring {
         approval: ApprovalMode::Ask,
         sink,
@@ -352,6 +361,9 @@ async fn serve(
                 task = None;
                 if let Some(Ok((a, _))) = done {
                     agent = Some(a);
+                }
+                if let Some(end) = ended.lock().unwrap_or_else(PoisonError::into_inner).take() {
+                    send(&end);
                 }
             }
         }
