@@ -29,6 +29,11 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Build provenance for every file of the site: an OIDC token to sign the attestation and the right to store it.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     outputs:
       index-sha256: ${{ steps.marker.outputs.sha256 }}
     steps:
@@ -54,6 +59,14 @@ jobs:
       - id: marker
         name: Fingerprint the build
         run: echo "sha256=$(sha256sum web/dist/index.html | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      # One attestation names every file of the site with its SHA-256, so anyone can check what the live site serves
+      # against this build (scripts/verify-deploy.sh, docs/self-hosting.md). The list stays out of the site itself.
+      - name: List the files of the build with their digests
+        working-directory: web/dist
+        run: find . -type f -printf '%P\0' | LC_ALL=C sort -z | xargs -0 sha256sum > ../pages-SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: web/pages-SHA256SUMS
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

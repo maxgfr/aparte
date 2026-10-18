@@ -167,11 +167,12 @@ jobs:
       needs.version.result == 'success' &&
       (needs.publish.result == 'success' ||
        (needs.version.outputs.version == '' && needs.publish.result == 'skipped'))
-    # What deploy.yml's jobs need: read the code, then publish to Pages with an OIDC token.
+    # What deploy.yml's jobs need: read the code, attest the build, then publish to Pages with an OIDC token.
     permissions:
       contents: read
       pages: write
       id-token: write
+      attestations: write
     uses: ./.github/workflows/deploy.yml
     with:
       version: ${{ needs.version.outputs.version }}
