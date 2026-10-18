@@ -82,6 +82,26 @@ description and loads it with the `skill` tool; `/skill:<name> ...` runs one by 
 aparte skills list [--all] | show <name> | path
 ```
 
+Skills installed with [`npx skills add`](https://github.com/vercel-labs/skills) are found where it puts them
+(`.agents/skills/<name>` in a project, `~/.agents/skills/<name>` with `-g`); the links it makes in `.claude/skills` are
+followed, and a skill reached twice is listed once. Only the name and description of each skill are in the system
+prompt (`<available_skills>`); the `skill` tool returns the instructions, with the skill's base directory filled in
+for `<skill-dir>`, `{baseDir}` and `${CLAUDE_SKILL_DIR}`, and with `path` one file of the skill, such as a reference.
+Nothing in a skill runs by itself: its scripts go through `bash`, so each command is approved and sandboxed. A skill
+with `disable-model-invocation: true` is only run by hand, and `allowed-tools` approves nothing.
+
+For example, [ultrasearch](https://github.com/maxgfr/ultrasearch), whose engine is a Node script that searches and
+fetches the web, needs Node and the network:
+
+```sh
+npx skills add maxgfr/ultrasearch       # into .agents/skills/ultrasearch
+aparte trust                            # project skills are offered once the project is trusted
+aparte --allow-net                      # then ask for an ultrasearch report and approve its `node` commands
+```
+
+Its run directories go under the private temporary directory of `bash`, which is removed when the session ends;
+ask for `--out` in the project to keep a dossier.
+
 ## The vault and sync
 
 ```sh
