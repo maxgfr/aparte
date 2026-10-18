@@ -173,6 +173,7 @@ function TrashedActions({
           <Button
             variant="secondary"
             icon={<RotateCcw size={18} strokeWidth={1.75} aria-hidden="true" />}
+            disabled={purging}
             onClick={() => {
               ws.conversations.restore(id)
               onClose()
@@ -236,13 +237,17 @@ function EmptyTrash({
             loading={emptying}
             onClick={async () => {
               setEmptying(true)
+              let purged = 0
               for (const c of trashed) {
-                // One restored meanwhile (on another device, through sync) is no longer in the trash: it is kept.
-                await ws.conversations.purge(c.id).catch(() => undefined)
+                // One restored meanwhile (here or through sync) is no longer in the trash: it is kept.
+                await ws.conversations.purge(c.id).then(
+                  () => purged++,
+                  () => undefined,
+                )
               }
               setEmptying(false)
               onClose()
-              toast(t('chat.emptiedTrash'))
+              if (purged > 0) toast(t('chat.emptiedTrash'))
             }}
           >
             {t('chat.emptyTrash')}
@@ -309,7 +314,12 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
   const list = useConversations(trash ? { trashed: true } : { archived: view === 'archived' })
   const streaming = useStreaming()
   const words = useMemo(() => queryWords(query), [query])
-  const search = useMessageSearch(list, query, deep)
+  // The search index leaves the trash out: there, only titles are searched.
+  const search = useMessageSearch(list, query, deep && !trash)
+  const show = (next: typeof view) => {
+    setView(next)
+    setMenu(null)
+  }
   const shown = useMemo(
     () => list.filter((c) => matches(c.title || t('chat.untitled'), words) || search.result?.has(c.id) === true),
     [list, words, search.result, t],
@@ -328,6 +338,10 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
         ]
     : groupConversations(shown, now).map((g) => ({ key: g.key, title: t(GROUP_KEYS[g.key]), items: g.items }))
   const menuFor = list.find((c) => c.id === menu)
+  // A chat that left this list (restored, deleted or moved by sync) takes its open sheet with it, for good.
+  useEffect(() => {
+    if (menu !== null && menuFor === undefined) setMenu(null)
+  }, [menu, menuFor])
 
   return (
     <div className={cx(styles.list, compact && styles.listCompact)}>
@@ -350,7 +364,7 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
           autoComplete="off"
         />
       </div>
-      {words.length > 0 && !deep && (
+      {words.length > 0 && !deep && !trash && (
         <Button variant="plain" onClick={() => setDeep(true)}>
           {t('chat.listSearchMessages')}
         </Button>
@@ -360,7 +374,7 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
           {t('chat.listSearching')}
         </p>
       )}
-      {trash && list.length > 0 && (
+      {trash && list.length > 0 && words.length === 0 && (
         <>
           <p className={styles.muted}>{t('chat.listTrashNote')}</p>
           <Button
@@ -428,21 +442,27 @@ export function ConversationList({ activeId = null, compact = false }: { activeI
       ))}
       {view === 'active' ? (
         <>
-          <Button variant="plain" onClick={() => setView('archived')}>
+          <Button variant="plain" onClick={() => show('archived')}>
             {t('chat.listShowArchived')}
           </Button>
-          <Button variant="plain" onClick={() => setView('trash')}>
+          <Button variant="plain" onClick={() => show('trash')}>
             {t('chat.listShowTrash')}
           </Button>
         </>
       ) : (
-        <Button variant="plain" onClick={() => setView('active')}>
+        <Button variant="plain" onClick={() => show('active')}>
           {t('chat.listShowActive')}
         </Button>
       )}
       {menuFor !== undefined &&
         (trash ? (
-          <TrashedActions conversation={menuFor} open={menu !== null} onClose={() => setMenu(null)} />
+          // One sheet per chat, and a purge that ends late closes its own sheet only, never another chat's.
+          <TrashedActions
+            key={menuFor.id}
+            conversation={menuFor}
+            open={menu !== null}
+            onClose={() => setMenu((m) => (m === menuFor.id ? null : m))}
+          />
         ) : (
           <ConversationActions conversation={menuFor} open={menu !== null} onClose={() => setMenu(null)} />
         ))}
