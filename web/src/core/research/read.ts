@@ -15,7 +15,7 @@
  */
 import type { FetchLike } from '../contracts/ai.ts'
 import type { SourceStatus } from '../contracts/research.ts'
-import { htmlText, privateHost } from '../tools/builtins.ts'
+import { htmlText, privateHost, wikipediaArticle, wikipediaExtract, wikipediaExtractsUrl } from '../tools/builtins.ts'
 import { abortError, WIKIPEDIA_LANGS } from './backends.ts'
 
 /** The largest answer read. */
@@ -160,26 +160,12 @@ const obj = (v: unknown): Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
 
 /** A Wikipedia article through the extracts API (plain text, CORS with `origin=*`). */
-async function wikipediaArticle(lang: string, title: string, o: ReadOptions): Promise<PageRead> {
-  const params = new URLSearchParams({
-    action: 'query',
-    prop: 'extracts',
-    explaintext: '1',
-    redirects: '1',
-    format: 'json',
-    formatversion: '2',
-    origin: '*',
-    titles: title,
-  })
-  const data = await apiJson(o.api, `https://${lang}.wikipedia.org/w/api.php?${params.toString()}`, o.signal)
-  const query = obj(obj(data).query)
-  const pages = Array.isArray(query.pages) ? query.pages : Object.values(obj(query.pages))
-  const page = obj(pages[0])
-  const extract = typeof page.extract === 'string' ? page.extract.trim() : ''
-  const name = typeof page.title === 'string' ? page.title : title.replace(/_/g, ' ')
+async function readWikipedia(lang: string, title: string, o: ReadOptions): Promise<PageRead> {
+  const data = await apiJson(o.api, wikipediaExtractsUrl(lang, title), o.signal)
+  const article = wikipediaExtract(data, title)
   if (data === null) return failed('Wikipedia could not be reached')
-  if (extract === '') return failed('Wikipedia has no article of that name', name)
-  return { status: 'ok', title: name, text: cut(extract, o.chars) }
+  if (article.text === '') return failed('Wikipedia has no article of that name', article.title)
+  return { status: 'ok', title: article.title, text: cut(article.text, o.chars) }
 }
 
 /** A Hacker News item (a story and its first comments) through the Algolia API. */
@@ -221,19 +207,9 @@ export async function readPage(raw: string, o: ReadOptions): Promise<PageRead> {
   if (privateHost(url.hostname)) return failed('addresses on this device or a private network are never read')
   url.hash = ''
 
-  const wiki = /^([a-z]{2,3})(?:\.m)?\.wikipedia\.org$/i.exec(url.hostname)
-  const article = /^\/wiki\/(.+)$/.exec(url.pathname)?.[1]
-  if (wiki?.[1] !== undefined && article !== undefined) {
-    const lang = wiki[1].toLowerCase()
-    if ((WIKIPEDIA_LANGS as readonly string[]).includes(lang)) {
-      let title: string
-      try {
-        title = decodeURIComponent(article)
-      } catch {
-        title = article
-      }
-      return wikipediaArticle(lang, title, o)
-    }
+  const wiki = wikipediaArticle(url)
+  if (wiki !== null && (WIKIPEDIA_LANGS as readonly string[]).includes(wiki.lang)) {
+    return readWikipedia(wiki.lang, wiki.title, o)
   }
   if (url.hostname === 'news.ycombinator.com' && url.pathname === '/item') {
     const id = url.searchParams.get('id') ?? ''

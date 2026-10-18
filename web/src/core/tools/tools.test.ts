@@ -522,6 +522,39 @@ describe('the built-in tools', () => {
     expect(ok.details).toMatchObject({ url: 'https://www.example.org/r' })
   })
 
+  test('fetch_url reads a Wikipedia article through its extracts API', async () => {
+    const seen: string[] = []
+    let served = () =>
+      new Response(
+        JSON.stringify({ query: { pages: [{ title: 'Église orthodoxe', extract: 'L’Église orthodoxe est…' }] } }),
+        { headers: { 'content-type': 'application/json; charset=utf-8' } },
+      )
+    const tool = fetchUrlTool({
+      download: async (input) => {
+        seen.push(String(input))
+        return served()
+      },
+    })
+    const ok = await tool.execute({ url: 'https://fr.m.wikipedia.org/wiki/%C3%89glise_orthodoxe#Histoire' }, ctx())
+    const api = new URL(seen[0] ?? '')
+    expect(api.origin).toBe('https://fr.wikipedia.org')
+    expect(api.pathname).toBe('/w/api.php')
+    expect(api.searchParams.get('origin')).toBe('*')
+    expect(api.searchParams.get('titles')).toBe('Église_orthodoxe')
+    expect(ok.isError).toBeUndefined()
+    expect(ok.content).toEqual([{ type: 'text', text: 'Église orthodoxe\n\nL’Église orthodoxe est…' }])
+    expect(ok.details).toMatchObject({ url: 'https://fr.m.wikipedia.org/wiki/%C3%89glise_orthodoxe' })
+
+    served = () =>
+      new Response(JSON.stringify({ query: { pages: [{ title: 'Nope', missing: true }] } }), {
+        headers: { 'content-type': 'application/json' },
+      })
+    expect(await tool.execute({ url: 'https://en.wikipedia.org/wiki/Nope' }, ctx())).toMatchObject({ isError: true })
+
+    await tool.execute({ url: 'https://fr.wikipedia.org/w/index.php?search=orthodoxie' }, ctx())
+    expect(seen.at(-1)).toBe('https://fr.wikipedia.org/w/index.php?search=orthodoxie')
+  })
+
   test('fetch_url stops with the turn', async () => {
     const abort = new AbortController()
     const tool = fetchUrlTool({

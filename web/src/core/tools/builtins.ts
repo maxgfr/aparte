@@ -166,6 +166,51 @@ export function privateHost(hostname: string): boolean {
   return false
 }
 
+/** The language and title of a Wikipedia article address (`https://fr.m.wikipedia.org/wiki/Orthodoxie`), or null. */
+export function wikipediaArticle(url: URL): { readonly lang: string; readonly title: string } | null {
+  const lang = /^([a-z]{2,3})(?:\.m)?\.wikipedia\.org$/i.exec(url.hostname)?.[1]
+  const article = /^\/wiki\/(.+)$/.exec(url.pathname)?.[1]
+  if (lang === undefined || article === undefined) return null
+  let title: string
+  try {
+    title = decodeURIComponent(article)
+  } catch {
+    title = article
+  }
+  return { lang: lang.toLowerCase(), title }
+}
+
+/**
+ * The plain-text extracts API of a Wikipedia article: it answers cross-origin reads (`origin=*`), which the article
+ * page itself does not.
+ */
+export function wikipediaExtractsUrl(lang: string, title: string): string {
+  const params = new URLSearchParams({
+    action: 'query',
+    prop: 'extracts',
+    explaintext: '1',
+    redirects: '1',
+    format: 'json',
+    formatversion: '2',
+    origin: '*',
+    titles: title,
+  })
+  return `https://${lang}.wikipedia.org/w/api.php?${params.toString()}`
+}
+
+/** The title and text of an extracts API answer; `text` is '' when it holds no article. */
+export function wikipediaExtract(data: unknown, title: string): { readonly title: string; readonly text: string } {
+  const obj = (v: unknown): Record<string, unknown> =>
+    v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+  const query = obj(obj(data).query)
+  const pages = Array.isArray(query.pages) ? query.pages : Object.values(obj(query.pages))
+  const page = obj(pages[0])
+  return {
+    title: typeof page.title === 'string' ? page.title : title.replace(/_/g, ' '),
+    text: typeof page.extract === 'string' ? page.extract.trim() : '',
+  }
+}
+
 const TEXTUAL =
   /^(text\/|application\/(json|ld\+json|xml|xhtml\+xml|rss\+xml|atom\+xml|javascript)\b|[^;]*\+(json|xml)\b)/i
 
@@ -248,6 +293,9 @@ export function fetchUrlTool(deps: { readonly download: FetchLike }): Tool {
       if (url.username || url.password) return failure('An address with credentials cannot be fetched.')
       if (privateHost(url.hostname)) return failure('Addresses on this device or a private network cannot be fetched.')
       url.hash = ''
+      // A Wikipedia article is read through its extracts API, which lets a page read it; the article page does not.
+      const wiki = wikipediaArticle(url)
+      const target = wiki === null ? url.href : wikipediaExtractsUrl(wiki.lang, wiki.title)
       const timeout = new AbortController()
       const timer = setTimeout(() => timeout.abort(), FETCH_TIMEOUT_MS)
       const onAbort = () => timeout.abort()
@@ -256,7 +304,7 @@ export function fetchUrlTool(deps: { readonly download: FetchLike }): Tool {
         if (context.signal.aborted) throw abortError()
         let response: Response
         try {
-          response = await deps.download(url.href, {
+          response = await deps.download(target, {
             method: 'GET',
             headers: { accept: 'text/html, text/plain, application/json, */*;q=0.5' },
             redirect: 'follow',
@@ -267,13 +315,13 @@ export function fetchUrlTool(deps: { readonly download: FetchLike }): Tool {
           if (timeout.signal.aborted) return failure('The request timed out.', { url: url.href })
           // A CORS refusal looks like a network failure from a web page: the site does not let pages read it.
           return failure(
-            'The page could not be read: the network failed, or the site does not let pages in a browser read it (CORS).',
+            'The page could not be read: the network failed, or the site does not let pages in a browser read it (CORS). Other sites may still be read. fetch_url does not search the web: the user can start a new chat with Web search or Deep research turned on.',
             { url: url.href },
           )
         }
         // The approval named `url`; a redirect may have taken the request elsewhere. What came back from this machine,
         // a private network or plain http is dropped unread: a local server may let the app's origin read it.
-        const final = response.redirected && response.url ? new URL(response.url) : url
+        const final = response.redirected && response.url ? new URL(response.url) : new URL(target)
         if (final.protocol !== 'https:' || privateHost(final.hostname)) {
           await response.body?.cancel().catch(() => undefined)
           return failure('The site redirected to an address on this device, a private network or plain http.', {
@@ -281,7 +329,7 @@ export function fetchUrlTool(deps: { readonly download: FetchLike }): Tool {
           })
         }
         const contentType = response.headers.get('content-type') ?? ''
-        const details = { url: final.href, status: response.status, contentType }
+        const details = { url: wiki === null ? final.href : url.href, status: response.status, contentType }
         if (!response.ok) {
           await response.body?.cancel().catch(() => undefined)
           return failure(`The site answered HTTP ${response.status}.`, details)
@@ -292,6 +340,25 @@ export function fetchUrlTool(deps: { readonly download: FetchLike }): Tool {
         }
         const { bytes, truncated } = await readCapped(response, context.signal)
         const decoded = new TextDecoder('utf-8').decode(bytes)
+        if (wiki !== null) {
+          let data: unknown = null
+          try {
+            data = JSON.parse(decoded)
+          } catch {
+            // A cut or malformed answer holds no article.
+          }
+          const article = wikipediaExtract(data, wiki.title)
+          if (article.text === '') {
+            const why = truncated ? 'is too long to be read here' : 'could not be found'
+            return failure(`The Wikipedia article "${article.title}" ${why}.`, details)
+          }
+          const cut = article.text.length > FETCH_MAX_CHARS
+          const note = cut ? '\n\n[The content was cut: only its beginning is shown.]' : ''
+          return {
+            content: [{ type: 'text', text: `${article.title}\n\n${article.text.slice(0, FETCH_MAX_CHARS)}${note}` }],
+            details: { ...details, bytes: bytes.length, truncated: cut },
+          }
+        }
         const isHtml = /html/i.test(contentType) || (contentType === '' && /^\s*<(!doctype|html)/i.test(decoded))
         let body = isHtml ? htmlText(decoded) : decoded
         const cut = body.length > FETCH_MAX_CHARS
