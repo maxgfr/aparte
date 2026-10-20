@@ -1,4 +1,4 @@
-//! Review: TypeScript is the reference (CLAUDE.md, spec/FORMAT.md section 15) and both readers must reach the same
+//! Review: TypeScript is the reference (AGENTS.md, spec/FORMAT.md section 15) and both readers must reach the same
 //! verdict on the same bytes. serde_json refuses valid JSON that JSON.parse accepts: a number that overflows f64
 //! (`1e400`) and nesting deeper than 128 levels. Inside `kdf` both are a broken rule of section 6.3 (a number out of
 //! bounds, an extra member), so the web reports `unsupported-keyslot` at step 2 while the CLI reports `corrupt` at
