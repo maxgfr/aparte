@@ -23,7 +23,7 @@
         "hash-wasm": "4.12.0",
         "idb": "8.0.4",
         "katex": "0.19.0",
-        "llm-connect": "2.2.0",
+        "llm-connect": "2.6.0",
         "llm-models": "1.12.0",
         "lowlight": "3.3.0",
         "lucide-react": "1.59.0",
@@ -1145,7 +1145,7 @@
 
     "lightningcss-win32-x64-msvc": ["lightningcss-win32-x64-msvc@1.33.0", "", { "os": "win32", "cpu": "x64" }, "sha512-OlEICDx/Xl0FqSp4bry8zFnCvGpig3Gl4gCquvYwHuqJKEC1+n9NgDniFvqHGmMv1ZkqDJrDqKKSykTDX+ehuA=="],
 
-    "llm-connect": ["llm-connect@2.2.0", "", { "dependencies": { "llm-models": "^1.12.0" }, "peerDependencies": { "@ai-sdk/anthropic": "^4.0.0", "@ai-sdk/google": "^4.0.0", "@ai-sdk/mistral": "^4.0.0", "@ai-sdk/openai": "^4.0.0", "@ai-sdk/openai-compatible": "^3.0.0", "ai": "^7.0.0", "react": ">=18" }, "optionalPeers": ["@ai-sdk/anthropic", "@ai-sdk/google", "@ai-sdk/mistral", "@ai-sdk/openai", "@ai-sdk/openai-compatible", "ai", "react"] }, "sha512-AwBJ+ZqsmXibONj7fsPjsLqJIURYyKNwKADVUd3UHGhYhwDh7ba/3HitspUtIBRFSawhnsjqpHD6cG4syaXi3w=="],
+    "llm-connect": ["llm-connect@2.6.0", "", { "dependencies": { "llm-models": "^1.14.0" }, "peerDependencies": { "@ai-sdk/anthropic": "^4.0.0", "@ai-sdk/google": "^4.0.0", "@ai-sdk/mistral": "^4.0.0", "@ai-sdk/openai": "^4.0.0", "@ai-sdk/openai-compatible": "^3.0.0", "@huggingface/transformers": "^4.0.0", "ai": "^7.0.0", "onnxruntime-web": ">=1.22.0", "react": ">=18" }, "optionalPeers": ["@ai-sdk/anthropic", "@ai-sdk/google", "@ai-sdk/mistral", "@ai-sdk/openai", "@ai-sdk/openai-compatible", "@huggingface/transformers", "ai", "onnxruntime-web", "react"] }, "sha512-vXDowqxOPae/WCdVn27A7/6+vYVGV/CiHqGoMf7eWgXUZoT0UbBfYGoDeew/aJJSlQkgtvl9A77YeEfU9AY8WA=="],
 
     "llm-models": ["llm-models@1.12.0", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.30.0", "commander": "^15.0.0", "zod": "^4.4.3" }, "bin": { "llm-models": "build/index.js" } }, "sha512-We6itqaVDDrXnPwde5/6UiHBVwQfriF2fT2FzE2YfJUEdFOL0byVt4QZXi5ZZUfOkjp2O0KIpjFwRKlt4xXE4g=="],
 
@@ -1546,6 +1546,8 @@
     "express/content-type": ["content-type@2.1.0", "", {}, "sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag=="],
 
     "filelist/minimatch": ["minimatch@5.1.9", "", { "dependencies": { "brace-expansion": "^2.0.1" } }, "sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw=="],
+
+    "llm-connect/llm-models": ["llm-models@1.14.0", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.30.0", "commander": "^15.0.0", "zod": "^4.4.3" }, "bin": { "llm-models": "build/index.js" } }, "sha512-RHK41ceuWrNhmj8oOzvf4DJBJCaUHgy8jwAk2PX0eBv9N37O4W2Fy42WQteBF9CluA5ilm666YvCypVO2S4Yyg=="],
 
     "mermaid/katex": ["katex@0.16.47", "", { "dependencies": { "commander": "^8.3.0" }, "bin": { "katex": "cli.js" } }, "sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg=="],
 
