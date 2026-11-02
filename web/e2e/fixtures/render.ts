@@ -45,21 +45,21 @@ export async function unsafeMarkup(content: Locator): Promise<string[]> {
   return content.evaluate(
     (root, [elements, attributes]) => {
       const found: string[] = []
-      const describe = (el: Element) => `<${el.tagName.toLowerCase()}>`
+      const tagOf = (el: Element) => `<${el.tagName.toLowerCase()}>`
       const all = [root, ...root.querySelectorAll('*')]
       for (const el of all) {
         const tag = el.localName
-        if (elements.some((e) => e.toLowerCase() === tag.toLowerCase())) found.push(`element ${describe(el)}`)
+        if (elements.some((e) => e.toLowerCase() === tag.toLowerCase())) found.push(`element ${tagOf(el)}`)
         // A task list checkbox is the only input Markdown makes, and it is read-only.
         if (tag === 'input' && !((el as HTMLInputElement).type === 'checkbox' && (el as HTMLInputElement).disabled))
           found.push(`element <input type=${(el as HTMLInputElement).type}>`)
         for (const attr of el.attributes) {
           const name = attr.name.toLowerCase()
           const value = attr.value
-          if (name.startsWith('on')) found.push(`handler ${name} on ${describe(el)}`)
-          if (attributes.includes(name)) found.push(`attribute ${name} on ${describe(el)}`)
+          if (name.startsWith('on')) found.push(`handler ${name} on ${tagOf(el)}`)
+          if (attributes.includes(name)) found.push(`attribute ${name} on ${tagOf(el)}`)
           if (name === 'style' && /url\s*\(|expression\s*\(|@import/i.test(value))
-            found.push(`style that loads on ${describe(el)}: ${value}`)
+            found.push(`style that loads on ${tagOf(el)}: ${value}`)
           if (name === 'href' || name === 'xlink:href' || name === 'src' || name.endsWith(':href')) {
             let protocol: string
             try {
@@ -69,9 +69,9 @@ export async function unsafeMarkup(content: Locator): Promise<string[]> {
             }
             if (name === 'src') {
               const inert = protocol === 'blob:' || (protocol === 'data:' && /^\s*data:image\//i.test(value))
-              if (!inert) found.push(`${describe(el)} src that loads: ${value}`)
+              if (!inert) found.push(`${tagOf(el)} src that loads: ${value}`)
             } else if (!['http:', 'https:', 'mailto:'].includes(protocol) && !value.trim().startsWith('#'))
-              found.push(`${name} with scheme ${protocol} on ${describe(el)}`)
+              found.push(`${name} with scheme ${protocol} on ${tagOf(el)}`)
           }
         }
       }

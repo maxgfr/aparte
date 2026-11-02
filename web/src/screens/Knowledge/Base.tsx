@@ -225,7 +225,7 @@ export default function KnowledgeBaseScreen({ params }: { params?: { id?: string
   const [draft, setDraft] = useState('')
   const [deleting, setDeleting] = useState(false)
   const inputId = useId()
-  const describe = useOutcomeMessage()
+  const outcomeMessage = useOutcomeMessage()
 
   if (status.state === 'absent') return <Redirect to={paths.home} replace />
   if (state.status !== 'open' || session === null) {
@@ -258,7 +258,7 @@ export default function KnowledgeBaseScreen({ params }: { params?: { id?: string
       {
         knowledge: session.knowledge,
         holdLock: (reason) => vault.holdLock(reason),
-        onDone: (outcome) => toast(describe(outcome)),
+        onDone: (outcome) => toast(outcomeMessage(outcome)),
       },
       base.id,
       [...files],

@@ -15,7 +15,8 @@
       "!playwright-report",
       "!test-results",
       "!src/core/ai/catalog.json",
-      "!src/core/ai/catalog-all.json"
+      "!src/core/ai/catalog-all.json",
+      "!src/core/skills/fixtures/**/*.md"
     ]
   },
   "formatter": {
