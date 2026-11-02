@@ -682,10 +682,10 @@ async function* streamChat(kind: ProviderKind, base: FetchLike, req: ChatRequest
           yield { type: 'usage', usage: usageOf(part.totalUsage) }
           const raw = step?.raw ?? part.rawFinishReason
           const unified = step?.unified ?? part.finishReason
-          // Every package starts from `other` with no raw reason and replaces it on the provider's own finish event,
-          // so a stream that closed before that event still holds it. (OpenAI's Responses API has no raw reason for
-          // a completed response, but reports `stop`.)
-          if (unified === 'other' && raw === undefined) {
+          // A stream that closed before the provider's own finish event: the AI SDK reports `interrupted` where the
+          // package detects it; otherwise the package still holds its starting `other` with no raw reason. (OpenAI's
+          // Responses API has no raw reason for a completed response, but reports `stop`.)
+          if (unified === 'interrupted' || (unified === 'other' && raw === undefined)) {
             yield { type: 'error', error: truncatedError() }
             return
           }

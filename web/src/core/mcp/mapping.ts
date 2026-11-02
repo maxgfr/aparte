@@ -164,7 +164,7 @@ function jsonOf(value: unknown): JsonValue | null {
   }
 }
 
-function describe(item: Record<string, unknown>): string {
+function describeItem(item: Record<string, unknown>): string {
   const type = typeof item.type === 'string' ? item.type : 'unknown'
   if (type === 'resource') {
     const r = (item.resource ?? {}) as Record<string, unknown>
@@ -216,7 +216,7 @@ export function toToolResult(result: McpCallResult): ToolResult {
         droppedImages++
       }
     } else {
-      pushText(describe(item))
+      pushText(describeItem(item))
     }
   }
   if (content.length === 0 && result.structuredContent !== undefined) {
