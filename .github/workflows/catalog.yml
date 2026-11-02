@@ -1,7 +1,7 @@
 name: Catalog
-# Weekly refresh of the model catalog (web/src/core/ai/catalog.json): llm-models lists the providers and models, and
-# probes from the app's origin which providers a web page can call. The result comes back as a pull request, so a
-# refresh goes through the same review and CI as any other change.
+# Weekly refresh of the model catalog (web/src/core/ai/catalog.json and catalog-all.json, which move together):
+# llm-models lists the providers and models, and probes from the app's origin which providers a web page can call. The
+# result comes back as a pull request, so a refresh goes through the same review and CI as any other change.
 on:
   schedule:
     - cron: '0 6 * * 1'
@@ -35,7 +35,9 @@ jobs:
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           branch: catalog-refresh
-          add-paths: web/src/core/ai/catalog.json
+          add-paths: |
+            web/src/core/ai/catalog.json
+            web/src/core/ai/catalog-all.json
           title: 'chore: refresh the model catalog'
           commit-message: 'chore: refresh the model catalog'
           body: Weekly refresh of the model catalog (providers, models, prices and browser reachability).
