@@ -6,6 +6,12 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    ignore:
+      # Pyodide 314 ships its runtime as pyodide.asm.mjs only, while the sandbox's classic worker loads pyodide.asm.js
+      # through importScripts (src/sandbox/frame/py-worker.ts). Moving to it is a reviewed change of the sandbox loader
+      # and of runtime-lock.json; 0.29.x patches still come in.
+      - dependency-name: pyodide
+        versions: ['>=1.0.0']
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
