@@ -47,6 +47,17 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
         working-directory: web
+      - name: Refresh the AI model catalog from llm-models
+        working-directory: web
+        # Fresh at every deploy, no weekly PR. If llm-models or an API is down, or the
+        # new catalog fails its check, the committed snapshot ships unchanged.
+        run: |
+          if bun run catalog && bun test src/core/ai/catalog.test.ts; then
+            echo "Catalog refreshed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git checkout -- src/core/ai/catalog.json src/core/ai/catalog-all.json
+            echo "::warning::Catalog refresh failed; the committed snapshot ships."
+          fi
       - name: Build
         working-directory: web
         env:
