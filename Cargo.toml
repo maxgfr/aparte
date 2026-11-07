@@ -66,7 +66,7 @@ schemars = { version = "1.2.3", default-features = false, features = ["std", "de
 
 # MCP client: rmcp on the workspace's reqwest (rustls, no TLS provider of its own), child processes in their own
 # process group.
-rmcp = { version = "=3.7.0", default-features = false, features = [
+rmcp = { version = "=3.8.0", default-features = false, features = [
     "client",
     "auth",
     "reqwest-tls-no-provider",
