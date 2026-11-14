@@ -66,7 +66,7 @@ schemars = { version = "1.2.3", default-features = false, features = ["std", "de
 
 # MCP client: rmcp on the workspace's reqwest (rustls, no TLS provider of its own), child processes in their own
 # process group.
-rmcp = { version = "=3.7.0", default-features = false, features = [
+rmcp = { version = "=3.9.0", default-features = false, features = [
     "client",
     "auth",
     "reqwest-tls-no-provider",
@@ -80,7 +80,7 @@ process-wrap = { version = "10.0.1", default-features = false, features = ["toki
 nix = { version = "0.31.3", default-features = false, features = ["signal"] }
 
 # Sync: the Yjs documents of a vault, byte-compatible with the web app's Yjs (OffsetKind::Utf16), pinned.
-yrs = { version = "=0.28.0", default-features = false }
+yrs = { version = "=0.28.1", default-features = false }
 
 # MCP serve and bridge: a loopback HTTP/1.1 server.
 hyper = { version = "1.12.0", default-features = false, features = ["server", "http1"] }
